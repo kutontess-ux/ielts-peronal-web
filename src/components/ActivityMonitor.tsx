@@ -139,7 +139,7 @@ export default function ActivityMonitor() {
   if (logs.length === 0) return null;
 
   return (
-    <div className="fixed bottom-20 right-4 z-50 flex w-80 max-w-[calc(100vw-2rem)] flex-col gap-2 md:bottom-4">
+    <div className="fixed bottom-4 right-4 z-50 hidden w-80 max-w-[calc(100vw-2rem)] flex-col gap-2 md:flex">
       {logs.map((l) => {
         const elapsed = l.durationMs ?? (now > 0 ? Math.max(0, now - l.startedAt) : 0);
         const sec = (elapsed / 1000).toFixed(1);
