@@ -1,0 +1,37 @@
+@import "tailwindcss";
+
+@theme inline {
+  /* Bảng màu lấy theo ảnh Quizlet dark */
+  --color-bg: #0a092d;
+  --color-card: #262642;
+  --color-card-hover: #32325a;
+  --color-line: #33335a;
+  --color-muted: #b2b5d0;
+  --color-brand: #4255ff;
+  --color-brand-hover: #8c9bff;
+  --font-sans: var(--font-main), "Helvetica Neue", Arial, sans-serif;
+}
+
+body {
+  background: var(--color-bg);
+  color: #ffffff;
+  font-family: var(--font-sans);
+}
+
+input, textarea, select {
+  background: #0a092d;
+  color: #fff;
+}
+input::placeholder, textarea::placeholder {
+  color: #7d86a8;
+}
+
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { scrollbar-width: none; }
+
+/* Ẩn nút tròn DevTools của Next.js trên màn hình điện thoại, chỉ giữ trên PC */
+@media (max-width: 767px) {
+  nextjs-portal {
+    display: none !important;
+  }
+}
