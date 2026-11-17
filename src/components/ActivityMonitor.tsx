@@ -139,36 +139,37 @@ export default function ActivityMonitor() {
   if (logs.length === 0) return null;
 
   return (
-    <div className="fixed bottom-4 right-4 z-50 hidden w-80 max-w-[calc(100vw-2rem)] flex-col gap-2 md:flex">
+    <div className="fixed bottom-16 left-3 z-50 flex w-60 max-w-[calc(100vw-1.5rem)] flex-col gap-1.5 md:bottom-3 md:left-3">
       {logs.map((l) => {
         const elapsed = l.durationMs ?? (now > 0 ? Math.max(0, now - l.startedAt) : 0);
         const sec = (elapsed / 1000).toFixed(1);
         return (
           <div
             key={l.id}
-            className="rounded-2xl border border-line bg-card/95 p-3.5 shadow-2xl backdrop-blur"
+            className="rounded-xl border border-line bg-card/95 px-2.5 py-2 shadow-xl backdrop-blur transition-all"
           >
-            <div className="flex items-start gap-2.5">
-              <div className="mt-0.5 shrink-0">
-                {l.status === "running" && <Loader2 size={17} className="animate-spin text-brand-hover" />}
-                {l.status === "done" && <CheckCircle2 size={17} className="text-emerald-300" />}
-                {l.status === "error" && <XCircle size={17} className="text-rose-300" />}
+            <div className="flex items-center gap-2">
+              <div className="shrink-0">
+                {l.status === "running" && <Loader2 size={14} className="animate-spin text-brand-hover" />}
+                {l.status === "done" && <CheckCircle2 size={14} className="text-emerald-400" />}
+                {l.status === "error" && <XCircle size={14} className="text-rose-400" />}
               </div>
               <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-1.5 text-[11px] font-mono text-brand-hover">
-                  <Activity size={12} />
-                  <span className="truncate">{l.endpoint}</span>
+                <div className="truncate text-xs font-semibold text-white" title={l.label}>
+                  {l.label}
                 </div>
-                <div className="mt-0.5 text-xs font-semibold text-white">{l.label}</div>
-                <div className="mt-1 text-[11px] text-muted">
-                  {l.status === "running" ? `Đang chạy · ${sec}s` : `${l.detail} · ${sec}s`}
+                <div className="flex items-center gap-1.5 text-[10px] text-muted">
+                  <span className="max-w-[95px] truncate font-mono text-brand-hover">{l.endpoint}</span>
+                  <span>·</span>
+                  <span>{l.status === "running" ? `${sec}s` : `${l.detail ?? "Xong"} (${sec}s)`}</span>
                 </div>
               </div>
               <button
                 onClick={() => setLogs((prev) => prev.filter((x) => x.id !== l.id))}
                 className="rounded p-0.5 text-muted hover:bg-line hover:text-white"
+                aria-label="Đóng"
               >
-                <X size={14} />
+                <X size={13} />
               </button>
             </div>
           </div>
