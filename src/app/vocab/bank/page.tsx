@@ -1,7 +1,7 @@
 "use client";
 
 import { createElement, useCallback, useEffect, useMemo, useState } from "react";
-import { ArrowLeft, BookMarked, Bot, Check, ChevronDown, ChevronLeft, ChevronRight, Loader2, Package, Repeat, RotateCcw, Search, Trash2, Upload } from "lucide-react";
+import { ArrowLeft, BookMarked, Bot, Check, ChevronDown, ChevronLeft, ChevronRight, Loader2, Package, Repeat, RotateCcw, Search, Trash2, Upload, Volume2 } from "lucide-react";
 import { LEVEL_INFO, levelColor, type Word } from "@/lib/mock";
 import { topicIcon } from "@/lib/icons";
 import { enrollWordsInSrs } from "@/lib/srs";
@@ -41,6 +41,14 @@ function getPageNumbers(current: number, total: number): (number | "...")[] {
   if (current < total - 2) pages.push("...");
   pages.push(total);
   return pages;
+}
+
+function speakWord(text: string) {
+  if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
+  speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang = "en-GB";
+  speechSynthesis.speak(u);
 }
 
 function WordCard({
@@ -109,6 +117,18 @@ function WordCard({
               )}
             </div>
             <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                title="Phát âm"
+                aria-label={`Phát âm ${w.word}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  speakWord(w.word);
+                }}
+                className="rounded-full p-1 text-muted transition hover:bg-bg hover:text-ink"
+              >
+                <Volume2 size={15} />
+              </button>
               <span className={`rounded-full px-2.5 py-0.5 text-xs font-bold ${levelColor[w.level]}`}>{w.level}</span>
               {onDelete && !picking && (
                 <button
@@ -148,6 +168,18 @@ function WordCard({
                 <div className="break-words text-xs text-muted">{w.ipa} · {w.pos}</div>
               </div>
               <div className="flex shrink-0 items-center gap-1.5">
+                <button
+                  type="button"
+                  title="Phát âm"
+                  aria-label={`Phát âm ${w.word}`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    speakWord(w.word);
+                  }}
+                  className="rounded-full p-1 text-muted transition hover:bg-bg hover:text-ink"
+                >
+                  <Volume2 size={15} />
+                </button>
                 <span className={`rounded-full px-2.5 py-0.5 text-xs font-bold ${levelColor[w.level]}`}>{w.level}</span>
                 {onDelete && !picking && (
                   <button
