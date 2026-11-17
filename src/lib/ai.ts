@@ -44,6 +44,7 @@ export async function askJson<T>(system: string, user: string): Promise<T> {
       const j = await r.json();
       if (!r.ok) throw new Error(j?.error?.message || `HTTP ${r.status}`);
       const text = j.candidates?.[0]?.content?.parts?.map((p: { text?: string }) => p.text ?? "").join("") ?? "";
+      console.log(`[AI Info] Gọi Gemini thành công với model: ${GEMINI_MODEL}`);
       return JSON.parse(text) as T;
     } catch (e) {
       const errMsg = (e as Error).message;
