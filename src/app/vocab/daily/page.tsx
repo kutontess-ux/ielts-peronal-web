@@ -1,13 +1,145 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Calendar, ExternalLink, GraduationCap, History, Loader2, Newspaper, Volume2 } from "lucide-react";
+import { Calendar, ChevronDown, ChevronRight, ExternalLink, GraduationCap, History, Loader2, Newspaper, Volume2 } from "lucide-react";
 import { levelColor } from "@/lib/mock";
 import { notifyDueUpdated } from "@/lib/due-events";
 import ExportButton from "@/components/ExportPanel";
 import type { DailyGroup, DailyWord } from "@/app/api/daily/route";
 
 type Mode = "today" | "yesterday" | "7d" | "custom";
+
+function DailyFlipCard({
+  w,
+  kind,
+  speak,
+}: {
+  w: DailyWord;
+  kind: "news" | "ielts";
+  speak: (word: string) => void;
+}) {
+  const [flipped, setFlipped] = useState(false);
+
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      aria-pressed={flipped}
+      aria-label={flipped ? `Úp thẻ ${w.word}` : `Lật thẻ ${w.word}`}
+      onClick={() => setFlipped((prev) => !prev)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          setFlipped((prev) => !prev);
+        }
+      }}
+      className="group cursor-pointer select-none [perspective:1000px] focus:outline-none"
+    >
+      <div
+        className={`grid h-full transition-transform duration-500 [transform-style:preserve-3d] ${
+          flipped ? "[transform:rotateY(180deg)]" : ""
+        }`}
+      >
+        {/* Mặt trước: chỉ hiển thị từ vựng, cấp độ CEFR và nút phát âm */}
+        <div
+          className={`col-start-1 row-start-1 flex min-h-[168px] flex-col justify-between rounded-2xl border-2 border-line/70 bg-card p-4 transition-colors group-hover:bg-card-hover dark:border-transparent [backface-visibility:hidden] [transform:rotateY(0deg)] ${
+            flipped ? "pointer-events-none" : ""
+          }`}
+        >
+          <div className="flex items-center justify-between gap-2">
+            <span className="inline-flex items-center gap-1 rounded-full bg-bg px-2.5 py-0.5 text-[11px] font-semibold text-muted">
+              {kind === "news" ? <Newspaper size={11} /> : <GraduationCap size={11} />}
+              {kind === "news" ? "Báo" : "IELTS"}
+            </span>
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                title="Phát âm"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  speak(w.word);
+                }}
+                className="rounded-full p-1 text-muted hover:bg-bg hover:text-ink"
+              >
+                <Volume2 size={15} />
+              </button>
+              <span className={`rounded-full px-2.5 py-0.5 text-xs font-bold ${levelColor[w.level]}`}>
+                {w.level}
+              </span>
+            </div>
+          </div>
+
+          <div className="my-2 flex flex-1 items-center justify-center text-center">
+            <div className="text-xl font-bold tracking-tight text-ink">{w.word}</div>
+          </div>
+
+          <div className="text-center text-[11px] font-medium text-muted/75">Bấm để lật</div>
+        </div>
+
+        {/* Mặt sau: đầy đủ nghĩa, IPA, ví dụ & link báo gốc */}
+        <div
+          className={`col-start-1 row-start-1 flex min-h-[168px] flex-col justify-between rounded-2xl border-2 border-line/70 bg-card p-4 transition-colors group-hover:bg-card-hover dark:border-transparent [backface-visibility:hidden] [transform:rotateY(180deg)] ${
+            flipped ? "" : "pointer-events-none"
+          }`}
+        >
+          <div>
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <div className="truncate text-lg font-bold text-ink">{w.word}</div>
+                <div className="text-xs text-muted">
+                  {w.ipa} · {w.pos}
+                </div>
+              </div>
+              <div className="flex shrink-0 items-center gap-1.5">
+                <button
+                  type="button"
+                  title="Phát âm"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    speak(w.word);
+                  }}
+                  className="rounded-full p-1 text-muted hover:bg-bg hover:text-ink"
+                >
+                  <Volume2 size={15} />
+                </button>
+                <span className={`rounded-full px-2.5 py-0.5 text-xs font-bold ${levelColor[w.level]}`}>
+                  {w.level}
+                </span>
+              </div>
+            </div>
+
+            <div className="mt-2 text-sm font-semibold text-brand-hover">{w.vi}</div>
+            <div className="mt-1 line-clamp-2 text-xs text-muted">{w.en}</div>
+            {(w.source_sentence || w.example) && (
+              <div className="mt-2 line-clamp-2 rounded-lg bg-bg/60 p-2 text-xs italic text-muted">
+                “{w.source_sentence || w.example}”
+              </div>
+            )}
+          </div>
+
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-1.5">
+            {w.topic && (
+              <span className="rounded-full bg-line px-2.5 py-0.5 text-[11px] font-semibold">
+                {w.topic}
+              </span>
+            )}
+            {w.article_url && (
+              <a
+                href={w.article_url}
+                target="_blank"
+                rel="noreferrer"
+                onClick={(e) => e.stopPropagation()}
+                className="inline-flex items-center gap-1 text-[11px] font-semibold text-brand-hover hover:underline"
+              >
+                {w.article_title ? "Bài báo gốc" : "Xem bài báo"} <ExternalLink size={11} />
+              </a>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function WordCards({
   news,
@@ -21,91 +153,40 @@ function WordCards({
   speak: (w: string) => void;
 }) {
   return (
-    <div className="space-y-8">
-      <section>
-        <div className="mb-3 flex items-center gap-2">
-          <Newspaper size={19} strokeWidth={1.6} className="text-brand-hover" />
-          <h2 className="text-lg font-bold">{news.length} từ từ báo mới</h2>
-          {news.length > 0 && (
+    <div className="space-y-6">
+      {news.length > 0 && (
+        <section>
+          <div className="mb-3 flex items-center gap-2">
+            <Newspaper size={18} strokeWidth={1.6} className="text-brand-hover" />
+            <h2 className="text-base font-bold sm:text-lg">{news.length} từ từ báo mới</h2>
             <div className="ml-auto">
               <ExportButton words={news} filename={`tu-bao-${date}`} label={`Xuất ${news.length} từ`} />
             </div>
-          )}
-        </div>
-        <div className="grid gap-4 md:grid-cols-2">
-          {news.map((w) => (
-            <div key={w.id} className="rounded-2xl bg-card p-5">
-              <div className="flex items-center justify-between gap-2">
-                <div className="flex items-center gap-2 text-xl font-bold">
-                  {w.word}
-                  <span className="text-sm font-normal text-muted">
-                    {w.ipa} · {w.pos}
-                  </span>
-                  <button onClick={() => speak(w.word)} title="Phát âm" className="text-muted hover:text-ink">
-                    <Volume2 size={17} />
-                  </button>
-                </div>
-                <span className={`rounded-full px-3 py-1 text-xs font-bold ${levelColor[w.level]}`}>{w.level}</span>
-              </div>
-              <div className="mt-1 font-semibold text-brand-hover">{w.vi}</div>
-              <div className="mt-1 text-xs text-muted">{w.en}</div>
-              {(w.source_sentence || w.example) && (
-                <div className="mt-3 rounded-xl bg-bg/60 p-3 text-sm italic text-muted">
-                  “{w.source_sentence || w.example}”
-                </div>
-              )}
-              {w.article_url && (
-                <a
-                  href={w.article_url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="mt-2 inline-flex items-center gap-1 text-xs text-brand-hover hover:underline"
-                >
-                  {w.article_title || "Xem bài báo gốc"} <ExternalLink size={12} />
-                </a>
-              )}
-            </div>
-          ))}
-        </div>
-      </section>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {news.map((w) => (
+              <DailyFlipCard key={w.id} w={w} kind="news" speak={speak} />
+            ))}
+          </div>
+        </section>
+      )}
 
-      <section>
-        <div className="mb-3 flex items-center gap-2">
-          <GraduationCap size={19} strokeWidth={1.6} className="text-brand-hover" />
-          <h2 className="text-lg font-bold">{ielts.length} từ IELTS</h2>
-          {ielts.length > 0 && (
+      {ielts.length > 0 && (
+        <section>
+          <div className="mb-3 flex items-center gap-2">
+            <GraduationCap size={18} strokeWidth={1.6} className="text-brand-hover" />
+            <h2 className="text-base font-bold sm:text-lg">{ielts.length} từ IELTS</h2>
             <div className="ml-auto">
               <ExportButton words={ielts} filename={`tu-ielts-${date}`} label={`Xuất ${ielts.length} từ`} />
             </div>
-          )}
-        </div>
-        <div className="grid gap-4 md:grid-cols-2">
-          {ielts.map((w) => (
-            <div key={w.id} className="rounded-2xl bg-card p-5">
-              <div className="flex items-center justify-between gap-2">
-                <div className="flex items-center gap-2 text-xl font-bold">
-                  {w.word}
-                  <span className="text-sm font-normal text-muted">
-                    {w.ipa} · {w.pos}
-                  </span>
-                  <button onClick={() => speak(w.word)} title="Phát âm" className="text-muted hover:text-ink">
-                    <Volume2 size={17} />
-                  </button>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <span className={`rounded-full px-2.5 py-0.5 text-xs font-bold ${levelColor[w.level]}`}>{w.level}</span>
-                  <span className="rounded-full bg-line px-3 py-1 text-xs font-semibold">{w.topic}</span>
-                </div>
-              </div>
-              <div className="mt-1 font-semibold text-brand-hover">{w.vi}</div>
-              <div className="mt-2 text-sm text-muted">{w.en}</div>
-              {w.example && (
-                <div className="mt-3 rounded-xl bg-bg/60 p-3 text-sm italic text-muted">“{w.example}”</div>
-              )}
-            </div>
-          ))}
-        </div>
-      </section>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {ielts.map((w) => (
+              <DailyFlipCard key={w.id} w={w} kind="ielts" speak={speak} />
+            ))}
+          </div>
+        </section>
+      )}
     </div>
   );
 }
@@ -118,6 +199,7 @@ export default function Daily() {
   const [news, setNews] = useState<DailyWord[]>([]);
   const [ielts, setIelts] = useState<DailyWord[]>([]);
   const [groups, setGroups] = useState<DailyGroup[]>([]);
+  const [openDates, setOpenDates] = useState<Set<string>>(new Set());
   const [history, setHistory] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
@@ -166,9 +248,11 @@ export default function Daily() {
       const r = await fetch("/api/daily?range=7d", { cache: "no-store" });
       const j = await r.json();
       if (!r.ok) throw new Error(j.error);
+      const nextGroups = (j.groups ?? []) as DailyGroup[];
       setToday(j.today);
       setYesterday(j.yesterday);
-      setGroups(j.groups ?? []);
+      setGroups(nextGroups);
+      setOpenDates(new Set(nextGroups[0] ? [nextGroups[0].date] : []));
       setHistory(j.history ?? []);
     } catch (e) {
       setErr((e as Error).message);
@@ -178,7 +262,10 @@ export default function Daily() {
   }, []);
 
   useEffect(() => {
-    loadDay();
+    const id = requestAnimationFrame(() => {
+      void loadDay();
+    });
+    return () => cancelAnimationFrame(id);
   }, [loadDay]);
 
   const switchMode = (next: Mode, customDate?: string) => {
@@ -190,24 +277,36 @@ export default function Daily() {
   };
 
   const speak = (word: string) => {
+    if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
+    speechSynthesis.cancel();
     const u = new SpeechSynthesisUtterance(word);
     u.lang = "en-GB";
     speechSynthesis.speak(u);
   };
 
+  const toggleDayGroup = (d: string) => {
+    setOpenDates((prev) => {
+      const next = new Set(prev);
+      if (next.has(d)) next.delete(d);
+      else next.add(d);
+      return next;
+    });
+  };
+
   const allSingle = [...news, ...ielts];
   const all7d = groups.flatMap((g) => [...g.news, ...g.ielts]);
+  const allDaysExpanded = groups.length > 0 && groups.every((g) => openDates.has(g.date));
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <div className="flex flex-wrap items-center gap-3">
         <div className="mr-auto">
           <h1 className="text-2xl font-bold">Từ vựng hằng ngày</h1>
-          <p className="text-muted">
+          <p className="text-sm text-muted">
             {mode === "7d"
-              ? `Tổng hợp 7 ngày qua · ${all7d.length} từ đã lưu`
+              ? `Tổng hợp 7 ngày qua · ${all7d.length} từ đã lưu · Bấm thẻ để lật xem nghĩa`
               : date
-                ? `Ngày ${date} · 5 từ báo & 5 từ IELTS (chỉ tạo 1 lần/ngày)`
+                ? `Ngày ${date} · 5 từ báo & 5 từ IELTS · Bấm thẻ để lật xem nghĩa`
                 : "Đang tải..."}
           </p>
         </div>
@@ -216,7 +315,20 @@ export default function Daily() {
           <ExportButton words={allSingle} filename={`tu-hang-ngay-${date}`} label="Xuất văn bản (Quizlet)" />
         )}
         {mode === "7d" && all7d.length > 0 && (
-          <ExportButton words={all7d} filename="tu-hang-ngay-7-ngay" label={`Xuất cả ${all7d.length} từ (7 ngày)`} />
+          <div className="flex flex-wrap items-center gap-2">
+            {groups.length > 1 && (
+              <button
+                type="button"
+                onClick={() =>
+                  setOpenDates(allDaysExpanded ? new Set() : new Set(groups.map((g) => g.date)))
+                }
+                className="rounded-full border border-line bg-card px-4 py-2 text-xs font-semibold text-muted transition hover:border-brand hover:text-ink"
+              >
+                {allDaysExpanded ? "Thu gọn tất cả" : "Mở tất cả"}
+              </button>
+            )}
+            <ExportButton words={all7d} filename="tu-hang-ngay-7-ngay" label={`Xuất cả ${all7d.length} từ (7 ngày)`} />
+          </div>
         )}
       </div>
 
@@ -302,19 +414,53 @@ export default function Daily() {
             Trong 7 ngày qua chưa có dữ liệu từ vựng hằng ngày.
           </div>
         ) : (
-          <div className="space-y-10">
+          <div className="space-y-4">
             {groups.map((g) => {
               const dayTotal = g.news.length + g.ielts.length;
+              const isOpen = openDates.has(g.date);
+              const dateLabel =
+                g.date === today
+                  ? `${g.date} (Hôm nay)`
+                  : g.date === yesterday
+                    ? `${g.date} (Hôm qua)`
+                    : g.date;
+
               return (
-                <div key={g.date} className="space-y-4 rounded-3xl border border-line bg-card/40 p-6">
-                  <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line pb-3">
-                    <div className="text-lg font-bold">
-                      {g.date === today ? `${g.date} (Hôm nay)` : g.date === yesterday ? `${g.date} (Hôm qua)` : g.date}
-                      <span className="ml-2 text-sm font-medium text-muted">({dayTotal} từ)</span>
+                <div key={g.date} className="overflow-hidden rounded-2xl border border-line bg-card/40">
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    aria-expanded={isOpen}
+                    onClick={() => toggleDayGroup(g.date)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        toggleDayGroup(g.date);
+                      }
+                    }}
+                    className="flex cursor-pointer flex-wrap items-center justify-between gap-3 px-5 py-3.5 transition hover:bg-card/70"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      {isOpen ? (
+                        <ChevronDown size={18} className="text-muted" />
+                      ) : (
+                        <ChevronRight size={18} className="text-muted" />
+                      )}
+                      <span className="text-base font-bold text-ink">{dateLabel}</span>
+                      <span className="rounded-full bg-bg px-2.5 py-0.5 text-xs font-semibold text-muted">
+                        {dayTotal} từ · {g.news.length} báo, {g.ielts.length} IELTS
+                      </span>
                     </div>
-                    <ExportButton words={[...g.news, ...g.ielts]} filename={`tu-hang-ngay-${g.date}`} label={`Xuất ${dayTotal} từ`} />
+                    <div onClick={(e) => e.stopPropagation()}>
+                      <ExportButton words={[...g.news, ...g.ielts]} filename={`tu-hang-ngay-${g.date}`} label={`Xuất ${dayTotal} từ`} />
+                    </div>
                   </div>
-                  <WordCards news={g.news} ielts={g.ielts} date={g.date} speak={speak} />
+
+                  {isOpen && (
+                    <div className="border-t border-line p-5">
+                      <WordCards news={g.news} ielts={g.ielts} date={g.date} speak={speak} />
+                    </div>
+                  )}
                 </div>
               );
             })}

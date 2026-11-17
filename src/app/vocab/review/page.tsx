@@ -2,10 +2,10 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
-import { Loader2, PartyPopper, Repeat, RotateCw, Volume2 } from "lucide-react";
+import { Loader2, PartyPopper, Repeat, RotateCw, Trash2, Volume2 } from "lucide-react";
 import { levelColor } from "@/lib/mock";
 import { notifyDueUpdated } from "@/lib/due-events";
-import { computeNextReview, type ReviewGrade } from "@/lib/srs";
+import { clearAllReviews, computeNextReview, type ReviewGrade } from "@/lib/srs";
 import type { ReviewWord } from "@/app/api/reviews/route";
 
 const GRADE_META: {
@@ -43,9 +43,11 @@ const GRADE_META: {
 export default function Review() {
   const [queue, setQueue] = useState<ReviewWord[]>([]);
   const [dueCount, setDueCount] = useState(0);
+  const [enrolledCount, setEnrolledCount] = useState(0);
   const [totalWords, setTotalWords] = useState(0);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [clearing, setClearing] = useState(false);
   const [flipped, setFlipped] = useState(false);
   const [revealed, setRevealed] = useState(false);
   const [reviewedInSession, setReviewedInSession] = useState(0);
@@ -58,6 +60,7 @@ export default function Review() {
         const j = await r.json();
         setQueue(j.words ?? []);
         setDueCount(j.dueCount ?? 0);
+        setEnrolledCount(j.enrolledCount ?? 0);
         setTotalWords(j.totalWords ?? 0);
         setFlipped(false);
         setRevealed(false);
@@ -66,6 +69,25 @@ export default function Review() {
       setLoading(false);
     }
   }, []);
+
+  const handleClearAll = async () => {
+    if (clearing) return;
+    if (!confirm("Xoá toàn bộ từ khỏi danh sách ôn tập ngắt quãng? (Từ vựng trong Kho vẫn được giữ nguyên)")) {
+      return;
+    }
+    setClearing(true);
+    try {
+      await clearAllReviews();
+      setQueue([]);
+      setDueCount(0);
+      setEnrolledCount(0);
+      setFlipped(false);
+      setRevealed(false);
+      notifyDueUpdated();
+    } finally {
+      setClearing(false);
+    }
+  };
 
   useEffect(() => {
     const id = requestAnimationFrame(() => {
@@ -160,7 +182,7 @@ export default function Review() {
       <div className="mx-auto max-w-xl rounded-3xl bg-card p-10 text-center">
         <Repeat size={44} strokeWidth={1.3} className="mx-auto text-brand-hover" />
         <h1 className="mt-4 text-2xl font-bold">Chưa có từ nào trong kho</h1>
-        <p className="mt-2 text-muted">Hãy nạp từ vựng vào kho trước, sau đó quay lại đây để ôn tập ngắt quãng.</p>
+        <p className="mt-2 text-muted">Hãy nạp từ vựng vào kho và tạo học phần trước khi ôn tập ngắt quãng.</p>
         <Link href="/vocab/bank" className="mt-6 inline-block rounded-full bg-brand px-6 py-3 font-bold text-white hover:bg-brand-hover hover:text-bg">
           Đi tới Kho từ vựng
         </Link>
@@ -172,19 +194,36 @@ export default function Review() {
     return (
       <div className="mx-auto max-w-xl rounded-3xl bg-card p-10 text-center">
         <PartyPopper size={52} strokeWidth={1.2} className="mx-auto text-brand-hover" />
-        <h1 className="mt-4 text-2xl font-bold">Hoàn thành phiên ôn tập!</h1>
+        <h1 className="mt-4 text-2xl font-bold">
+          {enrolledCount === 0 ? "Chưa có từ nào trong danh sách ôn" : "Hoàn thành phiên ôn tập!"}
+        </h1>
         <p className="mt-2 text-muted">
           {reviewedInSession > 0
             ? `Bạn đã hoàn thành ${reviewedInSession} từ. Lịch ôn tiếp theo đã được lưu và không còn thông báo nào.`
-            : "Hiện tại không có từ nào đến hạn ôn. Hãy quay lại sau hoặc nạp thêm từ mới."}
+            : enrolledCount === 0
+              ? "Chỉ những từ trong Học phần đã học hoặc Bộ sách / từ bạn chọn chuyển vào mới xuất hiện tại đây."
+              : "Hiện tại không có từ nào đến hạn ôn. Hãy học thêm học phần hoặc quay lại sau."}
         </p>
-        <div className="mt-6 flex justify-center gap-3">
-          <Link href="/vocab/bank" className="rounded-full bg-brand px-6 py-3 font-bold text-white hover:bg-brand-hover hover:text-bg">
+        <div className="mt-6 flex flex-wrap justify-center gap-3">
+          <Link href="/vocab" className="rounded-full bg-brand px-6 py-3 font-bold text-white hover:bg-brand-hover hover:text-bg">
+            Đi tới Thẻ ghi nhớ
+          </Link>
+          <Link href="/vocab/bank" className="rounded-full bg-line px-6 py-3 font-bold hover:bg-card-hover">
             Xem Kho từ vựng
           </Link>
-          <button onClick={load} className="rounded-full bg-line px-6 py-3 font-bold hover:bg-card-hover">
+          <button onClick={load} className="rounded-full bg-bg px-6 py-3 font-bold text-muted hover:text-ink">
             Kiểm tra lại
           </button>
+          {enrolledCount > 0 && (
+            <button
+              type="button"
+              onClick={handleClearAll}
+              disabled={clearing}
+              className="inline-flex items-center gap-1.5 rounded-full bg-rose-500/15 px-5 py-3 text-sm font-bold text-rose-700 hover:bg-rose-500/25 dark:text-rose-300 disabled:opacity-40"
+            >
+              <Trash2 size={15} /> Xoá danh sách ôn ({enrolledCount})
+            </button>
+          )}
         </div>
       </div>
     );
@@ -194,7 +233,7 @@ export default function Review() {
 
   return (
     <div className="mx-auto max-w-3xl">
-      <div className="mb-6 flex flex-wrap items-center justify-between gap-2">
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="flex items-center gap-2 text-2xl font-bold">
             <Repeat size={24} strokeWidth={1.6} className="text-brand-hover" /> Ôn tập ngắt quãng
@@ -203,8 +242,18 @@ export default function Review() {
             Còn <b className="text-ink">{dueCount} từ</b> cần ôn hôm nay
           </p>
         </div>
-        <div className="font-bold">
-          {reviewedInSession + 1} / {totalSession}
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={handleClearAll}
+            disabled={clearing}
+            className="inline-flex items-center gap-1.5 rounded-full border border-rose-500/40 bg-rose-500/10 px-3.5 py-1.5 text-xs font-bold text-rose-700 transition hover:bg-rose-500/20 dark:text-rose-300 disabled:opacity-40"
+          >
+            <Trash2 size={14} /> {clearing ? "Đang xoá..." : "Xoá toàn bộ từ cần ôn"}
+          </button>
+          <div className="font-bold">
+            {reviewedInSession + 1} / {totalSession}
+          </div>
         </div>
       </div>
       <div className="mb-6 h-2 overflow-hidden rounded-full bg-card">

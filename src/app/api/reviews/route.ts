@@ -35,7 +35,7 @@ export async function GET() {
       const rev = revMap.get(r.id as number);
       if (rev && Number(rev.interval_days) >= 7) masteredCount++;
 
-      const isDue = !rev || new Date(rev.due_at as string).getTime() <= now;
+      const isDue = !!rev && new Date(rev.due_at as string).getTime() <= now;
       if (isDue) {
         dueWords.push({
           id: r.id,
@@ -57,10 +57,61 @@ export async function GET() {
 
     return NextResponse.json({
       dueCount: dueWords.length,
+      enrolledCount: revMap.size,
       totalWords: (wordsData ?? []).length,
       masteredCount,
       words: dueWords.slice(0, 50),
     });
+  } catch (e) {
+    return NextResponse.json({ error: (e as Error).message }, { status: 500 });
+  }
+}
+
+// Chuyển từ vào hàng chờ ôn tập ngắt quãng (giữ nguyên lịch nếu từ đã có trong reviews)
+export async function PUT(req: Request) {
+  try {
+    const body = (await req.json().catch(() => ({}))) as { wordIds?: number[] };
+    const ids = Array.from(
+      new Set((body.wordIds ?? []).map(Number).filter((n) => Number.isFinite(n) && n > 0))
+    );
+    if (ids.length === 0) {
+      return NextResponse.json({ error: "Chưa có từ nào để chuyển" }, { status: 400 });
+    }
+
+    const db = supabaseAdmin();
+    const nowIso = new Date().toISOString();
+    let enrolled = 0;
+
+    for (let i = 0; i < ids.length; i += 500) {
+      const chunk = ids.slice(i, i + 500).map((word_id) => ({
+        word_id,
+        due_at: nowIso,
+        interval_days: 0,
+        ease: 2.5,
+        reps: 0,
+        lapses: 0,
+      }));
+      const { data, error } = await db
+        .from("reviews")
+        .upsert(chunk, { onConflict: "word_id", ignoreDuplicates: true })
+        .select("word_id");
+      if (error) throw new Error(error.message);
+      enrolled += data?.length ?? 0;
+    }
+
+    return NextResponse.json({ ok: true, enrolled, totalRequested: ids.length });
+  } catch (e) {
+    return NextResponse.json({ error: (e as Error).message }, { status: 500 });
+  }
+}
+
+// Xoá toàn bộ danh sách từ cần ôn tập ngắt quãng (giữ nguyên từ trong Kho)
+export async function DELETE() {
+  try {
+    const db = supabaseAdmin();
+    const { error } = await db.from("reviews").delete().gt("word_id", 0);
+    if (error) throw new Error(error.message);
+    return NextResponse.json({ ok: true });
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message }, { status: 500 });
   }

@@ -4,9 +4,11 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import {
   ArrowLeft, ArrowLeftRight, Check, Home, PartyPopper,
-  Pause, Play, RotateCcw, Shuffle, Star, Undo2, Volume2, X,
+  Pause, Play, Repeat, RotateCcw, Shuffle, Star, Undo2, Volume2, X,
 } from "lucide-react";
 import { levelColor, type Word } from "@/lib/mock";
+import { enrollWordsInSrs } from "@/lib/srs";
+import { notifyDueUpdated } from "@/lib/due-events";
 
 type HistoryEntry = {
   word: Word;
@@ -17,10 +19,12 @@ export default function Flashcards({
   title,
   words,
   onBack,
+  onCompleted,
 }: {
   title: string;
   words: Word[];
   onBack: () => void;
+  onCompleted?: () => void;
 }) {
   const [deck, setDeck] = useState<Word[]>(words);
   const [idx, setIdx] = useState(0);
@@ -29,6 +33,7 @@ export default function Flashcards({
   const [autoplay, setAutoplay] = useState(false);
   const [star, setStar] = useState<Record<number, boolean>>({});
   const [history, setHistory] = useState<HistoryEntry[]>([]);
+  const [srsMsg, setSrsMsg] = useState("");
 
   const done = idx >= deck.length;
   const card = deck[idx];
@@ -44,14 +49,37 @@ export default function Flashcards({
     speechSynthesis.speak(u);
   }, []);
 
+  const syncDeckToSrs = useCallback(
+    async (wordList: Word[]) => {
+      try {
+        const ids = wordList.map((w) => w.id);
+        const res = await enrollWordsInSrs(ids);
+        notifyDueUpdated();
+        onCompleted?.();
+        setSrsMsg(
+          res.enrolled > 0
+            ? `Đã chuyển ${res.enrolled} từ mới vào Ôn tập ngắt quãng`
+            : "Các từ trong học phần này đã nằm sẵn trong Ôn tập ngắt quãng"
+        );
+      } catch {
+        // bỏ qua nếu chưa kết nối DB
+      }
+    },
+    [onCompleted]
+  );
+
   const mark = useCallback(
     (known: boolean) => {
       if (!card) return;
+      const nextIdx = idx + 1;
       setHistory((h) => [...h, { word: card, known }]);
       setFlipped(false);
-      setIdx((x) => x + 1);
+      setIdx(nextIdx);
+      if (nextIdx >= deck.length) {
+        void syncDeckToSrs(deck);
+      }
     },
-    [card]
+    [card, idx, deck, syncDeckToSrs]
   );
 
   const undo = useCallback(() => {
@@ -72,6 +100,7 @@ export default function Flashcards({
     setHistory([]);
     setFlipped(false);
     setAutoplay(false);
+    setSrsMsg("");
   };
 
   const restart = (subset?: Word[]) => {
@@ -80,6 +109,7 @@ export default function Flashcards({
     setHistory([]);
     setFlipped(false);
     setAutoplay(false);
+    setSrsMsg("");
   };
 
   // Phím tắt giống Quizlet
@@ -130,7 +160,13 @@ export default function Flashcards({
         <h1 className="mt-4 text-3xl font-bold">Chúc mừng! Bạn đã học xong bộ thẻ</h1>
         <p className="mt-2 text-muted">{title} · {deck.length} thẻ</p>
 
-        <div className="mt-8 grid grid-cols-3 gap-4">
+        {srsMsg && (
+          <div className="mx-auto mt-4 inline-flex items-center gap-2 rounded-full bg-emerald-500/15 px-4 py-1.5 text-xs font-semibold text-emerald-700 dark:bg-emerald-400/15 dark:text-emerald-300">
+            <Repeat size={14} /> {srsMsg}
+          </div>
+        )}
+
+        <div className="mt-6 grid grid-cols-3 gap-4">
           <div className="rounded-2xl bg-bg p-4">
             <div className="text-2xl font-bold text-brand-hover">{pct}%</div>
             <div className="mt-1 text-xs text-muted">Hoàn thành</div>
@@ -154,6 +190,12 @@ export default function Flashcards({
               <RotateCcw size={16} /> Chỉ học lại {unknownList.length} từ chưa biết
             </button>
           )}
+          <Link
+            href="/vocab/review"
+            className="inline-flex items-center gap-2 rounded-full bg-emerald-500/15 px-6 py-3 text-sm font-bold text-emerald-700 hover:bg-emerald-500/25 dark:bg-emerald-400/15 dark:text-emerald-300"
+          >
+            <Repeat size={16} /> Đi ôn tập ngắt quãng
+          </Link>
           {starredWords.length > 0 && (
             <button
               onClick={() => restart(starredWords)}

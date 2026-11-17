@@ -3,9 +3,10 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  Bell, Check, CheckCircle2, ChevronRight, Layers, Loader2, Pencil, Plus, Search, Sparkles, Trash2, X,
+  Bell, Check, CheckCircle2, ChevronRight, Layers, Loader2, Pencil, Plus, Repeat, Search, Sparkles, Trash2, X,
 } from "lucide-react";
 import { levelColor, type Word } from "@/lib/mock";
+import { enrollWordsInSrs } from "@/lib/srs";
 import { notifyDueUpdated } from "@/lib/due-events";
 import { setActivityLabel } from "@/lib/activity";
 import {
@@ -377,6 +378,8 @@ export default function VocabLearn() {
     open: false,
     editing: null,
   });
+  const [enrollingId, setEnrollingId] = useState<string | null>(null);
+  const [srsBanner, setSrsBanner] = useState<{ text: string; isErr?: boolean } | null>(null);
 
   const studySets = useStudySets();
 
@@ -414,12 +417,34 @@ export default function VocabLearn() {
 
   const wordMap = useMemo(() => new Map(words.map((w) => [w.id, w])), [words]);
 
+  const handleEnrollSet = async (set: StudySet, setWords: Word[]) => {
+    if (setWords.length === 0 || enrollingId) return;
+    setEnrollingId(set.id);
+    setSrsBanner(null);
+    try {
+      const res = await enrollWordsInSrs(setWords.map((w) => w.id));
+      notifyDueUpdated();
+      await reloadWords();
+      setSrsBanner({
+        text:
+          res.enrolled > 0
+            ? `Đã chuyển ${res.enrolled} từ mới từ “${set.title}” vào Ôn tập ngắt quãng.`
+            : `Các từ trong “${set.title}” đã nằm sẵn trong Ôn tập ngắt quãng.`,
+      });
+    } catch (e) {
+      setSrsBanner({ text: (e as Error).message, isErr: true });
+    } finally {
+      setEnrollingId(null);
+    }
+  };
+
   if (activeSet) {
     return (
       <Flashcards
         title={activeSet.title}
         words={activeSet.words}
         onBack={() => setActiveSet(null)}
+        onCompleted={() => void reloadWords()}
       />
     );
   }
@@ -465,7 +490,7 @@ export default function VocabLearn() {
           <div>
             <h2 className="text-lg font-bold">Học phần của bạn</h2>
             <p className="text-xs text-muted">
-              Chỉ hiển thị các học phần bạn tự tạo để luyện Flashcards (Kho từ vựng lưu toàn bộ từ đã học).
+              Chỉ hiển thị các học phần bạn tự tạo để luyện Flashcards (học xong hoặc bấm nút để chuyển vào Ôn tập ngắt quãng).
             </p>
           </div>
           <button
@@ -476,6 +501,25 @@ export default function VocabLearn() {
             <Plus size={16} strokeWidth={2.2} /> Tạo học phần
           </button>
         </div>
+
+        {srsBanner && (
+          <div
+            className={`mb-4 flex flex-wrap items-center justify-between gap-2 rounded-2xl px-4 py-3 text-sm font-medium ${
+              srsBanner.isErr
+                ? "bg-rose-500/15 text-rose-700 dark:bg-rose-400/15 dark:text-rose-300"
+                : "bg-emerald-500/15 text-emerald-700 dark:bg-emerald-400/15 dark:text-emerald-300"
+            }`}
+          >
+            <span className="flex items-center gap-2">
+              <Repeat size={15} /> {srsBanner.text}
+            </span>
+            {!srsBanner.isErr && (
+              <Link href="/vocab/review" className="text-xs font-bold underline">
+                Mở Ôn tập ngắt quãng →
+              </Link>
+            )}
+          </div>
+        )}
 
         {loading ? (
           <div className="flex items-center gap-2 py-8 text-muted">
@@ -502,6 +546,7 @@ export default function VocabLearn() {
               const setWords = s.wordIds
                 .map((id) => wordMap.get(id))
                 .filter((w): w is Word => !!w);
+              const busy = enrollingId === s.id;
               return (
                 <div
                   key={s.id}
@@ -541,15 +586,28 @@ export default function VocabLearn() {
                     </div>
                   </div>
 
-                  <button
-                    type="button"
-                    disabled={setWords.length === 0}
-                    onClick={() => setActiveSet({ title: s.title, words: setWords })}
-                    className="mt-4 flex w-full items-center justify-between rounded-xl bg-bg px-4 py-2.5 text-sm font-bold text-ink transition hover:bg-brand hover:text-white disabled:opacity-40"
-                  >
-                    <span>{setWords.length > 0 ? "Học thẻ ngay" : "Chưa có thẻ hợp lệ"}</span>
-                    <ChevronRight size={16} />
-                  </button>
+                  <div className="mt-4 space-y-2">
+                    <button
+                      type="button"
+                      disabled={setWords.length === 0}
+                      onClick={() => setActiveSet({ title: s.title, words: setWords })}
+                      className="flex w-full items-center justify-between rounded-xl bg-bg px-4 py-2.5 text-sm font-bold text-ink transition hover:bg-brand hover:text-white disabled:opacity-40"
+                    >
+                      <span>{setWords.length > 0 ? "Học thẻ ngay" : "Chưa có thẻ hợp lệ"}</span>
+                      <ChevronRight size={16} />
+                    </button>
+                    {setWords.length > 0 && (
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => handleEnrollSet(s, setWords)}
+                        className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-line bg-bg/50 px-3 py-2 text-xs font-semibold text-muted transition hover:border-brand hover:text-brand-hover disabled:opacity-50"
+                      >
+                        {busy ? <Loader2 size={13} className="animate-spin" /> : <Repeat size={13} />}
+                        {busy ? "Đang chuyển..." : "Chuyển vào ôn tập"}
+                      </button>
+                    )}
+                  </div>
                 </div>
               );
             })}

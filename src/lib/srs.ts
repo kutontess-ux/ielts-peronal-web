@@ -83,3 +83,23 @@ export function computeNextReview(prev: ReviewState, grade: ReviewGrade): Comput
     label: `${nextInterval} ngày`,
   };
 }
+
+export async function enrollWordsInSrs(wordIds: number[]): Promise<{ enrolled: number }> {
+  const uniqueIds = Array.from(new Set(wordIds)).filter((id) => Number.isFinite(id) && id > 0);
+  if (uniqueIds.length === 0) return { enrolled: 0 };
+
+  const res = await fetch("/api/reviews", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ wordIds: uniqueIds }),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || "Không chuyển được từ vào ôn tập");
+  return { enrolled: Number(json.enrolled ?? 0) };
+}
+
+export async function clearAllReviews(): Promise<void> {
+  const res = await fetch("/api/reviews", { method: "DELETE" });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || "Không xoá được danh sách ôn tập");
+}

@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, BookMarked, Bot, Check, ChevronDown, ChevronUp, Loader2, Plus, Search, Sparkles } from "lucide-react";
+import { ArrowLeft, BookMarked, Bot, Check, ChevronDown, ChevronUp, Loader2, Plus, Repeat, Search, Sparkles } from "lucide-react";
 import { levelColor, type Word } from "@/lib/mock";
+import { enrollWordsInSrs } from "@/lib/srs";
 import { notifyDueUpdated } from "@/lib/due-events";
 import { setActivityLabel } from "@/lib/activity";
 import ExportButton from "@/components/ExportPanel";
@@ -96,6 +97,7 @@ export default function BookSection({
 
   const [msg, setMsg] = useState("");
   const [err, setErr] = useState("");
+  const [srsBusy, setSrsBusy] = useState(false);
 
   useEffect(() => {
     const raf = requestAnimationFrame(() => {
@@ -251,6 +253,26 @@ export default function BookSection({
     }
   };
 
+  const enrollBookToSrs = async () => {
+    if (bookFiltered.length === 0 || srsBusy) return;
+    setSrsBusy(true);
+    setErr("");
+    setMsg("");
+    try {
+      const res = await enrollWordsInSrs(bookFiltered.map((w) => w.id));
+      notifyDueUpdated();
+      setMsg(
+        res.enrolled > 0
+          ? `Đã chuyển ${res.enrolled} từ mới vào Ôn tập ngắt quãng.`
+          : "Các từ này đã nằm sẵn trong Ôn tập ngắt quãng."
+      );
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setSrsBusy(false);
+    }
+  };
+
   // Màn hình danh sách các bộ sách
   if (!activeBook) {
     return (
@@ -389,14 +411,27 @@ export default function BookSection({
             </div>
           </div>
 
-          <button
-            type="button"
-            onClick={() => setToolsOpen((v) => !v)}
-            className="inline-flex items-center gap-1.5 rounded-full border border-line bg-bg px-3.5 py-1.5 text-xs font-semibold text-muted transition hover:border-brand hover:text-ink"
-          >
-            {toolsOpen ? "Thu gọn công cụ & lọc" : "Mở công cụ & lọc"}
-            {toolsOpen ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            {bookFiltered.length > 0 && (
+              <button
+                type="button"
+                onClick={enrollBookToSrs}
+                disabled={srsBusy}
+                className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/15 px-3.5 py-1.5 text-xs font-bold text-emerald-700 transition hover:bg-emerald-500/25 disabled:opacity-50 dark:bg-emerald-400/15 dark:text-emerald-300"
+              >
+                {srsBusy ? <Loader2 size={14} className="animate-spin" /> : <Repeat size={14} />}
+                {srsBusy ? "Đang chuyển..." : `Chuyển ${bookFiltered.length} từ vào ôn tập`}
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => setToolsOpen((v) => !v)}
+              className="inline-flex items-center gap-1.5 rounded-full border border-line bg-bg px-3.5 py-1.5 text-xs font-semibold text-muted transition hover:border-brand hover:text-ink"
+            >
+              {toolsOpen ? "Thu gọn công cụ & lọc" : "Mở công cụ & lọc"}
+              {toolsOpen ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
+            </button>
+          </div>
         </div>
 
         {toolsOpen && (

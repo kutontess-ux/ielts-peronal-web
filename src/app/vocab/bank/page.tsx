@@ -1,9 +1,10 @@
 "use client";
 
 import { createElement, useCallback, useEffect, useMemo, useState } from "react";
-import { ArrowLeft, BookMarked, Bot, Check, ChevronDown, Loader2, Package, RotateCcw, Search, Trash2, Upload } from "lucide-react";
+import { ArrowLeft, BookMarked, Bot, Check, ChevronDown, ChevronLeft, ChevronRight, Loader2, Package, Repeat, RotateCcw, Search, Trash2, Upload } from "lucide-react";
 import { LEVEL_INFO, levelColor, type Word } from "@/lib/mock";
 import { topicIcon } from "@/lib/icons";
+import { enrollWordsInSrs } from "@/lib/srs";
 import { notifyDueUpdated } from "@/lib/due-events";
 import { setActivityLabel } from "@/lib/activity";
 import ExportButton from "@/components/ExportPanel";
@@ -14,6 +15,7 @@ type Tab = "all" | "topic" | "level" | "book";
 type Sel = { kind: "topic" | "level"; value: string } | null;
 type Sort = "az" | "za" | "level-asc" | "level-desc";
 
+const PAGE_SIZE = 30;
 const LEVELS = ["A2", "B1", "B2", "C1", "C2"];
 const LV: Record<string, number> = { A2: 0, B1: 1, B2: 2, C1: 3, C2: 4 };
 const LEVEL_BAR: Record<string, string> = {
@@ -26,6 +28,20 @@ type PreviewItem = {
   cefr_level?: string; topic?: string; is_awl?: boolean; collocations?: string[]; synonyms?: string[];
 };
 type Preview = { items: PreviewItem[]; summary: { total: number; new: number; duplicate: number; invalid: number } };
+
+function getPageNumbers(current: number, total: number): (number | "...")[] {
+  if (total <= 7) {
+    return Array.from({ length: total }, (_, i) => i + 1);
+  }
+  const pages: (number | "...")[] = [1];
+  if (current > 3) pages.push("...");
+  const start = Math.max(2, current - 1);
+  const end = Math.min(total - 1, current + 1);
+  for (let p = start; p <= end; p++) pages.push(p);
+  if (current < total - 2) pages.push("...");
+  pages.push(total);
+  return pages;
+}
 
 function WordCard({
   w,
@@ -51,7 +67,7 @@ function WordCard({
   };
 
   const borderCls = checked
-    ? "border-rose-400"
+    ? "border-brand"
     : "border-line/70 dark:border-transparent";
 
   return (
@@ -88,7 +104,7 @@ function WordCard({
                   checked={checked}
                   onChange={() => onToggleSelect?.(w.id)}
                   onClick={(e) => e.stopPropagation()}
-                  className="mt-1 h-4 w-4 accent-rose-500"
+                  className="mt-1 h-4 w-4 accent-brand"
                 />
               )}
             </div>
@@ -169,26 +185,116 @@ function WordGrid({
   onDelete,
   selectedIds,
   onToggleSelect,
+  onTogglePage,
 }: {
   list: Word[];
   onDelete?: (w: Word) => void;
   selectedIds?: Set<number>;
   onToggleSelect?: (id: number) => void;
+  onTogglePage?: (pageIds: number[], allSelected: boolean) => void;
 }) {
+  const listKey = useMemo(() => list.map((w) => w.id).join(","), [list]);
+  const [pageState, setPageState] = useState<{ key: string; page: number }>({ key: listKey, page: 1 });
+
   if (list.length === 0) return <div className="py-10 text-center text-muted">Không tìm thấy từ nào.</div>;
+
   const picking = !!selectedIds;
+  const totalPages = Math.max(1, Math.ceil(list.length / PAGE_SIZE));
+  const rawPage = pageState.key === listKey ? pageState.page : 1;
+  const page = Math.min(Math.max(1, rawPage), totalPages);
+  const start = (page - 1) * PAGE_SIZE;
+  const end = Math.min(start + PAGE_SIZE, list.length);
+  const paged = list.slice(start, end);
+
+  const pageIds = paged.map((w) => w.id);
+  const allPageSelected = picking && pageIds.length > 0 && pageIds.every((id) => selectedIds.has(id));
+  const pageNumbers = getPageNumbers(page, totalPages);
+
+  const goPage = (nextPage: number) => {
+    const clamped = Math.min(Math.max(1, nextPage), totalPages);
+    setPageState({ key: listKey, page: clamped });
+  };
+
   return (
-    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-      {list.map((w) => (
-        <WordCard
-          key={w.id}
-          w={w}
-          onDelete={onDelete}
-          picking={picking}
-          checked={selectedIds?.has(w.id) ?? false}
-          onToggleSelect={onToggleSelect}
-        />
-      ))}
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted">
+        <span>
+          Hiển thị <b className="text-ink">{start + 1}–{end}</b> / {list.length} từ
+          {totalPages > 1 && ` · Trang ${page}/${totalPages}`}
+        </span>
+        {picking && onTogglePage && (
+          <button
+            type="button"
+            onClick={() => onTogglePage(pageIds, allPageSelected)}
+            className="rounded-full border border-line bg-card px-3 py-1 font-semibold text-ink transition hover:border-brand"
+          >
+            {allPageSelected ? `Bỏ chọn ${paged.length} từ trang này` : `Chọn ${paged.length} từ trang này`}
+          </button>
+        )}
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        {paged.map((w) => (
+          <WordCard
+            key={w.id}
+            w={w}
+            onDelete={onDelete}
+            picking={picking}
+            checked={selectedIds?.has(w.id) ?? false}
+            onToggleSelect={onToggleSelect}
+          />
+        ))}
+      </div>
+
+      {totalPages > 1 && (
+        <nav aria-label="Phân trang kho từ vựng" className="flex flex-wrap items-center justify-between gap-3 pt-2">
+          <span className="text-xs text-muted">
+            Trang {page} / {totalPages} ({PAGE_SIZE} từ/trang)
+          </span>
+          <div className="flex flex-wrap items-center gap-1.5">
+            <button
+              type="button"
+              disabled={page <= 1}
+              onClick={() => goPage(page - 1)}
+              aria-label="Trang trước"
+              className="inline-flex items-center gap-1 rounded-full border border-line bg-card px-3 py-1.5 text-xs font-semibold text-ink transition hover:border-brand disabled:opacity-40"
+            >
+              <ChevronLeft size={14} /> Trước
+            </button>
+            {pageNumbers.map((item, idx) =>
+              item === "..." ? (
+                <span key={`ellipsis-${idx}`} className="px-1.5 text-xs text-muted">
+                  …
+                </span>
+              ) : (
+                <button
+                  key={item}
+                  type="button"
+                  onClick={() => goPage(item)}
+                  aria-label={`Trang ${item}`}
+                  aria-current={item === page ? "page" : undefined}
+                  className={`min-w-[34px] rounded-full px-2.5 py-1.5 text-xs font-bold transition ${
+                    item === page
+                      ? "bg-brand text-white"
+                      : "border border-line bg-card text-muted hover:border-brand hover:text-ink"
+                  }`}
+                >
+                  {item}
+                </button>
+              )
+            )}
+            <button
+              type="button"
+              disabled={page >= totalPages}
+              onClick={() => goPage(page + 1)}
+              aria-label="Trang sau"
+              className="inline-flex items-center gap-1 rounded-full border border-line bg-card px-3 py-1.5 text-xs font-semibold text-ink transition hover:border-brand disabled:opacity-40"
+            >
+              Sau <ChevronRight size={14} />
+            </button>
+          </div>
+        </nav>
+      )}
     </div>
   );
 }
@@ -335,9 +441,11 @@ export default function Bank() {
   const [subFilter, setSubFilter] = useState<string[]>([]);
   const [showSubFilters, setShowSubFilters] = useState(true);
 
-  // Xoá từ & tuỳ chỉnh icon/ảnh thẻ chủ đề
+  // Chọn nhiều để xoá / chuyển vào ôn tập ngắt quãng & tuỳ chỉnh icon/ảnh thẻ chủ đề
   const [selectMode, setSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [enrollingSelected, setEnrollingSelected] = useState(false);
+  const [bankMsg, setBankMsg] = useState<{ text: string; isErr?: boolean } | null>(null);
   const { badges, saveBadge } = useCardBadges();
   const [editingTopicBadge, setEditingTopicBadge] = useState<string | null>(null);
 
@@ -369,10 +477,43 @@ export default function Bank() {
     }
   };
 
+  const enrollSelected = async () => {
+    if (selectedIds.size === 0 || enrollingSelected) return;
+    setEnrollingSelected(true);
+    setBankMsg(null);
+    try {
+      const res = await enrollWordsInSrs(Array.from(selectedIds));
+      notifyDueUpdated();
+      setSelectedIds(new Set());
+      setSelectMode(false);
+      setBankMsg({
+        text:
+          res.enrolled > 0
+            ? `Đã chuyển ${res.enrolled} từ mới vào Ôn tập ngắt quãng.`
+            : "Các từ đã chọn đều đã nằm sẵn trong Ôn tập ngắt quãng.",
+      });
+    } catch (e) {
+      setBankMsg({ text: (e as Error).message, isErr: true });
+    } finally {
+      setEnrollingSelected(false);
+    }
+  };
+
   const toggleSelectId = (id: number) =>
     setSelectedIds((prev) => {
       const n = new Set(prev);
       n.has(id) ? n.delete(id) : n.add(id);
+      return n;
+    });
+
+  const togglePageIds = (pageIds: number[], allPageSelected: boolean) =>
+    setSelectedIds((prev) => {
+      const n = new Set(prev);
+      if (allPageSelected) {
+        for (const id of pageIds) n.delete(id);
+      } else {
+        for (const id of pageIds) n.add(id);
+      }
       return n;
     });
 
@@ -382,6 +523,7 @@ export default function Bank() {
       onDelete={deleteWord}
       selectedIds={selectMode ? selectedIds : undefined}
       onToggleSelect={toggleSelectId}
+      onTogglePage={togglePageIds}
     />
   );
 
@@ -506,20 +648,30 @@ export default function Bank() {
                 </button>
                 <div className="ml-auto flex flex-wrap items-center gap-3">
                   <button
-                    onClick={() => { setSelectMode((v) => !v); setSelectedIds(new Set()); }}
+                    onClick={() => { setSelectMode((v) => !v); setSelectedIds(new Set()); setBankMsg(null); }}
                     className={`inline-flex items-center gap-1.5 rounded-full px-4 py-2.5 text-sm font-semibold transition ${
-                      selectMode ? "bg-rose-500 text-white" : "bg-card text-muted hover:text-ink"
+                      selectMode ? "bg-ink text-bg" : "bg-card text-muted hover:text-ink"
                     }`}
                   >
-                    <Trash2 size={15} /> {selectMode ? "Huỷ chọn" : "Chọn xoá"}
+                    <Check size={15} /> {selectMode ? "Huỷ chọn" : "Chọn nhiều"}
                   </button>
                   {selectMode && selectedIds.size > 0 && (
-                    <button
-                      onClick={deleteSelected}
-                      className="inline-flex items-center gap-1.5 rounded-full bg-rose-500 px-4 py-2.5 text-sm font-bold text-white hover:bg-rose-400"
-                    >
-                      Xoá {selectedIds.size} từ
-                    </button>
+                    <>
+                      <button
+                        onClick={enrollSelected}
+                        disabled={enrollingSelected}
+                        className="inline-flex items-center gap-1.5 rounded-full bg-brand px-4 py-2.5 text-sm font-bold text-white hover:bg-brand-hover hover:text-bg disabled:opacity-50"
+                      >
+                        {enrollingSelected ? <Loader2 size={14} className="animate-spin" /> : <Repeat size={14} />}
+                        Chuyển {selectedIds.size} từ vào ôn tập
+                      </button>
+                      <button
+                        onClick={deleteSelected}
+                        className="inline-flex items-center gap-1.5 rounded-full bg-rose-500 px-4 py-2.5 text-sm font-bold text-white hover:bg-rose-400"
+                      >
+                        Xoá {selectedIds.size} từ
+                      </button>
+                    </>
                   )}
                   <select value={sort} onChange={(e) => setSort(e.target.value as Sort)} className="rounded-full border border-line px-4 py-2.5 text-sm">
                     <option value="az">Từ A → Z</option>
@@ -530,6 +682,18 @@ export default function Bank() {
                   <ExportButton words={filtered} filename="kho-tu-vung" label={`Xuất ${filtered.length} từ`} />
                 </div>
               </div>
+
+              {bankMsg && (
+                <div
+                  className={`flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium ${
+                    bankMsg.isErr
+                      ? "bg-rose-500/15 text-rose-700 dark:bg-rose-400/15 dark:text-rose-300"
+                      : "bg-emerald-500/15 text-emerald-700 dark:bg-emerald-400/15 dark:text-emerald-300"
+                  }`}
+                >
+                  <Repeat size={15} /> {bankMsg.text}
+                </div>
+              )}
 
               {showFilters && (
                 <div className="space-y-4 rounded-2xl bg-card p-5">
@@ -557,7 +721,6 @@ export default function Bank() {
                 </div>
               )}
 
-              <div className="text-sm text-muted">Hiển thị {filtered.length} / {words.length} từ</div>
               {renderGrid(filtered)}
             </div>
           )}
