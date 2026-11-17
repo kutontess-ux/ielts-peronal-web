@@ -10,6 +10,7 @@ type AuthStatus = {
   secretConfigured: boolean;
   adminEmailsConfigured: boolean;
   migrationReady: boolean;
+  migrationError?: string | null;
 };
 
 function LoginCard() {
@@ -87,7 +88,11 @@ function LoginCard() {
               )}
               {missingMigration && (
                 <li>
-                  Chưa chạy file SQL <code className="font-bold">supabase/migrations/20261118_multi_user_admin.sql</code> trong Supabase SQL Editor.
+                  Chưa chạy (hoặc Supabase chưa làm mới cache) file SQL{" "}
+                  <code className="font-bold">supabase/migrations/20261118_multi_user_admin.sql</code>.
+                  {status?.migrationError ? (
+                    <span className="mt-0.5 block opacity-80">Chi tiết: {status.migrationError}</span>
+                  ) : null}
                 </li>
               )}
               {missingAdminEmail && (

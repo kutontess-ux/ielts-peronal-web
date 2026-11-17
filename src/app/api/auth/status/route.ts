@@ -9,13 +9,18 @@ export async function GET() {
   const adminEmailsConfigured = Boolean((process.env.ADMIN_EMAILS || "").trim());
 
   let migrationReady = false;
+  let migrationError: string | null = null;
   if (url && secretKey) {
     try {
       const db = supabaseAdmin();
-      const { error } = await db.from("profiles").select("id", { head: true, count: "exact" });
+      const { error } = await db
+        .from("profiles")
+        .select("id,role,is_active,daily_ai_limit", { head: true, count: "exact" });
       migrationReady = !error;
-    } catch {
+      if (error) migrationError = error.message;
+    } catch (e) {
       migrationReady = false;
+      migrationError = (e as Error).message;
     }
   }
 
@@ -24,5 +29,6 @@ export async function GET() {
     secretConfigured: Boolean(url && secretKey),
     adminEmailsConfigured,
     migrationReady,
+    migrationError,
   });
 }

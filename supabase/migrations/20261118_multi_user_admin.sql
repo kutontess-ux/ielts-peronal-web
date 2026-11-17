@@ -4,7 +4,7 @@
 -- 1. Bảng hồ sơ & phân quyền người dùng (chỉ Admin mới sửa được role / is_active / daily_ai_limit qua server)
 create table if not exists public.profiles (
   id             uuid primary key references auth.users(id) on delete cascade,
-  email          text not null,
+  email          text not null default '',
   full_name      text not null default '',
   avatar_url     text,
   role           text not null default 'member' check (role in ('admin', 'member')),
@@ -13,6 +13,15 @@ create table if not exists public.profiles (
   created_at     timestamptz not null default now(),
   updated_at     timestamptz not null default now()
 );
+alter table public.profiles
+  add column if not exists email text not null default '',
+  add column if not exists full_name text not null default '',
+  add column if not exists avatar_url text,
+  add column if not exists role text not null default 'member',
+  add column if not exists is_active boolean not null default true,
+  add column if not exists daily_ai_limit int not null default 10,
+  add column if not exists created_at timestamptz not null default now(),
+  add column if not exists updated_at timestamptz not null default now();
 create index if not exists profiles_email_idx on public.profiles (email);
 
 alter table public.profiles enable row level security;
@@ -171,3 +180,6 @@ create policy "reading_notes_own_all"
   to authenticated
   using (auth.uid() = user_id)
   with check (auth.uid() = user_id);
+
+-- 7. Làm mới schema cache của Supabase PostgREST ngay lập tức
+notify pgrst, 'reload schema';

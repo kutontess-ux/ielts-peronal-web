@@ -87,11 +87,7 @@ async function ensureProfile(
     .maybeSingle();
 
   if (readErr) {
-    throw new Error(
-      readErr.message.includes("profiles")
-        ? "Chưa chạy SQL migration multi-user (thiếu bảng public.profiles)."
-        : readErr.message
-    );
+    throw new Error(`Lỗi đọc bảng public.profiles: ${readErr.message}`);
   }
 
   const adminEmails = getAdminEmailSet();
