@@ -289,10 +289,20 @@ export async function POST(req: Request) {
       wordId?: number;
       isCorrect?: boolean;
       isRetryInSession?: boolean;
+      grade?: string;
     };
 
     const wordId = Number(body.wordId);
-    if (!wordId || typeof body.isCorrect !== "boolean") {
+    let isCorrect: boolean | null =
+      typeof body.isCorrect === "boolean" ? body.isCorrect : null;
+
+    // Tương thích ngược nếu tab trình duyệt cũ còn cache giao diện 4 nút grade
+    if (isCorrect === null && typeof body.grade === "string") {
+      if (body.grade === "good" || body.grade === "easy") isCorrect = true;
+      else if (body.grade === "again" || body.grade === "hard") isCorrect = false;
+    }
+
+    if (!wordId || isCorrect === null) {
       return NextResponse.json({ error: "Dữ liệu không hợp lệ" }, { status: 400 });
     }
 
@@ -309,7 +319,7 @@ export async function POST(req: Request) {
         level: Number(existing?.level ?? 1),
         level5_streak: Number(existing?.level5_streak ?? 0),
       },
-      body.isCorrect,
+      isCorrect,
       Boolean(body.isRetryInSession)
     );
 
