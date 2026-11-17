@@ -16,7 +16,10 @@ export async function GET() {
       ai_config: {
         has_gemini_key: !!process.env.GEMINI_API_KEY,
         gemini_model: process.env.GEMINI_MODEL || "gemini-3.5-flash-lite",
+        has_gemini_key_2: !!process.env.GEMINI_API_KEY_2,
+        gemini_model_2: process.env.GEMINI_MODEL_2 || "gemini-2.5-flash-lite",
         has_openai_key: !!process.env.OPENAI_API_KEY,
+        openai_model: process.env.OPENAI_MODEL || "gpt-4o-mini",
         openai_fallback_disabled: process.env.DISABLE_OPENAI_FALLBACK === "true",
       },
     });

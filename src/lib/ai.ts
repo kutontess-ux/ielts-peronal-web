@@ -22,34 +22,27 @@ export type Enriched = {
 };
 
 const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-3.5-flash-lite";
+const GEMINI_MODEL_2 = process.env.GEMINI_MODEL_2 || "gemini-2.5-flash-lite";
 const OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-4o-mini";
 
-// Gọi Gemini (chính), lỗi thì chuyển sang OpenAI (dự phòng). Luôn trả về JSON đã parse.
+// Gọi Gemini #1 (chính) -> Gemini #2 (dự phòng miễn phí/rẻ) -> OpenAI (chỉ dùng khi cả 2 key Gemini đều lỗi).
 export async function askJson<T>(system: string, user: string): Promise<T> {
   const errors: string[] = [];
-  if (process.env.GEMINI_API_KEY) {
+  const geminiTargets = [
+    { label: "Gemini #1", apiKey: process.env.GEMINI_API_KEY, model: GEMINI_MODEL },
+    { label: "Gemini #2", apiKey: process.env.GEMINI_API_KEY_2, model: GEMINI_MODEL_2 },
+  ];
+
+  for (const target of geminiTargets) {
+    if (!target.apiKey) continue;
     try {
-      const r = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "x-goog-api-key": process.env.GEMINI_API_KEY },
-          body: JSON.stringify({
-            systemInstruction: { parts: [{ text: system }] },
-            contents: [{ role: "user", parts: [{ text: user }] }],
-            generationConfig: { responseMimeType: "application/json", temperature: 0.2 },
-          }),
-        }
-      );
-      const j = await r.json();
-      if (!r.ok) throw new Error(j?.error?.message || `HTTP ${r.status}`);
-      const text = j.candidates?.[0]?.content?.parts?.map((p: { text?: string }) => p.text ?? "").join("") ?? "";
-      console.log(`[AI Info] Gọi Gemini thành công với model: ${GEMINI_MODEL}`);
-      return JSON.parse(text) as T;
+      const res = await callGeminiJson<T>(target.apiKey, target.model, system, user);
+      console.log(`[AI Info] Gọi ${target.label} thành công với model: ${target.model}`);
+      return res;
     } catch (e) {
       const errMsg = (e as Error).message;
-      console.warn(`[AI Warning] Gemini thất bại (${errMsg}).`);
-      errors.push(`Gemini: ${errMsg}`);
+      console.warn(`[AI Warning] ${target.label} (${target.model}) thất bại (${errMsg}).`);
+      errors.push(`${target.label}: ${errMsg}`);
     }
   }
 
@@ -57,7 +50,7 @@ export async function askJson<T>(system: string, user: string): Promise<T> {
   const allowOpenAi = process.env.OPENAI_API_KEY && process.env.DISABLE_OPENAI_FALLBACK !== "true";
   if (allowOpenAi) {
     try {
-      console.info("[AI Info] Đang fallback sang OpenAI (có tính phí)...");
+      console.info(`[AI Info] Cả 2 key Gemini đều lỗi, đang fallback sang OpenAI (${OPENAI_MODEL})...`);
       const r = await fetch("https://api.openai.com/v1/chat/completions", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${process.env.OPENAI_API_KEY}` },
@@ -78,7 +71,7 @@ export async function askJson<T>(system: string, user: string): Promise<T> {
       errors.push(`OpenAI: ${(e as Error).message}`);
     }
   }
-  throw new Error("Lỗi gọi AI: " + errors.join(" | "));
+  throw new Error("Lỗi gọi AI: " + (errors.length ? errors.join(" | ") : "Chưa cấu hình API key"));
 }
 
 export type AiProfile = "vocab" | "reason" | "default";
@@ -98,8 +91,9 @@ async function callGeminiJson<T>(apiKey: string, model: string, system: string, 
   );
   const j = await r.json();
   if (!r.ok) throw new Error(j?.error?.message || `HTTP ${r.status}`);
-  const text = j.candidates?.[0]?.content?.parts?.map((p: { text?: string }) => p.text ?? "").join("") ?? "";
-  return JSON.parse(text) as T;
+  const raw = (j.candidates?.[0]?.content?.parts?.map((p: { text?: string }) => p.text ?? "").join("") ?? "").trim();
+  const cleaned = raw.replace(/^```json\s*/i, "").replace(/```$/i, "").trim();
+  return JSON.parse(cleaned) as T;
 }
 
 async function callOpenAiCompatibleJson<T>(
