@@ -116,7 +116,6 @@ async function generateDaily(day: string) {
   ]);
 
   const haveKeys = new Set((existingRows ?? []).map((r) => r.norm_key as string));
-  const excludeList = (existingRows ?? []).map((r) => r.lemma as string).slice(0, 400);
 
   const system = `Bạn là giáo viên IELTS Academic cho người Việt trình độ B1 hướng tới band 6.5.
 Nhiệm vụ: Tạo danh sách 10 từ vựng hằng ngày gồm:
@@ -124,7 +123,7 @@ Nhiệm vụ: Tạo danh sách 10 từ vựng hằng ngày gồm:
 2) ĐÚNG 5 từ (kind="ielts") là từ vựng học thuật IELTS Academic (B2-C1) hay dùng trong Writing Task 2 / Reading, khác với 5 từ báo.
 
 QUY TẮC BẮT BUỘC:
-- Không được trùng với bất kỳ từ nào trong danh sách đã có: ${JSON.stringify(excludeList)}.
+- Ưu tiên từ vựng phong phú, giá trị học thuật cao, không chọn từ quá đơn giản (A1-A2).
 - Không trùng lặp giữa 10 từ với nhau.
 - lemma: dạng gốc, chữ thường.
 - ipa: phiên âm IPA Anh-Anh có dấu gạch chéo.
@@ -140,7 +139,7 @@ Trả về JSON dạng {"items":[...]}.`;
 
   const res = await askJson<{ items: DailyAiItem[] }>(
     system,
-    JSON.stringify({ date: day, articles: newsList.slice(0, 15) })
+    JSON.stringify({ date: day, articles: newsList.slice(0, 5) })
   );
 
   const picked: DailyAiItem[] = [];

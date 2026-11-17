@@ -21,7 +21,7 @@ export type Enriched = {
   synonyms: string[];
 };
 
-const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-flash-latest";
+const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-1.5-flash";
 const OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-4o-mini";
 
 // Gọi Gemini (chính), lỗi thì chuyển sang OpenAI (dự phòng). Luôn trả về JSON đã parse.
@@ -46,11 +46,17 @@ export async function askJson<T>(system: string, user: string): Promise<T> {
       const text = j.candidates?.[0]?.content?.parts?.map((p: { text?: string }) => p.text ?? "").join("") ?? "";
       return JSON.parse(text) as T;
     } catch (e) {
-      errors.push(`Gemini: ${(e as Error).message}`);
+      const errMsg = (e as Error).message;
+      console.warn(`[AI Warning] Gemini thất bại (${errMsg}).`);
+      errors.push(`Gemini: ${errMsg}`);
     }
   }
-  if (process.env.OPENAI_API_KEY) {
+
+  // Cho phép tắt hoàn toàn fallback sang OpenAI nếu muốn 100% miễn phí (đặt DISABLE_OPENAI_FALLBACK=true)
+  const allowOpenAi = process.env.OPENAI_API_KEY && process.env.DISABLE_OPENAI_FALLBACK !== "true";
+  if (allowOpenAi) {
     try {
+      console.info("[AI Info] Đang fallback sang OpenAI (có tính phí)...");
       const r = await fetch("https://api.openai.com/v1/chat/completions", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${process.env.OPENAI_API_KEY}` },
@@ -71,7 +77,7 @@ export async function askJson<T>(system: string, user: string): Promise<T> {
       errors.push(`OpenAI: ${(e as Error).message}`);
     }
   }
-  throw new Error("Cả hai AI đều lỗi: " + errors.join(" | "));
+  throw new Error("Lỗi gọi AI: " + errors.join(" | "));
 }
 
 export type AiProfile = "vocab" | "reason" | "default";
@@ -208,7 +214,7 @@ export async function enrich(terms: string[]): Promise<Enriched[]> {
 export async function extractFromPassage(passage: string): Promise<string[]> {
   const res = await askJson<{ words: string[] }>(
     `Bạn trích từ vựng IELTS Academic từ đoạn văn. Chọn tối đa 25 từ/cụm từ hữu ích ở mức B2-C1 (bỏ từ quá dễ, tên riêng). Trả JSON {"words":["..."]} dạng gốc, chữ thường.`,
-    passage.slice(0, 8000)
+    passage.slice(0, 4500)
   );
   return res.words ?? [];
 }

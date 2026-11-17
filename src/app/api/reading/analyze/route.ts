@@ -232,7 +232,7 @@ Trả về JSON:
   "collocations": ["tối đa 3 cụm"],
   "synonyms": ["tối đa 3 từ"]
 }]}`,
-        passageContent.slice(0, 9000)
+        passageContent.slice(0, 5000)
       );
 
       const rawItems = (ai.items ?? []).filter((x) => x.lemma);
@@ -391,7 +391,7 @@ Trả về JSON:
   "paraphrases": [{"question_phrase": "cụm từ trong câu hỏi", "passage_phrase": "cụm từ tương đương trong bài đọc"}],
   "tip_vi": "1 mẹo ngắn để lần sau không dính bẫy dạng câu này"
 }`,
-        `BÀI ĐỌC:\n${passageContent.slice(0, 10000)}\n\nCÂU HỎI:\n${question}\nĐÁP ÁN ĐÚNG: ${body.correctAnswer || "(chưa rõ, hãy tự suy luận)"}\nĐÁP ÁN HỌC VIÊN CHỌN: ${body.userAnswer || "(không rõ)"}`
+        `BÀI ĐỌC:\n${passageContent.slice(0, 5500)}\n\nCÂU HỎI:\n${question}\nĐÁP ÁN ĐÚNG: ${body.correctAnswer || "(chưa rõ, hãy tự suy luận)"}\nĐÁP ÁN HỌC VIÊN CHỌN: ${body.userAnswer || "(không rõ)"}`
       );
 
       let savedNote = null;
