@@ -1,6 +1,6 @@
 "use client";
 
-import { useSyncExternalStore } from "react";
+import { useEffect, useSyncExternalStore } from "react";
 
 export type StudyFolder = {
   id: string;
@@ -26,11 +26,15 @@ export const STUDY_FOLDERS_STORAGE_KEY = "ielts_study_folders_v1";
 const STUDY_FOLDERS_EVENT = "ielts-study-folders-change";
 const EMPTY_FOLDERS: StudyFolder[] = [];
 
+const MIGRATED_KEY = "ielts_study_migrated_v1";
+
 let cachedRaw: string | null | undefined;
 let cachedParsed: StudySet[] = EMPTY_SETS;
 
 let cachedFoldersRaw: string | null | undefined;
 let cachedFoldersParsed: StudyFolder[] = EMPTY_FOLDERS;
+
+let remoteSyncPromise: Promise<void> | null = null;
 
 function parseSets(raw: string | null): StudySet[] {
   if (!raw) return EMPTY_SETS;
@@ -161,6 +165,78 @@ function subscribeFolders(callback: () => void) {
   };
 }
 
+async function postSync(payload: Record<string, unknown>) {
+  try {
+    await fetch("/api/study-sets", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+  } catch {
+    // bỏ qua lỗi mạng tạm thời
+  }
+}
+
+export function ensureStudySetsSynced() {
+  if (typeof window === "undefined") return;
+  if (remoteSyncPromise) return;
+
+  remoteSyncPromise = (async () => {
+    try {
+      const res = await fetch("/api/study-sets", { cache: "no-store" });
+      if (!res.ok) return;
+      const remote = (await res.json()) as { folders?: StudyFolder[]; sets?: StudySet[] };
+      const remoteFolders = remote.folders ?? [];
+      const remoteSets = remote.sets ?? [];
+
+      let migrated = false;
+      try {
+        migrated = localStorage.getItem(MIGRATED_KEY) === "1";
+      } catch {
+        migrated = false;
+      }
+
+      if (!migrated) {
+        const localFolders = getFoldersSnapshot();
+        const localSets = getSnapshot();
+        const remoteFolderIds = new Set(remoteFolders.map((f) => f.id));
+        const remoteSetIds = new Set(remoteSets.map((s) => s.id));
+
+        const newFolders = localFolders.filter((f) => !remoteFolderIds.has(f.id));
+        const newSets = localSets.filter((s) => !remoteSetIds.has(s.id));
+
+        if (newFolders.length > 0 || newSets.length > 0) {
+          await postSync({
+            action: "sync_local",
+            folders: newFolders,
+            sets: newSets,
+          });
+          const res2 = await fetch("/api/study-sets", { cache: "no-store" });
+          if (res2.ok) {
+            const merged = (await res2.json()) as { folders?: StudyFolder[]; sets?: StudySet[] };
+            writeFolders(merged.folders ?? []);
+            writeSets(merged.sets ?? []);
+          }
+        } else {
+          writeFolders(remoteFolders);
+          writeSets(remoteSets);
+        }
+
+        try {
+          localStorage.setItem(MIGRATED_KEY, "1");
+        } catch {
+          // bỏ qua
+        }
+      } else {
+        writeFolders(remoteFolders);
+        writeSets(remoteSets);
+      }
+    } catch {
+      // fallback giữ localStorage nếu chưa chạy migration SQL
+    }
+  })();
+}
+
 export function createStudySet(input: {
   title: string;
   desc?: string;
@@ -177,6 +253,7 @@ export function createStudySet(input: {
     createdAt: new Date().toISOString(),
   };
   writeSets([created, ...current]);
+  void postSync({ action: "create_set", set: created });
   return created;
 }
 
@@ -197,6 +274,7 @@ export function updateStudySet(
       : s
   );
   writeSets(next);
+  void postSync({ action: "update_set", id, patch });
 }
 
 export function moveStudySetToFolder(setId: string, folderId: string | null) {
@@ -205,6 +283,7 @@ export function moveStudySetToFolder(setId: string, folderId: string | null) {
     s.id === setId ? { ...s, folderId: folderId || null } : s
   );
   writeSets(next);
+  void postSync({ action: "move_set", setId, folderId: folderId || null });
 }
 
 export function setFolderStudySets(folderId: string, setIds: string[]) {
@@ -220,11 +299,13 @@ export function setFolderStudySets(folderId: string, setIds: string[]) {
     return s;
   });
   writeSets(next);
+  void postSync({ action: "set_folder_sets", folderId, setIds });
 }
 
 export function deleteStudySet(id: string) {
   const current = getSnapshot();
   writeSets(current.filter((s) => s.id !== id));
+  void postSync({ action: "delete_set", id });
 }
 
 export function createStudyFolder(input: {
@@ -239,6 +320,7 @@ export function createStudyFolder(input: {
     createdAt: new Date().toISOString(),
   };
   writeFolders([created, ...current]);
+  void postSync({ action: "create_folder", folder: created });
   return created;
 }
 
@@ -257,6 +339,7 @@ export function updateStudyFolder(
       : f
   );
   writeFolders(next);
+  void postSync({ action: "update_folder", id, patch });
 }
 
 export function deleteStudyFolder(id: string) {
@@ -270,13 +353,20 @@ export function deleteStudyFolder(id: string) {
       currentSets.map((s) => (s.folderId === id ? { ...s, folderId: null } : s))
     );
   }
+  void postSync({ action: "delete_folder", id });
 }
 
 export function useStudySets() {
+  useEffect(() => {
+    ensureStudySetsSynced();
+  }, []);
   return useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
 }
 
 export function useStudyFolders() {
+  useEffect(() => {
+    ensureStudySetsSynced();
+  }, []);
   return useSyncExternalStore(
     subscribeFolders,
     getFoldersSnapshot,

@@ -101,3 +101,24 @@ create index if not exists reading_notes_passage_idx on public.reading_notes (pa
 
 alter table public.reading_passages enable row level security;
 alter table public.reading_notes    enable row level security;
+
+-- Học phần & Thư mục Flashcards (đồng bộ giữa các thiết bị)
+create table if not exists public.study_folders (
+  id         text primary key,
+  name       text not null,
+  desc_text  text not null default '',
+  created_at timestamptz not null default now()
+);
+
+create table if not exists public.study_sets (
+  id         text primary key,
+  title      text not null,
+  desc_text  text not null default '',
+  word_ids   bigint[] not null default '{}',
+  folder_id  text references public.study_folders(id) on delete set null,
+  created_at timestamptz not null default now()
+);
+create index if not exists study_sets_folder_idx on public.study_sets (folder_id);
+
+alter table public.study_folders enable row level security;
+alter table public.study_sets    enable row level security;
