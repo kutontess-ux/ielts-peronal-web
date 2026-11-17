@@ -15,7 +15,7 @@ export async function GET() {
       database: result,
       ai_config: {
         has_gemini_key: !!process.env.GEMINI_API_KEY,
-        gemini_model: process.env.GEMINI_MODEL || "gemini-1.5-flash",
+        gemini_model: process.env.GEMINI_MODEL || "gemini-3.5-flash-lite",
         has_openai_key: !!process.env.OPENAI_API_KEY,
         openai_fallback_disabled: process.env.DISABLE_OPENAI_FALLBACK === "true",
       },

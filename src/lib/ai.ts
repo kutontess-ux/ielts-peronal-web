@@ -21,7 +21,7 @@ export type Enriched = {
   synonyms: string[];
 };
 
-const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-1.5-flash";
+const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-3.5-flash-lite";
 const OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-4o-mini";
 
 // Gọi Gemini (chính), lỗi thì chuyển sang OpenAI (dự phòng). Luôn trả về JSON đã parse.
