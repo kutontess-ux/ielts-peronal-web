@@ -1076,7 +1076,7 @@ export default function VocabLearn() {
       <section className="grid gap-4 md:grid-cols-3">
         {[
           ["Học phần đã tạo", `${studySets.length} học phần`, "text-brand-hover"],
-          ["Đã thuộc (≥ 7 ngày)", `${stats.masteredCount} / ${stats.totalWords}`, "text-emerald-600 dark:text-emerald-300"],
+          ["Đã thuộc (≥ 7 ngày)", `${stats.masteredCount} từ`, "text-emerald-600 dark:text-emerald-300"],
           ["Tổng từ trong kho", `${stats.totalWords} từ`, "text-orange-600 dark:text-orange-300"],
         ].map(([l, v, c]) => (
           <div key={l} className="rounded-2xl bg-card p-5">
