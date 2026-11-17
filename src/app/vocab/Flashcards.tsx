@@ -229,31 +229,36 @@ export default function Flashcards({
 
   const frontContent = meaningFirst ? (
     <>
-      <div className="text-center text-3xl font-bold text-brand-hover md:text-4xl">{card.vi}</div>
-      <div className="mt-3 max-w-lg text-center text-base text-muted">{card.en}</div>
+      <div className="break-words text-center text-2xl font-bold text-brand-hover sm:text-3xl md:text-4xl">{card.vi}</div>
+      <div className="mt-3 max-w-lg break-words text-center text-sm text-muted sm:text-base">{card.en}</div>
     </>
   ) : (
     <>
-      <div className="text-center text-4xl font-bold md:text-5xl">{card.word}</div>
-      <div className="mt-3 text-lg text-muted">
+      <div className="break-words text-center text-3xl font-bold sm:text-4xl md:text-5xl">{card.word}</div>
+      <div className="mt-2 break-words text-center text-base text-muted sm:mt-3 sm:text-lg">
         {card.ipa} {card.pos ? `· ${card.pos}` : ""}
       </div>
+      {card.example && (
+        <div className="mt-5 max-w-lg rounded-xl bg-bg/60 px-4 py-3 text-center text-sm italic leading-relaxed text-muted break-words">
+          “{card.example}”
+        </div>
+      )}
     </>
   );
 
   const backContent = meaningFirst ? (
     <div className="text-center">
-      <div className="text-4xl font-bold md:text-5xl">{card.word}</div>
-      <div className="mt-2 text-lg text-muted">
+      <div className="break-words text-3xl font-bold sm:text-4xl md:text-5xl">{card.word}</div>
+      <div className="mt-2 break-words text-base text-muted sm:text-lg">
         {card.ipa} {card.pos ? `· ${card.pos}` : ""}
       </div>
-      {card.example && <div className="mt-6 rounded-xl bg-bg/60 p-4 text-sm italic text-muted">“{card.example}”</div>}
+      {card.example && <div className="mt-5 rounded-xl bg-bg/60 p-4 text-sm italic leading-relaxed text-muted break-words">“{card.example}”</div>}
     </div>
   ) : (
-    <div>
-      <div className="text-3xl font-bold text-brand-hover">{card.vi}</div>
-      <div className="mt-3 text-lg">{card.en}</div>
-      {card.example && <div className="mt-6 rounded-xl bg-bg/60 p-4 italic text-muted">“{card.example}”</div>}
+    <div className="min-w-0">
+      <div className="break-words text-2xl font-bold text-brand-hover sm:text-3xl">{card.vi}</div>
+      <div className="mt-3 break-words text-base sm:text-lg">{card.en}</div>
+      {card.example && <div className="mt-5 rounded-xl bg-bg/60 p-4 text-sm italic leading-relaxed text-muted break-words">“{card.example}”</div>}
       {card.awl && <div className="mt-4 text-xs font-bold text-orange-600 dark:text-orange-300">Academic Word List</div>}
     </div>
   );
@@ -268,7 +273,7 @@ export default function Flashcards({
         <div className="font-bold">
           {idx + 1} / {deck.length}
         </div>
-        <div className="flex items-center gap-3 text-xs font-bold">
+        <div className="flex items-center gap-2 text-xs font-bold sm:gap-3">
           <span className="rounded-full bg-orange-500/15 px-3 py-1 text-orange-700 dark:bg-orange-400/15 dark:text-orange-300">Chưa biết: {unknownList.length}</span>
           <span className="rounded-full bg-emerald-500/15 px-3 py-1 text-emerald-700 dark:bg-emerald-400/15 dark:text-emerald-300">Đã biết: {knownList.length}</span>
         </div>
@@ -279,7 +284,7 @@ export default function Flashcards({
         <div className="h-full bg-brand-hover transition-all" style={{ width: `${(idx / Math.max(1, deck.length)) * 100}%` }} />
       </div>
 
-      {/* Thẻ lật 3D */}
+      {/* Thẻ lật 3D (tự giãn chiều cao khi thu nhỏ màn hình) */}
       <div
         role="button"
         tabIndex={0}
@@ -289,16 +294,16 @@ export default function Flashcards({
         onClick={() => setFlipped((f) => !f)}
       >
         <div
-          className="relative h-[400px] transition-transform duration-500"
+          className="grid transition-transform duration-500"
           style={{ transformStyle: "preserve-3d", transform: flipped ? "rotateX(180deg)" : "rotateX(0deg)" }}
         >
           <div
-            className={`absolute inset-0 flex flex-col rounded-3xl border border-line bg-card p-8 shadow-xl ${
+            className={`col-start-1 row-start-1 flex min-h-[320px] flex-col justify-between rounded-3xl border border-line bg-card p-5 shadow-xl sm:min-h-[380px] sm:p-8 ${
               flipped ? "pointer-events-none" : ""
             }`}
             style={{ backfaceVisibility: "hidden", transform: "rotateX(0deg)" }}
           >
-            <div className="flex justify-between text-muted">
+            <div className="flex items-center justify-between gap-2 text-muted">
               <span className={`rounded-full px-3 py-1 text-xs font-bold ${levelColor[card.level]}`}>
                 {card.level} · {card.topic}
               </span>
@@ -311,24 +316,24 @@ export default function Flashcards({
                 </button>
               </div>
             </div>
-            <div className="flex flex-1 flex-col items-center justify-center">{frontContent}</div>
+            <div className="my-4 flex flex-1 flex-col items-center justify-center">{frontContent}</div>
             <div className="text-center text-sm text-muted/70">Bấm thẻ hoặc Space để lật</div>
           </div>
 
           <div
-            className={`absolute inset-0 flex flex-col justify-between rounded-3xl border border-line bg-card p-10 shadow-xl ${
+            className={`col-start-1 row-start-1 flex min-h-[320px] flex-col justify-between rounded-3xl border border-line bg-card p-5 shadow-xl sm:min-h-[380px] sm:p-10 ${
               flipped ? "" : "pointer-events-none"
             }`}
             style={{ backfaceVisibility: "hidden", transform: "rotateX(180deg)" }}
           >
-            <div className="flex flex-1 flex-col justify-center">{backContent}</div>
+            <div className="my-4 flex flex-1 flex-col justify-center">{backContent}</div>
             <div className="text-center text-sm text-muted/70">Bấm lại để lật về mặt trước</div>
           </div>
         </div>
       </div>
 
       {/* Nút điều khiển dưới thẻ kiểu Quizlet */}
-      <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
+      <div className="mt-6 flex flex-wrap items-center justify-center gap-2.5 sm:justify-between sm:gap-3">
         <div className="flex items-center gap-2">
           <button
             onClick={undo}
@@ -350,16 +355,16 @@ export default function Flashcards({
           </button>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2.5 sm:gap-3">
           <button
             onClick={() => mark(false)}
-            className="inline-flex items-center gap-2 rounded-full border-2 border-orange-500/50 px-6 py-2.5 font-bold text-orange-700 hover:bg-orange-500/10 dark:border-orange-400/60 dark:text-orange-300 dark:hover:bg-orange-400/10"
+            className="inline-flex items-center gap-2 rounded-full border-2 border-orange-500/50 px-4 py-2.5 text-sm font-bold text-orange-700 hover:bg-orange-500/10 dark:border-orange-400/60 dark:text-orange-300 dark:hover:bg-orange-400/10 sm:px-6 sm:text-base"
           >
             <X size={18} strokeWidth={2} /> Chưa biết
           </button>
           <button
             onClick={() => mark(true)}
-            className="inline-flex items-center gap-2 rounded-full border-2 border-emerald-500/50 px-6 py-2.5 font-bold text-emerald-700 hover:bg-emerald-500/10 dark:border-emerald-400/60 dark:text-emerald-300 dark:hover:bg-emerald-400/10"
+            className="inline-flex items-center gap-2 rounded-full border-2 border-emerald-500/50 px-4 py-2.5 text-sm font-bold text-emerald-700 hover:bg-emerald-500/10 dark:border-emerald-400/60 dark:text-emerald-300 dark:hover:bg-emerald-400/10 sm:px-6 sm:text-base"
           >
             <Check size={18} strokeWidth={2} /> Đã biết
           </button>

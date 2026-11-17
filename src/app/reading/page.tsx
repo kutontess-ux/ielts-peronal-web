@@ -184,11 +184,11 @@ export default function ReadingHistoryPage() {
             return (
               <div
                 key={p.id}
-                className="group flex items-center justify-between gap-4 rounded-2xl border border-line bg-card p-4 transition hover:border-brand/60 hover:bg-card-hover"
+                className="group flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-line bg-card p-4 transition hover:border-brand/60 hover:bg-card-hover sm:gap-4"
               >
-                <Link href={`/reading/${p.id}`} className="min-w-0 flex-1">
+                <Link href={`/reading/${p.id}`} className="min-w-[200px] flex-1">
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="truncate text-base font-bold text-ink">{p.title}</span>
+                    <span className="break-words text-base font-bold text-ink">{p.title}</span>
                     {p.source_name && (
                       <span className="rounded-lg bg-bg px-2 py-0.5 text-xs font-medium text-muted">
                         {p.source_name}
@@ -198,7 +198,7 @@ export default function ReadingHistoryPage() {
                       {p.topic}
                     </span>
                   </div>
-                  <div className="mt-2 flex flex-wrap items-center gap-4 text-xs text-muted">
+                  <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-muted sm:gap-4">
                     <span className="inline-flex items-center gap-1.5">
                       <Calendar size={13} /> {formatDate(p.studied_at)}
                     </span>
@@ -213,7 +213,7 @@ export default function ReadingHistoryPage() {
                   </div>
                 </Link>
 
-                <div className="flex items-center gap-3">
+                <div className="ml-auto flex shrink-0 items-center gap-2 sm:gap-3">
                   {hasScore ? (
                     <div className="rounded-xl bg-bg px-3 py-1.5 text-right">
                       <div className="text-sm font-bold text-ink">

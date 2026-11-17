@@ -42,7 +42,7 @@ function DailyFlipCard({
       >
         {/* Mặt trước: chỉ hiển thị từ vựng, cấp độ CEFR và nút phát âm */}
         <div
-          className={`col-start-1 row-start-1 flex min-h-[168px] flex-col justify-between rounded-2xl border-2 border-line/70 bg-card p-4 transition-colors group-hover:bg-card-hover dark:border-transparent [backface-visibility:hidden] [transform:rotateY(0deg)] ${
+          className={`col-start-1 row-start-1 flex min-h-[168px] flex-col justify-between rounded-2xl border-2 border-line/70 bg-card p-3.5 transition-colors group-hover:bg-card-hover dark:border-transparent sm:p-4 [backface-visibility:hidden] [transform:rotateY(0deg)] ${
             flipped ? "pointer-events-none" : ""
           }`}
         >
@@ -69,8 +69,8 @@ function DailyFlipCard({
             </div>
           </div>
 
-          <div className="my-2 flex flex-1 items-center justify-center text-center">
-            <div className="text-xl font-bold tracking-tight text-ink">{w.word}</div>
+          <div className="my-2 flex flex-1 items-center justify-center px-1 text-center">
+            <div className="break-words text-xl font-bold tracking-tight text-ink">{w.word}</div>
           </div>
 
           <div className="text-center text-[11px] font-medium text-muted/75">Bấm để lật</div>
@@ -78,15 +78,15 @@ function DailyFlipCard({
 
         {/* Mặt sau: đầy đủ nghĩa, IPA, ví dụ & link báo gốc */}
         <div
-          className={`col-start-1 row-start-1 flex min-h-[168px] flex-col justify-between rounded-2xl border-2 border-line/70 bg-card p-4 transition-colors group-hover:bg-card-hover dark:border-transparent [backface-visibility:hidden] [transform:rotateY(180deg)] ${
+          className={`col-start-1 row-start-1 flex min-h-[168px] flex-col justify-between rounded-2xl border-2 border-line/70 bg-card p-3.5 transition-colors group-hover:bg-card-hover dark:border-transparent sm:p-4 [backface-visibility:hidden] [transform:rotateY(180deg)] ${
             flipped ? "" : "pointer-events-none"
           }`}
         >
-          <div>
+          <div className="min-w-0">
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0">
-                <div className="truncate text-lg font-bold text-ink">{w.word}</div>
-                <div className="text-xs text-muted">
+                <div className="break-words text-lg font-bold text-ink">{w.word}</div>
+                <div className="break-words text-xs text-muted">
                   {w.ipa} · {w.pos}
                 </div>
               </div>
@@ -108,16 +108,16 @@ function DailyFlipCard({
               </div>
             </div>
 
-            <div className="mt-2 text-sm font-semibold text-brand-hover">{w.vi}</div>
-            <div className="mt-1 line-clamp-2 text-xs text-muted">{w.en}</div>
+            <div className="mt-2 break-words text-sm font-semibold text-brand-hover">{w.vi}</div>
+            <div className="mt-1 break-words text-xs leading-relaxed text-muted">{w.en}</div>
             {(w.source_sentence || w.example) && (
-              <div className="mt-2 line-clamp-2 rounded-lg bg-bg/60 p-2 text-xs italic text-muted">
+              <div className="mt-2.5 rounded-lg bg-bg/60 p-2.5 text-xs italic leading-relaxed text-muted break-words">
                 “{w.source_sentence || w.example}”
               </div>
             )}
           </div>
 
-          <div className="mt-3 flex flex-wrap items-center justify-between gap-1.5">
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
             {w.topic && (
               <span className="rounded-full bg-line px-2.5 py-0.5 text-[11px] font-semibold">
                 {w.topic}
@@ -156,14 +156,14 @@ function WordCards({
     <div className="space-y-6">
       {news.length > 0 && (
         <section>
-          <div className="mb-3 flex items-center gap-2">
+          <div className="mb-3 flex flex-wrap items-center gap-2">
             <Newspaper size={18} strokeWidth={1.6} className="text-brand-hover" />
             <h2 className="text-base font-bold sm:text-lg">{news.length} từ từ báo mới</h2>
             <div className="ml-auto">
               <ExportButton words={news} filename={`tu-bao-${date}`} label={`Xuất ${news.length} từ`} />
             </div>
           </div>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
             {news.map((w) => (
               <DailyFlipCard key={w.id} w={w} kind="news" speak={speak} />
             ))}
@@ -173,14 +173,14 @@ function WordCards({
 
       {ielts.length > 0 && (
         <section>
-          <div className="mb-3 flex items-center gap-2">
+          <div className="mb-3 flex flex-wrap items-center gap-2">
             <GraduationCap size={18} strokeWidth={1.6} className="text-brand-hover" />
             <h2 className="text-base font-bold sm:text-lg">{ielts.length} từ IELTS</h2>
             <div className="ml-auto">
               <ExportButton words={ielts} filename={`tu-ielts-${date}`} label={`Xuất ${ielts.length} từ`} />
             </div>
           </div>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
             {ielts.map((w) => (
               <DailyFlipCard key={w.id} w={w} kind="ielts" speak={speak} />
             ))}

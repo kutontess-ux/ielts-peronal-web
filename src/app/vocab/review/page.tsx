@@ -51,9 +51,12 @@ export default function Review() {
   const [flipped, setFlipped] = useState(false);
   const [revealed, setRevealed] = useState(false);
   const [reviewedInSession, setReviewedInSession] = useState(0);
+  const [retryWords, setRetryWords] = useState<ReviewWord[]>([]);
+  const [errMsg, setErrMsg] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true);
+    setErrMsg("");
     try {
       const r = await fetch("/api/reviews", { cache: "no-store" });
       if (r.ok) {
@@ -64,6 +67,7 @@ export default function Review() {
         setTotalWords(j.totalWords ?? 0);
         setFlipped(false);
         setRevealed(false);
+        setRetryWords([]);
       }
     } finally {
       setLoading(false);
@@ -76,14 +80,18 @@ export default function Review() {
       return;
     }
     setClearing(true);
+    setErrMsg("");
     try {
       await clearAllReviews();
       setQueue([]);
       setDueCount(0);
       setEnrolledCount(0);
+      setRetryWords([]);
       setFlipped(false);
       setRevealed(false);
       notifyDueUpdated();
+    } catch (e) {
+      setErrMsg((e as Error).message);
     } finally {
       setClearing(false);
     }
@@ -119,31 +127,37 @@ export default function Review() {
     async (k: ReviewGrade) => {
       if (!card || saving) return;
       setSaving(true);
+      setErrMsg("");
       try {
         const computed = computeNextReview(card, k);
-        await fetch("/api/reviews", {
+        const res = await fetch("/api/reviews", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ wordId: card.id, grade: k }),
         });
+        const j = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(j.error || "Không lưu được kết quả ôn tập");
 
         setFlipped(false);
         setRevealed(false);
+        setQueue((q) => q.slice(1));
+        setDueCount((c) => Math.max(0, c - 1));
+        setReviewedInSession((n) => n + 1);
+
         if (k === "again" || k === "hard") {
-          // Xem lại (5p) / Khó (10p): đẩy xuống cuối hàng chờ để ôn lại trong phiên
           const updatedCard: ReviewWord = {
             ...card,
             reps: computed.reps,
             interval_days: computed.interval_days,
             ease: computed.ease,
           };
-          setQueue((q) => [...q.slice(1), updatedCard]);
-        } else {
-          setQueue((q) => q.slice(1));
-          setDueCount((c) => Math.max(0, c - 1));
-          setReviewedInSession((n) => n + 1);
+          setRetryWords((prev) =>
+            prev.some((w) => w.id === updatedCard.id) ? prev : [...prev, updatedCard]
+          );
         }
         notifyDueUpdated();
+      } catch (e) {
+        setErrMsg((e as Error).message);
       } finally {
         setSaving(false);
       }
@@ -179,7 +193,7 @@ export default function Review() {
 
   if (totalWords === 0) {
     return (
-      <div className="mx-auto max-w-xl rounded-3xl bg-card p-10 text-center">
+      <div className="mx-auto max-w-xl rounded-3xl bg-card p-8 text-center sm:p-10">
         <Repeat size={44} strokeWidth={1.3} className="mx-auto text-brand-hover" />
         <h1 className="mt-4 text-2xl font-bold">Chưa có từ nào trong kho</h1>
         <p className="mt-2 text-muted">Hãy nạp từ vựng vào kho và tạo học phần trước khi ôn tập ngắt quãng.</p>
@@ -192,19 +206,37 @@ export default function Review() {
 
   if (!card) {
     return (
-      <div className="mx-auto max-w-xl rounded-3xl bg-card p-10 text-center">
+      <div className="mx-auto max-w-xl rounded-3xl bg-card p-8 text-center sm:p-10">
         <PartyPopper size={52} strokeWidth={1.2} className="mx-auto text-brand-hover" />
         <h1 className="mt-4 text-2xl font-bold">
           {enrolledCount === 0 ? "Chưa có từ nào trong danh sách ôn" : "Hoàn thành phiên ôn tập!"}
         </h1>
         <p className="mt-2 text-muted">
           {reviewedInSession > 0
-            ? `Bạn đã hoàn thành ${reviewedInSession} từ. Lịch ôn tiếp theo đã được lưu và không còn thông báo nào.`
+            ? retryWords.length > 0
+              ? `Bạn đã ôn ${reviewedInSession} từ. Có ${retryWords.length} từ cần xem lại/khó được hẹn sau 5–10 phút.`
+              : `Bạn đã hoàn thành ${reviewedInSession} từ. Lịch ôn tiếp theo đã được lưu và không còn thông báo nào.`
             : enrolledCount === 0
               ? "Chỉ những từ trong Học phần đã học hoặc Bộ sách / từ bạn chọn chuyển vào mới xuất hiện tại đây."
               : "Hiện tại không có từ nào đến hạn ôn. Hãy học thêm học phần hoặc quay lại sau."}
         </p>
         <div className="mt-6 flex flex-wrap justify-center gap-3">
+          {retryWords.length > 0 && (
+            <button
+              type="button"
+              onClick={() => {
+                setQueue(retryWords);
+                setDueCount(retryWords.length);
+                setRetryWords([]);
+                setReviewedInSession(0);
+                setFlipped(false);
+                setRevealed(false);
+              }}
+              className="rounded-full bg-orange-500 px-6 py-3 text-sm font-bold text-white hover:bg-orange-400"
+            >
+              Ôn lại ngay {retryWords.length} từ Xem lại/Khó
+            </button>
+          )}
           <Link href="/vocab" className="rounded-full bg-brand px-6 py-3 font-bold text-white hover:bg-brand-hover hover:text-bg">
             Đi tới Thẻ ghi nhớ
           </Link>
@@ -242,7 +274,7 @@ export default function Review() {
             Còn <b className="text-ink">{dueCount} từ</b> cần ôn hôm nay
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <button
             type="button"
             onClick={handleClearAll}
@@ -256,11 +288,18 @@ export default function Review() {
           </div>
         </div>
       </div>
+
+      {errMsg && (
+        <div className="mb-4 rounded-xl bg-rose-500/15 px-4 py-2.5 text-sm text-rose-700 dark:bg-rose-400/15 dark:text-rose-300">
+          {errMsg}
+        </div>
+      )}
+
       <div className="mb-6 h-2 overflow-hidden rounded-full bg-card">
         <div className="h-full bg-brand-hover transition-all" style={{ width: `${(reviewedInSession / Math.max(1, totalSession)) * 100}%` }} />
       </div>
 
-      {/* Thẻ lật 3D 2 chiều: bấm qua lại giữa mặt từ và mặt nghĩa */}
+      {/* Thẻ lật 3D 2 chiều: bấm qua lại giữa mặt từ (+ ví dụ) và mặt nghĩa */}
       <div
         role="button"
         tabIndex={0}
@@ -276,11 +315,11 @@ export default function Review() {
         >
           {/* Mặt trước */}
           <div
-            className={`col-start-1 row-start-1 flex min-h-[340px] flex-col justify-between rounded-3xl border border-line bg-card p-8 shadow-xl [backface-visibility:hidden] [transform:rotateY(0deg)] ${
+            className={`col-start-1 row-start-1 flex min-h-[320px] flex-col justify-between rounded-3xl border border-line bg-card p-5 shadow-xl sm:min-h-[340px] sm:p-8 [backface-visibility:hidden] [transform:rotateY(0deg)] ${
               flipped ? "pointer-events-none" : ""
             }`}
           >
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-2">
               <span className={`rounded-full px-3 py-1 text-xs font-bold ${levelColor[card.level]}`}>
                 {card.level} · {card.topic}
               </span>
@@ -289,11 +328,16 @@ export default function Review() {
               </button>
             </div>
 
-            <div className="my-6 text-center">
-              <div className="text-4xl font-bold md:text-5xl">{card.word}</div>
-              <div className="mt-2 text-muted">
+            <div className="my-5 text-center">
+              <div className="break-words text-3xl font-bold sm:text-4xl md:text-5xl">{card.word}</div>
+              <div className="mt-2 break-words text-muted">
                 {card.ipa} {card.pos ? `· ${card.pos}` : ""}
               </div>
+              {card.example && (
+                <div className="mx-auto mt-5 max-w-xl rounded-xl bg-bg/60 px-4 py-3 text-sm italic leading-relaxed text-muted break-words">
+                  “{card.example}”
+                </div>
+              )}
             </div>
 
             <div className="flex items-center justify-center gap-1.5 text-sm text-muted/80">
@@ -303,11 +347,11 @@ export default function Review() {
 
           {/* Mặt sau */}
           <div
-            className={`col-start-1 row-start-1 flex min-h-[340px] flex-col justify-between rounded-3xl border border-line bg-card p-8 shadow-xl [backface-visibility:hidden] [transform:rotateY(180deg)] ${
+            className={`col-start-1 row-start-1 flex min-h-[320px] flex-col justify-between rounded-3xl border border-line bg-card p-5 shadow-xl sm:min-h-[340px] sm:p-8 [backface-visibility:hidden] [transform:rotateY(180deg)] ${
               flipped ? "" : "pointer-events-none"
             }`}
           >
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-2">
               <span className={`rounded-full px-3 py-1 text-xs font-bold ${levelColor[card.level]}`}>
                 {card.word} · {card.level}
               </span>
@@ -317,10 +361,10 @@ export default function Review() {
             </div>
 
             <div className="my-4 space-y-3 text-center">
-              <div className="text-2xl font-bold text-brand-hover md:text-3xl">{card.vi}</div>
-              <div className="text-muted">{card.en}</div>
+              <div className="break-words text-2xl font-bold text-brand-hover md:text-3xl">{card.vi}</div>
+              <div className="break-words text-muted">{card.en}</div>
               {card.example && (
-                <div className="mx-auto max-w-xl rounded-xl bg-bg/60 p-3 text-sm italic text-muted">
+                <div className="mx-auto max-w-xl rounded-xl bg-bg/60 p-3 text-sm italic leading-relaxed text-muted break-words">
                   “{card.example}”
                 </div>
               )}

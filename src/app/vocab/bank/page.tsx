@@ -92,7 +92,7 @@ function WordCard({
       >
         {/* Mặt trước: chỉ hiển thị từ vựng và cấp độ CEFR */}
         <div
-          className={`col-start-1 row-start-1 flex min-h-[168px] flex-col justify-between rounded-2xl border-2 bg-card p-4 transition-colors group-hover:bg-card-hover [backface-visibility:hidden] [transform:rotateY(0deg)] ${borderCls} ${
+          className={`col-start-1 row-start-1 flex min-h-[168px] flex-col justify-between rounded-2xl border-2 bg-card p-3.5 transition-colors group-hover:bg-card-hover sm:p-4 [backface-visibility:hidden] [transform:rotateY(0deg)] ${borderCls} ${
             !picking && flipped ? "pointer-events-none" : ""
           }`}
         >
@@ -126,8 +126,8 @@ function WordCard({
             </div>
           </div>
 
-          <div className="my-2 flex flex-1 items-center justify-center text-center">
-            <div className="text-xl font-bold tracking-tight text-ink">{w.word}</div>
+          <div className="my-2 flex flex-1 items-center justify-center px-1 text-center">
+            <div className="break-words text-xl font-bold tracking-tight text-ink">{w.word}</div>
           </div>
 
           <div className="text-center text-[11px] font-medium text-muted/75">
@@ -137,17 +137,17 @@ function WordCard({
 
         {/* Mặt sau: hiển thị đầy đủ thông tin từ vựng */}
         <div
-          className={`col-start-1 row-start-1 flex min-h-[168px] flex-col justify-between rounded-2xl border-2 bg-card p-4 transition-colors group-hover:bg-card-hover [backface-visibility:hidden] [transform:rotateY(180deg)] ${borderCls} ${
+          className={`col-start-1 row-start-1 flex min-h-[168px] flex-col justify-between rounded-2xl border-2 bg-card p-3.5 transition-colors group-hover:bg-card-hover sm:p-4 [backface-visibility:hidden] [transform:rotateY(180deg)] ${borderCls} ${
             !picking && flipped ? "" : "pointer-events-none"
           }`}
         >
-          <div>
+          <div className="min-w-0">
             <div className="flex items-start justify-between gap-2">
-              <div>
-                <div className="text-lg font-bold">{w.word}</div>
-                <div className="text-xs text-muted">{w.ipa} · {w.pos}</div>
+              <div className="min-w-0">
+                <div className="break-words text-lg font-bold">{w.word}</div>
+                <div className="break-words text-xs text-muted">{w.ipa} · {w.pos}</div>
               </div>
-              <div className="flex items-center gap-1.5">
+              <div className="flex shrink-0 items-center gap-1.5">
                 <span className={`rounded-full px-2.5 py-0.5 text-xs font-bold ${levelColor[w.level]}`}>{w.level}</span>
                 {onDelete && !picking && (
                   <button
@@ -164,8 +164,8 @@ function WordCard({
                 )}
               </div>
             </div>
-            <div className="mt-2 text-sm font-semibold text-brand-hover">{w.vi}</div>
-            <div className="mt-1 line-clamp-2 text-xs text-muted">{w.en}</div>
+            <div className="mt-2 break-words text-sm font-semibold text-brand-hover">{w.vi}</div>
+            <div className="mt-1 break-words text-xs leading-relaxed text-muted">{w.en}</div>
           </div>
 
           <div className="mt-3 flex flex-wrap gap-1.5">
@@ -233,7 +233,7 @@ function WordGrid({
         )}
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
         {paged.map((w) => (
           <WordCard
             key={w.id}

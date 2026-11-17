@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  Bell, Check, CheckCircle2, ChevronRight, Layers, Loader2, Pencil, Plus, Repeat, Search, Sparkles, Trash2, X,
+  Bell, Bot, Check, CheckCircle2, ChevronRight, Layers, Loader2, Pencil, Plus, Repeat, Search, Sparkles, Trash2, X,
 } from "lucide-react";
 import { levelColor, type Word } from "@/lib/mock";
 import { enrollWordsInSrs } from "@/lib/srs";
@@ -15,6 +15,12 @@ import {
 import Flashcards from "./Flashcards";
 
 const LEVELS = ["A2", "B1", "B2", "C1", "C2"] as const;
+
+const AI_PRESETS = [
+  "12 từ vựng IELTS C1 chủ đề Môi trường cho Writing Task 2",
+  "10 collocations hay về Công nghệ & AI trình độ B2–C1",
+  "12 từ vựng miêu tả xu hướng biểu đồ Writing Task 1",
+];
 
 type PreviewItem = {
   input: string;
@@ -33,6 +39,22 @@ type PreviewItem = {
   synonyms?: string[];
 };
 
+type AiItem = {
+  lemma: string;
+  norm_key: string;
+  ipa?: string;
+  pos?: string;
+  meaning_vi?: string;
+  definition_en?: string;
+  example?: string;
+  cefr_level?: string;
+  topic?: string;
+  is_awl?: boolean;
+  collocations?: string[];
+  synonyms?: string[];
+  existingId: number | null;
+};
+
 function StudySetModal({
   editing,
   words,
@@ -49,7 +71,7 @@ function StudySetModal({
   const [selectedIds, setSelectedIds] = useState<Set<number>>(
     () => new Set(editing?.wordIds ?? [])
   );
-  const [mode, setMode] = useState<"pick" | "quick-add">("pick");
+  const [mode, setMode] = useState<"pick" | "quick-add" | "ai-create">("pick");
 
   // Tìm kiếm & lọc từ trong Kho từ vựng
   const [query, setQuery] = useState("");
@@ -60,6 +82,13 @@ function StudySetModal({
   const [quickBusy, setQuickBusy] = useState(false);
   const [quickErr, setQuickErr] = useState("");
   const [quickMsg, setQuickMsg] = useState("");
+
+  // AI hiểu yêu cầu & tạo Flashcard theo mô tả tự nhiên
+  const [aiPrompt, setAiPrompt] = useState("");
+  const [aiBusy, setAiBusy] = useState<"" | "generate" | "save">("");
+  const [aiErr, setAiErr] = useState("");
+  const [aiItems, setAiItems] = useState<AiItem[] | null>(null);
+  const [aiOff, setAiOff] = useState<Set<string>>(new Set());
 
   const filteredWords = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -152,6 +181,91 @@ function StudySetModal({
     }
   };
 
+  const handleAiGenerate = async () => {
+    if (!aiPrompt.trim() || aiBusy !== "") return;
+    setAiBusy("generate");
+    setAiErr("");
+    setQuickMsg("");
+    setAiItems(null);
+    try {
+      setActivityLabel("/api/study-sets/ai-generate", "AI đang phân tích yêu cầu & tạo bộ Flashcard...");
+      const res = await fetch("/api/study-sets/ai-generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt: aiPrompt }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "AI không tạo được flashcard");
+
+      const list = (json.items ?? []) as AiItem[];
+      if (list.length === 0) {
+        throw new Error("AI chưa tìm được từ phù hợp. Hãy mô tả rõ chủ đề hoặc số lượng hơn.");
+      }
+
+      if (!title.trim() && json.suggestedTitle) setTitle(json.suggestedTitle);
+      if (!desc.trim() && json.suggestedDesc) setDesc(json.suggestedDesc);
+
+      setAiItems(list);
+      setAiOff(new Set());
+    } catch (e) {
+      setAiErr((e as Error).message);
+    } finally {
+      setAiBusy("");
+    }
+  };
+
+  const chosenAiItems = useMemo(
+    () => (aiItems ?? []).filter((item) => !aiOff.has(item.norm_key)),
+    [aiItems, aiOff]
+  );
+
+  const handleAiApply = async () => {
+    if (chosenAiItems.length === 0 || aiBusy !== "") return;
+    setAiBusy("save");
+    setAiErr("");
+    try {
+      const newItems = chosenAiItems.filter((item) => !item.existingId);
+      if (newItems.length > 0) {
+        setActivityLabel("/api/import/commit", `Đang lưu ${newItems.length} flashcard mới vào kho...`);
+        const cRes = await fetch("/api/import/commit", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            items: newItems,
+            source: "study-set-ai",
+          }),
+        });
+        const cJson = await cRes.json();
+        if (!cRes.ok) throw new Error(cJson.error || "Không lưu được flashcard mới");
+        notifyDueUpdated();
+      }
+
+      const freshWords = await onReloadWords();
+      const lemmaSet = new Set(chosenAiItems.map((i) => i.lemma.toLowerCase().trim()));
+      const matchedIds = freshWords
+        .filter((w) => lemmaSet.has(w.word.toLowerCase().trim()))
+        .map((w) => w.id);
+
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        for (const item of chosenAiItems) {
+          if (item.existingId) next.add(item.existingId);
+        }
+        for (const id of matchedIds) next.add(id);
+        return next;
+      });
+
+      setAiItems(null);
+      setAiPrompt("");
+      setQuickMsg(`AI đã tạo & thêm ${chosenAiItems.length} flashcard vào học phần (đồng bộ cùng Kho từ vựng).`);
+      setMode("pick");
+    } catch (e) {
+      setAiErr((e as Error).message);
+    } finally {
+      setAiBusy("");
+    }
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim() || selectedIds.size === 0) return;
@@ -165,14 +279,14 @@ function StudySetModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-3 sm:p-4" onClick={onClose}>
       <form
         onSubmit={handleSubmit}
         onClick={(e) => e.stopPropagation()}
-        className="flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-3xl border border-line bg-card shadow-2xl"
+        className="flex max-h-[92vh] w-full max-w-2xl flex-col overflow-hidden rounded-3xl border border-line bg-card shadow-2xl"
       >
-        <div className="flex items-center justify-between border-b border-line px-6 py-4">
-          <h2 className="text-lg font-bold">
+        <div className="flex items-center justify-between border-b border-line px-4 py-3.5 sm:px-6 sm:py-4">
+          <h2 className="text-base font-bold sm:text-lg">
             {editing ? "Chỉnh sửa học phần" : "Tạo học phần mới"}
           </h2>
           <button type="button" onClick={onClose} className="rounded-lg p-1.5 text-muted hover:text-ink">
@@ -180,7 +294,7 @@ function StudySetModal({
           </button>
         </div>
 
-        <div className="flex-1 space-y-4 overflow-y-auto p-6">
+        <div className="flex-1 space-y-4 overflow-y-auto p-4 sm:p-6">
           <div className="grid gap-3 sm:grid-cols-2">
             <div>
               <label className="mb-1 block text-xs font-semibold text-muted">Tên học phần *</label>
@@ -204,11 +318,11 @@ function StudySetModal({
           </div>
 
           <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line pb-3">
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               <button
                 type="button"
                 onClick={() => setMode("pick")}
-                className={`rounded-full px-4 py-1.5 text-xs font-bold transition ${
+                className={`rounded-full px-3.5 py-1.5 text-xs font-bold transition ${
                   mode === "pick" ? "bg-ink text-bg" : "bg-bg text-muted hover:text-ink"
                 }`}
               >
@@ -217,11 +331,20 @@ function StudySetModal({
               <button
                 type="button"
                 onClick={() => setMode("quick-add")}
-                className={`inline-flex items-center gap-1 rounded-full px-4 py-1.5 text-xs font-bold transition ${
+                className={`inline-flex items-center gap-1 rounded-full px-3.5 py-1.5 text-xs font-bold transition ${
                   mode === "quick-add" ? "bg-ink text-bg" : "bg-bg text-muted hover:text-ink"
                 }`}
               >
                 <Sparkles size={13} /> Nhập từ mới nhanh
+              </button>
+              <button
+                type="button"
+                onClick={() => setMode("ai-create")}
+                className={`inline-flex items-center gap-1 rounded-full px-3.5 py-1.5 text-xs font-bold transition ${
+                  mode === "ai-create" ? "bg-ink text-bg" : "bg-bg text-muted hover:text-ink"
+                }`}
+              >
+                <Bot size={13} /> AI tạo Flashcard
               </button>
             </div>
             <div className="text-xs font-bold text-brand-hover">
@@ -261,6 +384,133 @@ function StudySetModal({
                 {quickBusy ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
                 {quickBusy ? "Đang tra & lưu từ..." : "Tra nghĩa & thêm vào học phần"}
               </button>
+            </div>
+          ) : mode === "ai-create" ? (
+            <div className="space-y-3">
+              <p className="text-xs text-muted">
+                Mô tả chủ đề, band điểm hoặc mục tiêu học tập bằng tiếng Việt/Anh. AI sẽ tự hiểu nhu cầu, gợi ý tên học phần, tra nghĩa + IPA + ví dụ và tạo bộ Flashcard để bạn duyệt ngay.
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {AI_PRESETS.map((preset) => (
+                  <button
+                    key={preset}
+                    type="button"
+                    onClick={() => setAiPrompt(preset)}
+                    className="rounded-full border border-line bg-bg px-3 py-1 text-[11px] font-medium text-muted transition hover:border-brand hover:text-ink"
+                  >
+                    {preset}
+                  </button>
+                ))}
+              </div>
+              <textarea
+                rows={3}
+                value={aiPrompt}
+                onChange={(e) => setAiPrompt(e.target.value)}
+                placeholder="Vd: Tạo giúp tôi 15 từ vựng Band 7.0+ chủ đề Urbanization cho IELTS Writing Task 2 kèm câu ví dụ..."
+                className="w-full rounded-2xl border border-line p-3.5 text-sm outline-none focus:border-brand-hover"
+              />
+              {aiErr && (
+                <div className="rounded-xl bg-rose-500/15 px-3.5 py-2 text-xs text-rose-700 dark:bg-rose-400/15 dark:text-rose-300">
+                  {aiErr}
+                </div>
+              )}
+              <button
+                type="button"
+                onClick={handleAiGenerate}
+                disabled={!aiPrompt.trim() || aiBusy !== ""}
+                className="inline-flex items-center gap-2 rounded-full bg-brand px-5 py-2 text-xs font-bold text-white hover:bg-brand-hover hover:text-bg disabled:opacity-40"
+              >
+                {aiBusy === "generate" ? <Loader2 size={14} className="animate-spin" /> : <Bot size={14} />}
+                {aiBusy === "generate" ? "AI đang phân tích & tạo thẻ..." : "AI tạo Flashcard"}
+              </button>
+
+              {aiItems && (
+                <div className="space-y-3 border-t border-line pt-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                    <span className="font-semibold">
+                      AI đã tạo <b className="text-brand-hover">{aiItems.length}</b> flashcard · Đã chọn{" "}
+                      <b>{chosenAiItems.length}</b>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setAiOff(
+                          aiOff.size > 0 ? new Set() : new Set(aiItems.map((i) => i.norm_key))
+                        )
+                      }
+                      className="font-semibold text-muted hover:text-ink"
+                    >
+                      {aiOff.size > 0 ? "Chọn tất cả" : "Bỏ chọn tất cả"}
+                    </button>
+                  </div>
+
+                  <div className="max-h-60 space-y-2 overflow-y-auto rounded-2xl border border-line bg-bg p-2">
+                    {aiItems.map((item) => {
+                      const on = !aiOff.has(item.norm_key);
+                      return (
+                        <label
+                          key={item.norm_key}
+                          className={`flex cursor-pointer items-start gap-2.5 rounded-xl bg-card p-2.5 text-xs transition ${
+                            on ? "" : "opacity-40"
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={on}
+                            onChange={() => {
+                              const next = new Set(aiOff);
+                              if (on) next.add(item.norm_key);
+                              else next.delete(item.norm_key);
+                              setAiOff(next);
+                            }}
+                            className="mt-0.5 h-4 w-4 accent-brand"
+                          />
+                          <div className="min-w-0 flex-1">
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              <span className="text-sm font-bold text-ink">{item.lemma}</span>
+                              {item.ipa && (
+                                <span className="text-muted">
+                                  {item.ipa} {item.pos ? `· ${item.pos}` : ""}
+                                </span>
+                              )}
+                              {item.cefr_level && (
+                                <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${levelColor[item.cefr_level] ?? ""}`}>
+                                  {item.cefr_level}
+                                </span>
+                              )}
+                              <span
+                                className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                                  item.existingId
+                                    ? "bg-sky-500/15 text-sky-700 dark:text-sky-300"
+                                    : "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300"
+                                }`}
+                              >
+                                {item.existingId ? "Có trong kho" : "Thẻ mới"}
+                              </span>
+                            </div>
+                            <div className="mt-0.5 font-semibold text-brand-hover">{item.meaning_vi}</div>
+                            {item.example && (
+                              <div className="mt-1 italic text-muted break-words">“{item.example}”</div>
+                            )}
+                          </div>
+                        </label>
+                      );
+                    })}
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleAiApply}
+                    disabled={chosenAiItems.length === 0 || aiBusy !== ""}
+                    className="inline-flex items-center gap-2 rounded-full bg-emerald-500 px-5 py-2 text-xs font-bold text-white hover:bg-emerald-400 disabled:opacity-40"
+                  >
+                    {aiBusy === "save" ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+                    {aiBusy === "save"
+                      ? "Đang lưu vào học phần..."
+                      : `Lưu & thêm ${chosenAiItems.length} thẻ vào học phần`}
+                  </button>
+                </div>
+              )}
             </div>
           ) : (
             <div className="space-y-3">
@@ -541,7 +791,7 @@ export default function VocabLearn() {
             </button>
           </div>
         ) : (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
             {studySets.map((s) => {
               const setWords = s.wordIds
                 .map((id) => wordMap.get(id))
@@ -557,8 +807,8 @@ export default function VocabLearn() {
                       <Layers size={20} strokeWidth={1.6} />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <div className="truncate font-bold">{s.title}</div>
-                      <div className="text-xs text-muted">
+                      <div className="break-words font-bold">{s.title}</div>
+                      <div className="break-words text-xs text-muted">
                         {setWords.length} thẻ{s.desc ? ` · ${s.desc}` : ""}
                       </div>
                     </div>
