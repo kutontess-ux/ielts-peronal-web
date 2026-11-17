@@ -136,7 +136,10 @@ export default function Review() {
 
   const handleClearAll = async () => {
     if (clearing) return;
-    if (!confirm("Xoá toàn bộ từ khỏi danh sách ôn tập ngắt quãng? (Từ vựng trong Kho vẫn được giữ nguyên)")) {
+    const answer = window.prompt(
+      `CẢNH BÁO: Thao tác này sẽ xoá toàn bộ ${enrolledCount} từ khỏi danh sách ôn tập và MẤT HẾT Level (1–5) lẫn lịch sử ôn tập của chúng (từ vựng trong Kho vẫn giữ nguyên).\n\nNhập chính xác chữ XOA để xác nhận:`
+    );
+    if (answer?.trim().toUpperCase() !== "XOA") {
       return;
     }
     setClearing(true);
@@ -150,7 +153,8 @@ export default function Review() {
       setLevelCounts({ 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 });
       setFeedback(null);
       setTyped("");
-      notifyDueUpdated();
+      setSettingsOpen(false);
+      notifyDueUpdated(0);
     } catch (e) {
       setErrMsg((e as Error).message);
     } finally {
@@ -372,6 +376,20 @@ export default function Review() {
             {savingSettings ? "Đang lưu..." : "Lưu cài đặt"}
           </button>
         </div>
+
+        {enrolledCount > 0 && (
+          <div className="mt-5 flex items-center justify-between border-t border-line pt-4 text-xs">
+            <span className="text-muted">Xoá toàn bộ tiến độ Level ({enrolledCount} từ)</span>
+            <button
+              type="button"
+              onClick={handleClearAll}
+              disabled={clearing}
+              className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1 font-semibold text-rose-600 hover:bg-rose-500/10 dark:text-rose-400 disabled:opacity-40"
+            >
+              <Trash2 size={12} /> {clearing ? "Đang xoá..." : "Xoá danh sách ôn"}
+            </button>
+          </div>
+        )}
       </form>
     </div>
   );
@@ -437,16 +455,6 @@ export default function Review() {
           <Link href="/vocab/bank" className="rounded-full bg-line px-6 py-3 text-sm font-bold hover:bg-card-hover">
             Xem Kho từ vựng
           </Link>
-          {enrolledCount > 0 && (
-            <button
-              type="button"
-              onClick={handleClearAll}
-              disabled={clearing}
-              className="inline-flex items-center gap-1.5 rounded-full bg-rose-500/15 px-5 py-3 text-sm font-bold text-rose-700 hover:bg-rose-500/25 dark:text-rose-300 disabled:opacity-40"
-            >
-              <Trash2 size={15} /> Xoá danh sách ôn ({enrolledCount})
-            </button>
-          )}
         </div>
       </div>
     );
@@ -486,14 +494,6 @@ export default function Review() {
             className="inline-flex items-center gap-1.5 rounded-full border border-line bg-card px-3.5 py-1.5 text-xs font-bold hover:bg-card-hover"
           >
             <Settings2 size={14} /> Cài đặt
-          </button>
-          <button
-            type="button"
-            onClick={handleClearAll}
-            disabled={clearing}
-            className="inline-flex items-center gap-1.5 rounded-full border border-rose-500/40 bg-rose-500/10 px-3.5 py-1.5 text-xs font-bold text-rose-700 transition hover:bg-rose-500/20 dark:text-rose-300 disabled:opacity-40"
-          >
-            <Trash2 size={14} /> {clearing ? "Đang xoá..." : "Xoá tất cả"}
           </button>
           <div className="ml-1 font-bold">
             {Math.min(reviewedInSession + 1, totalSession)} / {totalSession}
