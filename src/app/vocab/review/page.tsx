@@ -2,17 +2,43 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
-import { Loader2, PartyPopper, Repeat, Volume2 } from "lucide-react";
+import { Loader2, PartyPopper, Repeat, RotateCw, Volume2 } from "lucide-react";
 import { levelColor } from "@/lib/mock";
 import { notifyDueUpdated } from "@/lib/due-events";
+import { computeNextReview, type ReviewGrade } from "@/lib/srs";
 import type { ReviewWord } from "@/app/api/reviews/route";
 
-const GRADES = [
-  { key: "again", label: "Quên", next: "< 1 phút", cls: "border-rose-500/50 text-rose-700 hover:bg-rose-500/10 dark:border-rose-400/60 dark:text-rose-300 dark:hover:bg-rose-400/10" },
-  { key: "hard", label: "Khó", next: "1 ngày", cls: "border-orange-500/50 text-orange-700 hover:bg-orange-500/10 dark:border-orange-400/60 dark:text-orange-300 dark:hover:bg-orange-400/10" },
-  { key: "good", label: "Tốt", next: "3+ ngày", cls: "border-sky-500/50 text-sky-700 hover:bg-sky-500/10 dark:border-sky-400/60 dark:text-sky-300 dark:hover:bg-sky-400/10" },
-  { key: "easy", label: "Dễ", next: "7+ ngày", cls: "border-emerald-500/50 text-emerald-700 hover:bg-emerald-500/10 dark:border-emerald-400/60 dark:text-emerald-300 dark:hover:bg-emerald-400/10" },
-] as const;
+const GRADE_META: {
+  key: ReviewGrade;
+  label: string;
+  shortcut: string;
+  cls: string;
+}[] = [
+  {
+    key: "again",
+    label: "Xem lại",
+    shortcut: "1",
+    cls: "border-rose-500/50 text-rose-700 hover:bg-rose-500/10 dark:border-rose-400/60 dark:text-rose-300 dark:hover:bg-rose-400/10",
+  },
+  {
+    key: "hard",
+    label: "Khó",
+    shortcut: "2",
+    cls: "border-orange-500/50 text-orange-700 hover:bg-orange-500/10 dark:border-orange-400/60 dark:text-orange-300 dark:hover:bg-orange-400/10",
+  },
+  {
+    key: "good",
+    label: "Ổn",
+    shortcut: "3",
+    cls: "border-sky-500/50 text-sky-700 hover:bg-sky-500/10 dark:border-sky-400/60 dark:text-sky-300 dark:hover:bg-sky-400/10",
+  },
+  {
+    key: "easy",
+    label: "Dễ",
+    shortcut: "4",
+    cls: "border-emerald-500/50 text-emerald-700 hover:bg-emerald-500/10 dark:border-emerald-400/60 dark:text-emerald-300 dark:hover:bg-emerald-400/10",
+  },
+];
 
 export default function Review() {
   const [queue, setQueue] = useState<ReviewWord[]>([]);
@@ -21,6 +47,7 @@ export default function Review() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [flipped, setFlipped] = useState(false);
+  const [revealed, setRevealed] = useState(false);
   const [reviewedInSession, setReviewedInSession] = useState(0);
 
   const load = useCallback(async () => {
@@ -32,6 +59,8 @@ export default function Review() {
         setQueue(j.words ?? []);
         setDueCount(j.dueCount ?? 0);
         setTotalWords(j.totalWords ?? 0);
+        setFlipped(false);
+        setRevealed(false);
       }
     } finally {
       setLoading(false);
@@ -39,43 +68,84 @@ export default function Review() {
   }, []);
 
   useEffect(() => {
-    load();
+    const id = requestAnimationFrame(() => {
+      void load();
+    });
+    return () => cancelAnimationFrame(id);
   }, [load]);
 
   const card = queue[0];
 
+  const toggleFlip = useCallback(() => {
+    setFlipped((f) => {
+      const next = !f;
+      if (next) setRevealed(true);
+      return next;
+    });
+  }, []);
+
   const speak = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!card) return;
+    if (!card || typeof window === "undefined" || !("speechSynthesis" in window)) return;
+    speechSynthesis.cancel();
     const u = new SpeechSynthesisUtterance(card.word);
     u.lang = "en-GB";
     speechSynthesis.speak(u);
   };
 
-  const grade = async (k: "again" | "hard" | "good" | "easy") => {
-    if (!card || saving) return;
-    setSaving(true);
-    try {
-      await fetch("/api/reviews", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ wordId: card.id, grade: k }),
-      });
+  const grade = useCallback(
+    async (k: ReviewGrade) => {
+      if (!card || saving) return;
+      setSaving(true);
+      try {
+        const computed = computeNextReview(card, k);
+        await fetch("/api/reviews", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ wordId: card.id, grade: k }),
+        });
 
-      setFlipped(false);
-      if (k === "again") {
-        // Quên: đẩy xuống cuối hàng chờ trong phiên để ôn lại ngay
-        setQueue((q) => [...q.slice(1), q[0]]);
-      } else {
-        setQueue((q) => q.slice(1));
-        setDueCount((c) => Math.max(0, c - 1));
-        setReviewedInSession((n) => n + 1);
+        setFlipped(false);
+        setRevealed(false);
+        if (k === "again" || k === "hard") {
+          // Xem lại (5p) / Khó (10p): đẩy xuống cuối hàng chờ để ôn lại trong phiên
+          const updatedCard: ReviewWord = {
+            ...card,
+            reps: computed.reps,
+            interval_days: computed.interval_days,
+            ease: computed.ease,
+          };
+          setQueue((q) => [...q.slice(1), updatedCard]);
+        } else {
+          setQueue((q) => q.slice(1));
+          setDueCount((c) => Math.max(0, c - 1));
+          setReviewedInSession((n) => n + 1);
+        }
+        notifyDueUpdated();
+      } finally {
+        setSaving(false);
       }
-      notifyDueUpdated();
-    } finally {
-      setSaving(false);
-    }
-  };
+    },
+    [card, saving]
+  );
+
+  // Phím tắt Space để lật qua lại, 1-4 để chấm mức độ sau khi đã xem mặt sau
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!card) return;
+      if (e.code === "Space") {
+        e.preventDefault();
+        toggleFlip();
+      } else if (revealed && !saving) {
+        if (e.key === "1") void grade("again");
+        else if (e.key === "2") void grade("hard");
+        else if (e.key === "3") void grade("good");
+        else if (e.key === "4") void grade("easy");
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [card, revealed, saving, toggleFlip, grade]);
 
   if (loading) {
     return (
@@ -141,47 +211,98 @@ export default function Review() {
         <div className="h-full bg-brand-hover transition-all" style={{ width: `${(reviewedInSession / Math.max(1, totalSession)) * 100}%` }} />
       </div>
 
-      <div className="cursor-pointer rounded-3xl bg-card p-8" style={{ minHeight: 340 }} onClick={() => setFlipped(true)}>
-        <div className="flex justify-between">
-          <span className={`rounded-full px-3 py-1 text-xs font-bold ${levelColor[card.level]}`}>
-            {card.level} · {card.topic}
-          </span>
-          <button onClick={speak} title="Phát âm" className="text-muted hover:text-ink">
-            <Volume2 size={21} strokeWidth={1.6} />
-          </button>
-        </div>
-        <div className="mt-8 text-center">
-          <div className="text-5xl font-bold">{card.word}</div>
-          <div className="mt-2 text-muted">
-            {card.ipa} · {card.pos}
+      {/* Thẻ lật 3D 2 chiều: bấm qua lại giữa mặt từ và mặt nghĩa */}
+      <div
+        role="button"
+        tabIndex={0}
+        aria-pressed={flipped}
+        aria-label={flipped ? `Lật về mặt trước của ${card.word}` : `Lật xem nghĩa của ${card.word}`}
+        className="cursor-pointer select-none [perspective:1500px] focus:outline-none"
+        onClick={toggleFlip}
+      >
+        <div
+          className={`grid transition-transform duration-500 [transform-style:preserve-3d] ${
+            flipped ? "[transform:rotateY(180deg)]" : ""
+          }`}
+        >
+          {/* Mặt trước */}
+          <div
+            className={`col-start-1 row-start-1 flex min-h-[340px] flex-col justify-between rounded-3xl border border-line bg-card p-8 shadow-xl [backface-visibility:hidden] [transform:rotateY(0deg)] ${
+              flipped ? "pointer-events-none" : ""
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <span className={`rounded-full px-3 py-1 text-xs font-bold ${levelColor[card.level]}`}>
+                {card.level} · {card.topic}
+              </span>
+              <button type="button" onClick={speak} title="Phát âm" className="text-muted hover:text-ink">
+                <Volume2 size={21} strokeWidth={1.6} />
+              </button>
+            </div>
+
+            <div className="my-6 text-center">
+              <div className="text-4xl font-bold md:text-5xl">{card.word}</div>
+              <div className="mt-2 text-muted">
+                {card.ipa} {card.pos ? `· ${card.pos}` : ""}
+              </div>
+            </div>
+
+            <div className="flex items-center justify-center gap-1.5 text-sm text-muted/80">
+              <RotateCw size={14} /> Bấm thẻ hoặc Space để lật xem đáp án
+            </div>
+          </div>
+
+          {/* Mặt sau */}
+          <div
+            className={`col-start-1 row-start-1 flex min-h-[340px] flex-col justify-between rounded-3xl border border-line bg-card p-8 shadow-xl [backface-visibility:hidden] [transform:rotateY(180deg)] ${
+              flipped ? "" : "pointer-events-none"
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <span className={`rounded-full px-3 py-1 text-xs font-bold ${levelColor[card.level]}`}>
+                {card.word} · {card.level}
+              </span>
+              <button type="button" onClick={speak} title="Phát âm" className="text-muted hover:text-ink">
+                <Volume2 size={21} strokeWidth={1.6} />
+              </button>
+            </div>
+
+            <div className="my-4 space-y-3 text-center">
+              <div className="text-2xl font-bold text-brand-hover md:text-3xl">{card.vi}</div>
+              <div className="text-muted">{card.en}</div>
+              {card.example && (
+                <div className="mx-auto max-w-xl rounded-xl bg-bg/60 p-3 text-sm italic text-muted">
+                  “{card.example}”
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center justify-center gap-1.5 text-sm text-muted/80">
+              <RotateCw size={14} /> Bấm lại để lật về mặt trước
+            </div>
           </div>
         </div>
-        {flipped ? (
-          <div className="mt-8 space-y-3 text-center">
-            <div className="text-2xl font-bold text-brand-hover">{card.vi}</div>
-            <div className="text-muted">{card.en}</div>
-            {card.example && <div className="rounded-xl bg-bg/60 p-3 text-sm italic text-muted">“{card.example}”</div>}
-          </div>
-        ) : (
-          <div className="mt-16 text-center text-sm text-muted">Nhớ nghĩa của từ rồi bấm để xem đáp án</div>
-        )}
       </div>
 
       <div className="mt-6 grid grid-cols-2 gap-3 md:grid-cols-4">
-        {GRADES.map((g) => (
-          <button
-            key={g.key}
-            disabled={!flipped || saving}
-            onClick={() => grade(g.key)}
-            className={`rounded-2xl border-2 px-4 py-3 font-bold transition disabled:cursor-not-allowed disabled:opacity-30 ${g.cls}`}
-          >
-            {g.label}
-            <div className="text-xs font-medium opacity-80">{g.next}</div>
-          </button>
-        ))}
+        {GRADE_META.map((g) => {
+          const preview = computeNextReview(card, g.key);
+          return (
+            <button
+              key={g.key}
+              type="button"
+              disabled={!revealed || saving}
+              onClick={() => grade(g.key)}
+              className={`rounded-2xl border-2 px-4 py-3 font-bold transition disabled:cursor-not-allowed disabled:opacity-30 ${g.cls}`}
+            >
+              <div>{g.label}</div>
+              <div className="text-xs font-medium opacity-80">{preview.label}</div>
+            </button>
+          );
+        })}
       </div>
       <p className="mt-4 text-center text-xs text-muted">
-        Khi bạn chọn Khó / Tốt / Dễ, từ sẽ được hẹn lịch ôn sang ngày khác và số thông báo tự động giảm xuống.
+        Phím tắt: Space lật qua lại · 1 Xem lại · 2 Khó · 3 Ổn · 4 Dễ (từ học nhiều tự tăng lên 4 ngày, 7 ngày).
       </p>
     </div>
   );

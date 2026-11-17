@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
 import type { Word } from "@/lib/mock";
+import { computeNextReview, type ReviewGrade } from "@/lib/srs";
 
 export type ReviewWord = Word & {
   reps: number;
@@ -65,12 +66,10 @@ export async function GET() {
   }
 }
 
-type Grade = "again" | "hard" | "good" | "easy";
-
-// Cập nhật lịch ôn tập ngắt quãng (SM-2 đơn giản)
+// Cập nhật lịch ôn tập ngắt quãng (5p / 10p / 1d / 2d -> 4d -> 7d)
 export async function POST(req: Request) {
   try {
-    const { wordId, grade } = (await req.json()) as { wordId: number; grade: Grade };
+    const { wordId, grade } = (await req.json()) as { wordId: number; grade: ReviewGrade };
     if (!wordId || !["again", "hard", "good", "easy"].includes(grade)) {
       return NextResponse.json({ error: "Dữ liệu không hợp lệ" }, { status: 400 });
     }
@@ -82,51 +81,40 @@ export async function POST(req: Request) {
       .eq("word_id", wordId)
       .maybeSingle();
 
-    let interval = Number(existing?.interval_days ?? 0);
-    let ease = Number(existing?.ease ?? 2.5);
-    let reps = Number(existing?.reps ?? 0);
-    let lapses = Number(existing?.lapses ?? 0);
+    const prevLapses = Number(existing?.lapses ?? 0);
+    const next = computeNextReview(
+      {
+        interval_days: Number(existing?.interval_days ?? 0),
+        ease: Number(existing?.ease ?? 2.5),
+        reps: Number(existing?.reps ?? 0),
+      },
+      grade
+    );
 
     const now = Date.now();
-    let dueAtMs = now;
-
-    if (grade === "again") {
-      reps = 0;
-      lapses += 1;
-      interval = 0;
-      ease = Math.max(1.3, ease - 0.2);
-      dueAtMs = now + 60 * 1000; // quay lại sau 1 phút
-    } else if (grade === "hard") {
-      reps += 1;
-      interval = interval === 0 ? 1 : Math.max(1, Math.round(interval * 1.2));
-      ease = Math.max(1.3, ease - 0.15);
-      dueAtMs = now + interval * 86400 * 1000;
-    } else if (grade === "good") {
-      reps += 1;
-      interval = interval === 0 ? 3 : Math.max(2, Math.round(interval * ease));
-      dueAtMs = now + interval * 86400 * 1000;
-    } else {
-      reps += 1;
-      interval = interval === 0 ? 7 : Math.max(4, Math.round(interval * ease * 1.3));
-      ease = Math.min(3.0, ease + 0.15);
-      dueAtMs = now + interval * 86400 * 1000;
-    }
+    const dueAtMs = now + next.delayMs;
 
     const { error } = await db.from("reviews").upsert(
       {
         word_id: wordId,
         due_at: new Date(dueAtMs).toISOString(),
-        interval_days: interval,
-        ease,
-        reps,
-        lapses,
+        interval_days: next.interval_days,
+        ease: next.ease,
+        reps: next.reps,
+        lapses: prevLapses + next.lapsesDelta,
         last_reviewed_at: new Date(now).toISOString(),
       },
       { onConflict: "word_id" }
     );
     if (error) throw new Error(error.message);
 
-    return NextResponse.json({ ok: true, interval_days: interval });
+    return NextResponse.json({
+      ok: true,
+      interval_days: next.interval_days,
+      reps: next.reps,
+      ease: next.ease,
+      due_at: new Date(dueAtMs).toISOString(),
+    });
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message }, { status: 500 });
   }

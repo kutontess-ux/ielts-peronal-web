@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import {
-  ArrowLeft, ArrowLeftRight, ArrowRight, Check, Home, PartyPopper,
+  ArrowLeft, ArrowLeftRight, Check, Home, PartyPopper,
   Pause, Play, RotateCcw, Shuffle, Star, Undo2, Volume2, X,
 } from "lucide-react";
 import { levelColor, type Word } from "@/lib/mock";
@@ -238,21 +238,33 @@ export default function Flashcards({
       </div>
 
       {/* Thẻ lật 3D */}
-      <div className="cursor-pointer" style={{ perspective: 1500 }} onClick={() => setFlipped((f) => !f)}>
+      <div
+        role="button"
+        tabIndex={0}
+        aria-pressed={flipped}
+        className="cursor-pointer select-none focus:outline-none"
+        style={{ perspective: 1500 }}
+        onClick={() => setFlipped((f) => !f)}
+      >
         <div
           className="relative h-[400px] transition-transform duration-500"
-          style={{ transformStyle: "preserve-3d", transform: flipped ? "rotateX(180deg)" : "none" }}
+          style={{ transformStyle: "preserve-3d", transform: flipped ? "rotateX(180deg)" : "rotateX(0deg)" }}
         >
-          <div className="absolute inset-0 flex flex-col rounded-3xl border border-line bg-card p-8 shadow-xl" style={{ backfaceVisibility: "hidden" }}>
+          <div
+            className={`absolute inset-0 flex flex-col rounded-3xl border border-line bg-card p-8 shadow-xl ${
+              flipped ? "pointer-events-none" : ""
+            }`}
+            style={{ backfaceVisibility: "hidden", transform: "rotateX(0deg)" }}
+          >
             <div className="flex justify-between text-muted">
               <span className={`rounded-full px-3 py-1 text-xs font-bold ${levelColor[card.level]}`}>
                 {card.level} · {card.topic}
               </span>
               <div className="flex gap-3" onClick={(e) => e.stopPropagation()}>
-                <button title="Phát âm (A)" onClick={() => speak(card.word)} className="hover:text-ink">
+                <button type="button" title="Phát âm (A)" onClick={() => speak(card.word)} className="hover:text-ink">
                   <Volume2 size={21} strokeWidth={1.6} />
                 </button>
-                <button title="Gắn sao (S)" onClick={() => setStar((s) => ({ ...s, [card.id]: !s[card.id] }))} className="hover:text-ink">
+                <button type="button" title="Gắn sao (S)" onClick={() => setStar((s) => ({ ...s, [card.id]: !s[card.id] }))} className="hover:text-ink">
                   <Star size={21} strokeWidth={1.6} className={star[card.id] ? "fill-amber-400 text-amber-400 dark:fill-yellow-300 dark:text-yellow-300" : ""} />
                 </button>
               </div>
@@ -262,10 +274,13 @@ export default function Flashcards({
           </div>
 
           <div
-            className="absolute inset-0 flex flex-col justify-center rounded-3xl border border-line bg-card p-10 shadow-xl"
+            className={`absolute inset-0 flex flex-col justify-between rounded-3xl border border-line bg-card p-10 shadow-xl ${
+              flipped ? "" : "pointer-events-none"
+            }`}
             style={{ backfaceVisibility: "hidden", transform: "rotateX(180deg)" }}
           >
-            {backContent}
+            <div className="flex flex-1 flex-col justify-center">{backContent}</div>
+            <div className="text-center text-sm text-muted/70">Bấm lại để lật về mặt trước</div>
           </div>
         </div>
       </div>
