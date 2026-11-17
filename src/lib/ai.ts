@@ -213,3 +213,25 @@ export async function extractFromPassage(passage: string): Promise<string[]> {
   );
   return res.words ?? [];
 }
+
+// Tách số lượng từ người dùng yêu cầu trong prompt (bỏ qua số của Task 1/2, Band 6.5, B1-C2)
+export function parseRequestedWordCount(
+  prompt: string,
+  defaultCount = 15,
+  maxCount = 60
+): { targetCount: number; explicit: boolean } {
+  const cleaned = prompt
+    .replace(/\btask\s*[12]\b/gi, " ")
+    .replace(/\bband\s*\d+(?:\.\d+)?\b/gi, " ")
+    .replace(/\b[abc][12]\b/gi, " ");
+
+  const explicitUnit = cleaned.match(
+    /\b(\d{1,3})\s*(?:từ|tu|thẻ|the|flashcards?|cards?|words?|vocab(?:ulary)?|cụm|collocations?|items?)\b/i
+  );
+  const rawNum = explicitUnit?.[1] ?? cleaned.match(/\b(\d{1,3})\b/)?.[1];
+  if (!rawNum) return { targetCount: defaultCount, explicit: false };
+
+  const n = Number(rawNum);
+  if (!Number.isFinite(n) || n < 3) return { targetCount: defaultCount, explicit: false };
+  return { targetCount: Math.min(maxCount, Math.max(3, Math.round(n))), explicit: true };
+}
