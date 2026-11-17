@@ -124,14 +124,101 @@ export function checkRecallAnswer(userInput: string, targetWord: string): boolea
  * Tạo gợi ý chữ cái đầu cho từng từ (ví dụ "analyse" -> "a _ _ _ _ _ _")
  */
 export function getWordHint(word: string): string {
+  return getProgressiveWordHint(word, 1);
+}
+
+/**
+ * Tạo gợi ý 3 nấc cho từ tiếng Anh:
+ * - level 1: chỉ chữ cái đầu mỗi từ
+ * - level 2: chữ đầu + chữ cuối + ~40% chữ ở giữa
+ * - level 3: ~70% chữ cái
+ */
+export function getProgressiveWordHint(word: string, level: 1 | 2 | 3): string {
   return word
     .trim()
     .split(/\s+/)
     .map((part) => {
-      if (part.length <= 1) return part;
-      return `${part[0]} ${Array(part.length - 1).fill("_").join(" ")}`;
+      const chars = Array.from(part);
+      if (chars.length <= 1) return part;
+      return chars
+        .map((ch, idx) => {
+          if (!/[a-zA-Z]/.test(ch)) return ch;
+          if (idx === 0) return ch;
+          if (level === 1) return "_";
+          if (level === 2) {
+            if (idx === chars.length - 1 && chars.length >= 4) return ch;
+            return idx % 3 === 0 ? ch : "_";
+          }
+          // level 3
+          if (idx === chars.length - 1) return ch;
+          return idx % 3 !== 2 ? ch : "_";
+        })
+        .join(" ");
     })
     .join("   ");
+}
+
+/**
+ * Che từ mục tiêu trong câu ví dụ thành "_____" để làm ngữ cảnh gợi ý.
+ */
+export function maskWordInExample(example: string, targetWord: string): string {
+  if (!example.trim() || !targetWord.trim()) return example;
+  const escaped = targetWord.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const re = new RegExp(`\\b${escaped}(?:s|es|ed|d|ing)?\\b`, "gi");
+  const masked = example.replace(re, "_____");
+  return masked;
+}
+
+function levenshtein(a: string, b: string): number {
+  const m = a.length;
+  const n = b.length;
+  const dp: number[] = Array.from({ length: n + 1 }, (_, j) => j);
+  for (let i = 1; i <= m; i++) {
+    let prev = dp[0];
+    dp[0] = i;
+    for (let j = 1; j <= n; j++) {
+      const tmp = dp[j];
+      if (a[i - 1] === b[j - 1]) {
+        dp[j] = prev;
+      } else {
+        dp[j] = 1 + Math.min(prev, dp[j], dp[j - 1]);
+      }
+      prev = tmp;
+    }
+  }
+  return dp[n];
+}
+
+export type RecallMatchKind = "exact" | "synonym" | "typo" | "wrong";
+
+/**
+ * Kiểm tra mềm đáp án Active Recall:
+ * - "exact": khớp từ mục tiêu (hoặc biến thể Anh/Mỹ)
+ * - "synonym": khớp một từ đồng nghĩa đã lưu trong kho
+ * - "typo": gõ sai 1 ký tự với từ dài >= 5 chữ
+ * - "wrong": sai hoàn toàn
+ */
+export function checkRecallSoftMatch(
+  userInput: string,
+  targetWord: string,
+  synonyms: string[] = []
+): RecallMatchKind {
+  if (checkRecallAnswer(userInput, targetWord)) return "exact";
+  const cleanedInput = cleanTerm(userInput);
+  if (!cleanedInput) return "wrong";
+
+  for (const syn of synonyms) {
+    if (syn && checkRecallAnswer(cleanedInput, syn)) {
+      return "synonym";
+    }
+  }
+
+  const cleanedTarget = cleanTerm(targetWord);
+  if (cleanedTarget.length >= 5 && levenshtein(cleanedInput, cleanedTarget) === 1) {
+    return "typo";
+  }
+
+  return "wrong";
 }
 
 export type EnrollResult = {

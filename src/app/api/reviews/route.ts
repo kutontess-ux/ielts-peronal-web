@@ -14,6 +14,7 @@ export type ReviewWord = Word & {
   level5_streak: number;
   lapses: number;
   next_review_at: string;
+  synonyms?: string[];
 };
 
 const VN_OFFSET_MS = 7 * 60 * 60 * 1000;
@@ -69,7 +70,7 @@ export async function GET() {
       db
         .from("reviews")
         .select(
-          "word_id,level,next_review_at,level5_streak,lapses,words!inner(id,lemma,ipa,pos,meaning_vi,definition_en,example,cefr_level,topic,is_awl,status)"
+          "word_id,level,next_review_at,level5_streak,lapses,words!inner(id,lemma,ipa,pos,meaning_vi,definition_en,example,cefr_level,topic,is_awl,synonyms,status)"
         )
         .eq("words.status", "approved")
         .lte("next_review_at", nowIso)
@@ -122,6 +123,7 @@ export async function GET() {
         level: (w.cefr_level ?? "B2") as Word["level"],
         topic: w.topic ?? "Other",
         awl: Boolean(w.is_awl),
+        synonyms: Array.isArray(w.synonyms) ? w.synonyms : [],
         level_srs: clampLevel(row.level ?? 1),
         level5_streak: Number(row.level5_streak ?? 0),
         lapses: Number(row.lapses ?? 0),
