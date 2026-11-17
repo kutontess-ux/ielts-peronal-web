@@ -1,8 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Activity, CheckCircle2, Loader2, X, XCircle } from "lucide-react";
+import { CheckCircle2, Loader2, X, XCircle } from "lucide-react";
 import { consumeActivityLabel } from "@/lib/activity";
+
+const AUTO_CLOSE_MS = 3000;
 
 type LogEntry = {
   id: number;
@@ -32,6 +34,18 @@ function describeRequest(method: string, path: string): string {
 export default function ActivityMonitor() {
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [now, setNow] = useState(0);
+  const [isDesktop, setIsDesktop] = useState(false);
+
+  useEffect(() => {
+    const mq = window.matchMedia("(min-width: 768px)");
+    const update = () => {
+      setIsDesktop(mq.matches);
+      if (!mq.matches) setLogs([]);
+    };
+    update();
+    mq.addEventListener("change", update);
+    return () => mq.removeEventListener("change", update);
+  }, []);
 
   useEffect(() => {
     setNow(Date.now());
@@ -63,7 +77,7 @@ export default function ActivityMonitor() {
       let shown = false;
 
       const addEntry = () => {
-        if (shown) return;
+        if (shown || window.matchMedia("(max-width: 767px)").matches) return;
         shown = true;
         setLogs((prev) => [
           ...prev.slice(-2),
@@ -105,28 +119,30 @@ export default function ActivityMonitor() {
           );
           setTimeout(() => {
             setLogs((prev) => prev.filter((l) => l.id !== id));
-          }, 4500);
+          }, AUTO_CLOSE_MS);
         }
         return res;
       } catch (err) {
         if (delayShow) clearTimeout(delayShow);
         addEntry();
-        const durationMs = Date.now() - startedAt;
-        setLogs((prev) =>
-          prev.map((l) =>
-            l.id === id
-              ? {
-                  ...l,
-                  status: "error",
-                  detail: (err as Error).message || "Lỗi kết nối",
-                  durationMs,
-                }
-              : l
-          )
-        );
-        setTimeout(() => {
-          setLogs((prev) => prev.filter((l) => l.id !== id));
-        }, 6000);
+        if (shown) {
+          const durationMs = Date.now() - startedAt;
+          setLogs((prev) =>
+            prev.map((l) =>
+              l.id === id
+                ? {
+                    ...l,
+                    status: "error",
+                    detail: (err as Error).message || "Lỗi kết nối",
+                    durationMs,
+                  }
+                : l
+            )
+          );
+          setTimeout(() => {
+            setLogs((prev) => prev.filter((l) => l.id !== id));
+          }, AUTO_CLOSE_MS);
+        }
         throw err;
       }
     };
@@ -136,10 +152,10 @@ export default function ActivityMonitor() {
     };
   }, []);
 
-  if (logs.length === 0) return null;
+  if (!isDesktop || logs.length === 0) return null;
 
   return (
-    <div className="fixed bottom-16 left-3 z-50 flex w-60 max-w-[calc(100vw-1.5rem)] flex-col gap-1.5 md:bottom-3 md:left-3">
+    <div className="fixed bottom-3 left-3 z-50 hidden w-60 max-w-[calc(100vw-1.5rem)] flex-col gap-1.5 md:flex">
       {logs.map((l) => {
         const elapsed = l.durationMs ?? (now > 0 ? Math.max(0, now - l.startedAt) : 0);
         const sec = (elapsed / 1000).toFixed(1);
