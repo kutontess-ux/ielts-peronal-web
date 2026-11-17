@@ -489,7 +489,9 @@ export default function Bank() {
       setBankMsg({
         text:
           res.enrolled > 0
-            ? `Đã chuyển ${res.enrolled} từ mới vào Ôn tập ngắt quãng.`
+            ? res.deferred > 0
+              ? `Đã chuyển ${res.enrolled} từ vào Ôn tập (${res.deferred} từ được dời lịch sang từ ${res.scheduledFromDay ?? "ngày sau"} do hôm nay đã đủ chỉ tiêu).`
+              : `Đã chuyển ${res.enrolled} từ mới vào Ôn tập ngắt quãng.`
             : "Các từ đã chọn đều đã nằm sẵn trong Ôn tập ngắt quãng.",
       });
     } catch (e) {

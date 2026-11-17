@@ -58,7 +58,9 @@ export default function Flashcards({
         onCompleted?.();
         setSrsMsg(
           res.enrolled > 0
-            ? `Đã chuyển ${res.enrolled} từ mới vào Ôn tập ngắt quãng`
+            ? res.deferred > 0
+              ? `Đã chuyển ${res.enrolled} từ vào Ôn tập (${res.deferred} từ mới được dời sang từ ${res.scheduledFromDay ?? "ngày sau"} vì hôm nay đã đủ chỉ tiêu — nên ôn hết từ cũ trước)`
+              : `Đã chuyển ${res.enrolled} từ mới vào Ôn tập ngắt quãng`
             : "Các từ trong học phần này đã nằm sẵn trong Ôn tập ngắt quãng"
         );
       } catch {

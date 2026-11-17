@@ -65,10 +65,18 @@ export default function Sidebar() {
       }
     };
     fetchDue();
-    window.addEventListener(DUE_EVENT, fetchDue);
+    const onDueEvent = (e: Event) => {
+      const detail = (e as CustomEvent<{ dueCount?: number }>).detail;
+      if (typeof detail?.dueCount === "number") {
+        setDueCount(detail.dueCount);
+        return;
+      }
+      void fetchDue();
+    };
+    window.addEventListener(DUE_EVENT, onDueEvent);
     return () => {
       active = false;
-      window.removeEventListener(DUE_EVENT, fetchDue);
+      window.removeEventListener(DUE_EVENT, onDueEvent);
     };
   }, [path]);
 

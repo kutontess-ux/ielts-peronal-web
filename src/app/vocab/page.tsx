@@ -1027,7 +1027,9 @@ export default function VocabLearn() {
       setSrsBanner({
         text:
           res.enrolled > 0
-            ? `Đã chuyển ${res.enrolled} từ mới từ “${set.title}” vào Ôn tập ngắt quãng.`
+            ? res.deferred > 0
+              ? `Đã chuyển ${res.enrolled} từ từ “${set.title}” (${res.deferred} từ được dời lịch sang từ ${res.scheduledFromDay ?? "ngày sau"} do hôm nay đã đủ chỉ tiêu).`
+              : `Đã chuyển ${res.enrolled} từ mới từ “${set.title}” vào Ôn tập ngắt quãng.`
             : `Các từ trong “${set.title}” đã nằm sẵn trong Ôn tập ngắt quãng.`,
       });
     } catch (e) {
