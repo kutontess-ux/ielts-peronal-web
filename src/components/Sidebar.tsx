@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import {
-  Bell, BookOpen, Home, Layers, Menu, Newspaper, Package, PenLine, Repeat, Target, X,
+  BarChart3, Bell, BookOpen, Home, Layers, Menu, Newspaper, Package, PenLine, Repeat, Target, X,
   type LucideIcon,
 } from "lucide-react";
 import { DUE_EVENT } from "@/lib/due-events";
@@ -90,6 +90,7 @@ export default function Sidebar() {
     { href: "/vocab/review", label: "Ôn tập ngắt quãng", icon: Repeat, badge: dueCount },
     { href: "/vocab/bank", label: "Kho từ vựng", icon: Package },
     { href: "/vocab/daily", label: "Từ hằng ngày", icon: Newspaper },
+    { href: "/vocab/stats", label: "Thống kê", icon: BarChart3 },
   ];
 
   const MOBILE_TABS: Item[] = [

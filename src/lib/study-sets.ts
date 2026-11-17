@@ -373,3 +373,116 @@ export function useStudyFolders() {
     getFoldersServerSnapshot
   );
 }
+
+export type StudySessionLog = {
+  id: string;
+  setId: string | null;
+  title: string;
+  wordCount: number;
+  studiedAt: string;
+  dateKey: string;
+};
+
+export const STUDY_HISTORY_STORAGE_KEY = "ielts_study_history_v1";
+const STUDY_HISTORY_EVENT = "ielts-study-history-change";
+const EMPTY_HISTORY: StudySessionLog[] = [];
+
+let cachedHistoryRaw: string | null | undefined;
+let cachedHistoryParsed: StudySessionLog[] = EMPTY_HISTORY;
+
+export function getVnTodayKey(nowMs = Date.now()): string {
+  const vn = new Date(nowMs + 7 * 60 * 60 * 1000);
+  const y = vn.getUTCFullYear();
+  const m = String(vn.getUTCMonth() + 1).padStart(2, "0");
+  const d = String(vn.getUTCDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+function parseHistory(raw: string | null): StudySessionLog[] {
+  if (!raw) return EMPTY_HISTORY;
+  try {
+    const data = JSON.parse(raw);
+    if (!Array.isArray(data)) return EMPTY_HISTORY;
+    return data.filter(
+      (h): h is StudySessionLog =>
+        !!h &&
+        typeof h.id === "string" &&
+        typeof h.title === "string" &&
+        typeof h.dateKey === "string"
+    );
+  } catch {
+    return EMPTY_HISTORY;
+  }
+}
+
+function getHistorySnapshot(): StudySessionLog[] {
+  if (typeof window === "undefined") return EMPTY_HISTORY;
+  try {
+    const raw = localStorage.getItem(STUDY_HISTORY_STORAGE_KEY);
+    if (raw !== cachedHistoryRaw) {
+      cachedHistoryRaw = raw;
+      cachedHistoryParsed = parseHistory(raw);
+    }
+    return cachedHistoryParsed;
+  } catch {
+    return EMPTY_HISTORY;
+  }
+}
+
+function getHistoryServerSnapshot(): StudySessionLog[] {
+  return EMPTY_HISTORY;
+}
+
+function subscribeHistory(callback: () => void) {
+  if (typeof window === "undefined") return () => {};
+  const onStorage = (e: StorageEvent) => {
+    if (e.key === STUDY_HISTORY_STORAGE_KEY) {
+      cachedHistoryRaw = undefined;
+      callback();
+    }
+  };
+  window.addEventListener(STUDY_HISTORY_EVENT, callback);
+  window.addEventListener("storage", onStorage);
+  return () => {
+    window.removeEventListener(STUDY_HISTORY_EVENT, callback);
+    window.removeEventListener("storage", onStorage);
+  };
+}
+
+export function recordStudySetSession(input: {
+  setId?: string | null;
+  title: string;
+  wordCount: number;
+}) {
+  const current = getHistorySnapshot();
+  const nowMs = Date.now();
+  const entry: StudySessionLog = {
+    id: `hist-${nowMs.toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
+    setId: input.setId ?? null,
+    title: input.title,
+    wordCount: input.wordCount,
+    studiedAt: new Date(nowMs).toISOString(),
+    dateKey: getVnTodayKey(nowMs),
+  };
+  const next = [entry, ...current].slice(0, 200);
+  const raw = JSON.stringify(next);
+  cachedHistoryRaw = raw;
+  cachedHistoryParsed = next;
+  if (typeof window !== "undefined") {
+    try {
+      localStorage.setItem(STUDY_HISTORY_STORAGE_KEY, raw);
+    } catch {
+      // bỏ qua
+    }
+    window.dispatchEvent(new Event(STUDY_HISTORY_EVENT));
+  }
+}
+
+export function useStudyHistory() {
+  return useSyncExternalStore(
+    subscribeHistory,
+    getHistorySnapshot,
+    getHistoryServerSnapshot
+  );
+}
+

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  ArrowLeft, Bell, Bot, Check, CheckCircle2, ChevronRight, Folder, FolderInput, FolderOpen, FolderPlus, Layers, ListChecks, Loader2, Pencil, Plus, Repeat, Search, Sparkles, Trash2, X,
+  ArrowLeft, BarChart3, Bell, Bot, Check, CheckCircle2, ChevronRight, Folder, FolderInput, FolderOpen, FolderPlus, Layers, ListChecks, Loader2, Pencil, Plus, Repeat, Search, Sparkles, Trash2, X,
 } from "lucide-react";
 import { levelColor, type Word } from "@/lib/mock";
 import { enrollWordsInSrs } from "@/lib/srs";
@@ -937,7 +937,7 @@ export default function VocabLearn() {
   const [words, setWords] = useState<Word[]>([]);
   const [stats, setStats] = useState({ dueCount: 0, totalWords: 0, masteredCount: 0 });
   const [loading, setLoading] = useState(true);
-  const [activeSet, setActiveSet] = useState<{ title: string; words: Word[] } | null>(null);
+  const [activeSet, setActiveSet] = useState<{ id?: string; title: string; words: Word[] } | null>(null);
   const [modalState, setModalState] = useState<{ open: boolean; editing: StudySet | null }>({
     open: false,
     editing: null,
@@ -1043,6 +1043,7 @@ export default function VocabLearn() {
   if (activeSet) {
     return (
       <Flashcards
+        setId={activeSet.id}
         title={activeSet.title}
         words={activeSet.words}
         onBack={() => setActiveSet(null)}
@@ -1164,6 +1165,12 @@ export default function VocabLearn() {
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
+              <Link
+                href="/vocab/stats"
+                className="inline-flex items-center gap-2 rounded-full border border-line bg-card px-4 py-2.5 text-sm font-bold text-ink transition hover:border-brand-hover"
+              >
+                <BarChart3 size={16} strokeWidth={2} /> Thống kê
+              </Link>
               <button
                 type="button"
                 onClick={() => setFolderModal({ open: true, editing: null })}
@@ -1466,7 +1473,7 @@ export default function VocabLearn() {
                     <button
                       type="button"
                       disabled={setWords.length === 0}
-                      onClick={() => setActiveSet({ title: s.title, words: setWords })}
+                      onClick={() => setActiveSet({ id: s.id, title: s.title, words: setWords })}
                       className="flex w-full items-center justify-between rounded-xl bg-bg px-4 py-2.5 text-sm font-bold text-ink transition hover:bg-brand hover:text-white disabled:opacity-40"
                     >
                       <span>{setWords.length > 0 ? "Học thẻ ngay" : "Chưa có thẻ hợp lệ"}</span>

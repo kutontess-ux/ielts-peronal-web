@@ -9,6 +9,7 @@ import {
 import { levelColor, type Word } from "@/lib/mock";
 import { enrollWordsInSrs } from "@/lib/srs";
 import { notifyDueUpdated } from "@/lib/due-events";
+import { recordStudySetSession } from "@/lib/study-sets";
 
 type HistoryEntry = {
   word: Word;
@@ -16,11 +17,13 @@ type HistoryEntry = {
 };
 
 export default function Flashcards({
+  setId,
   title,
   words,
   onBack,
   onCompleted,
 }: {
+  setId?: string;
   title: string;
   words: Word[];
   onBack: () => void;
@@ -78,10 +81,11 @@ export default function Flashcards({
       setFlipped(false);
       setIdx(nextIdx);
       if (nextIdx >= deck.length) {
+        recordStudySetSession({ setId, title, wordCount: deck.length });
         void syncDeckToSrs(deck);
       }
     },
-    [card, idx, deck, syncDeckToSrs]
+    [card, idx, deck, setId, title, syncDeckToSrs]
   );
 
   const undo = useCallback(() => {
