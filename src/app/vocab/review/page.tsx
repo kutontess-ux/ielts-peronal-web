@@ -282,7 +282,7 @@ export default function Review() {
 
   const submitDirect = useCallback(
     async (isCorrect: boolean, displayLabel: string) => {
-      if (!card || saving || feedback) return;
+      if (!card || feedback) return;
       const isRetry = Boolean(card.isRetryInSession);
       const computed = computeLeitnerReview(
         { level: card.level_srs, level5_streak: card.level5_streak },
@@ -290,50 +290,51 @@ export default function Review() {
         isRetry
       );
 
-      setSaving(true);
       setErrMsg("");
       setSoftHintMsg("");
-      try {
-        const res = await fetch("/api/reviews", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            wordId: card.id,
-            isCorrect,
-            isRetryInSession: isRetry,
-          }),
-        });
-        const j = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(j.error || "Không lưu được kết quả ôn tập");
+      speakWord(card.word);
+      setFeedback({
+        isCorrect,
+        typed: displayLabel,
+        nextLevel: computed.level,
+        nextLabel: computed.label,
+        wasRetry: isRetry,
+      });
 
-        speakWord(card.word);
-        setFeedback({
-          isCorrect,
-          typed: displayLabel,
-          nextLevel: computed.level,
-          nextLabel: computed.label,
-          wasRetry: isRetry,
-        });
-
-        setReviewedInSession((n) => n + 1);
-        if (isCorrect) {
-          setCorrectInSession((n) => n + 1);
-          if (!isRetry) {
-            const nextDue = Math.max(0, dueCount - 1);
-            setReviewedToday((n) => n + 1);
-            setDueCount(nextDue);
-            setTotalOverdueCount((c) => Math.max(0, c - 1));
-            setDailyLimitRemaining((c) => Math.max(0, c - 1));
-            notifyDueUpdated(nextDue);
-          }
+      setReviewedInSession((n) => n + 1);
+      if (isCorrect) {
+        setCorrectInSession((n) => n + 1);
+        if (!isRetry) {
+          const nextDue = Math.max(0, dueCount - 1);
+          setReviewedToday((n) => n + 1);
+          setDueCount(nextDue);
+          setTotalOverdueCount((c) => Math.max(0, c - 1));
+          setDailyLimitRemaining((c) => Math.max(0, c - 1));
+          notifyDueUpdated(nextDue);
         }
-      } catch (e) {
-        setErrMsg((e as Error).message);
-      } finally {
-        setSaving(false);
       }
+
+      // Lưu kết quả lên server ở nền để không làm trễ phản hồi đúng/sai
+      void fetch("/api/reviews", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          wordId: card.id,
+          isCorrect,
+          isRetryInSession: isRetry,
+        }),
+      })
+        .then(async (res) => {
+          if (!res.ok) {
+            const j = await res.json().catch(() => ({}));
+            throw new Error(j.error || "Không lưu được kết quả ôn tập");
+          }
+        })
+        .catch((e: Error) => {
+          setErrMsg(e.message);
+        });
     },
-    [card, saving, feedback, speakWord, dueCount]
+    [card, feedback, speakWord, dueCount]
   );
 
   const submitAnswer = useCallback(
