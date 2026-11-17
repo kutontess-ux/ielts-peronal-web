@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { CheckCircle2, Newspaper, Repeat, type LucideIcon } from "lucide-react";
+import { markNotifSeenToday } from "@/lib/due-events";
 
 export default function Notifications() {
   const [perm, setPerm] = useState<string>(
@@ -12,6 +13,7 @@ export default function Notifications() {
   const [dueCount, setDueCount] = useState<number | null>(null);
 
   useEffect(() => {
+    markNotifSeenToday();
     fetch("/api/reviews", { cache: "no-store" })
       .then((r) => r.json())
       .then((j) => setDueCount(j.dueCount ?? 0))

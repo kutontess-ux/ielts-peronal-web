@@ -7,7 +7,7 @@ import {
   BarChart3, Bell, BookOpen, Home, Layers, Menu, Newspaper, Package, PenLine, Repeat, Target, X,
   type LucideIcon,
 } from "lucide-react";
-import { DUE_EVENT } from "@/lib/due-events";
+import { DUE_EVENT, isNotifSeenToday, markNotifSeenToday, NOTIF_SEEN_EVENT } from "@/lib/due-events";
 import ThemeToggle from "@/components/ThemeToggle";
 
 type Item = { href: string; label: string; icon: LucideIcon; exact?: boolean; badge?: number; soon?: boolean };
@@ -39,7 +39,9 @@ function NavLink({
       <Icon size={19} strokeWidth={1.6} />
       <span className="flex-1 truncate">{item.label}</span>
       {item.badge && item.badge > 0 ? (
-        <span className="rounded-full bg-brand px-2 py-0.5 text-[11px] font-bold text-white">{item.badge}</span>
+        <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-brand px-1.5 text-[11px] font-bold leading-none text-white">
+          {item.badge > 99 ? "99+" : item.badge}
+        </span>
       ) : null}
       {item.soon && <span className="rounded bg-line px-1.5 py-0.5 text-[10px] uppercase">sắp có</span>}
     </Link>
@@ -49,10 +51,21 @@ function NavLink({
 export default function Sidebar() {
   const path = usePathname();
   const [dueCount, setDueCount] = useState(0);
+  const [notifSeen, setNotifSeen] = useState(true);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   useEffect(() => {
     let active = true;
+    const syncSeen = () => {
+      if (path.startsWith("/notifications")) {
+        markNotifSeenToday();
+        setNotifSeen(true);
+      } else {
+        setNotifSeen(isNotifSeenToday());
+      }
+    };
+    syncSeen();
+
     const fetchDue = async () => {
       try {
         const r = await fetch("/api/reviews", { cache: "no-store" });
@@ -73,16 +86,21 @@ export default function Sidebar() {
       }
       void fetchDue();
     };
+    const onNotifSeen = () => setNotifSeen(true);
     window.addEventListener(DUE_EVENT, onDueEvent);
+    window.addEventListener(NOTIF_SEEN_EVENT, onNotifSeen);
     return () => {
       active = false;
       window.removeEventListener(DUE_EVENT, onDueEvent);
+      window.removeEventListener(NOTIF_SEEN_EVENT, onNotifSeen);
     };
   }, [path]);
 
+  const notifBadge = dueCount > 0 && !notifSeen ? 1 : 0;
+
   const MAIN: Item[] = [
     { href: "/", label: "Trang chủ", icon: Home, exact: true },
-    { href: "/notifications", label: "Thông báo", icon: Bell, badge: dueCount },
+    { href: "/notifications", label: "Thông báo", icon: Bell, badge: notifBadge },
   ];
 
   const LIBRARY: Item[] = [
@@ -116,9 +134,9 @@ export default function Sidebar() {
             aria-label="Thông báo"
           >
             <Bell size={18} />
-            {dueCount > 0 && (
-              <span className="absolute -right-1 -top-1 rounded-full bg-brand px-1.5 py-0.2 text-[10px] font-bold text-white">
-                {dueCount}
+            {notifBadge > 0 && (
+              <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-bold leading-none text-white ring-2 ring-bg">
+                {notifBadge}
               </span>
             )}
           </Link>
