@@ -612,7 +612,7 @@ function ReadingDetailInner() {
     if (activeTool === "vocab") {
       const tokens = p.split(/(\s+)/);
       return (
-        <p key={idx} onMouseUp={() => handleParagraphMouseUp(p)} className="text-[15.5px] leading-8 text-slate-100">
+        <p key={idx} onMouseUp={() => handleParagraphMouseUp(p)} className="text-[15.5px] leading-8 text-ink">
           {tokens.map((tok, i) =>
             /^\s+$/.test(tok) ? (
               tok
@@ -620,7 +620,7 @@ function ReadingDetailInner() {
               <span
                 key={i}
                 onClick={() => handleWordClick(tok, p)}
-                className="cursor-pointer rounded px-0.5 transition hover:bg-brand/30 hover:text-white"
+                className="cursor-pointer rounded px-0.5 transition hover:bg-brand/25 hover:text-ink"
               >
                 {tok}
               </span>
@@ -636,9 +636,9 @@ function ReadingDetailInner() {
       const match = p.slice(pos, pos + quote.length);
       const after = p.slice(pos + quote.length);
       return (
-        <p key={idx} onMouseUp={() => handleParagraphMouseUp(p)} className="text-[15.5px] leading-8 text-slate-100">
+        <p key={idx} onMouseUp={() => handleParagraphMouseUp(p)} className="text-[15.5px] leading-8 text-ink">
           {before}
-          <mark className="rounded bg-amber-400/25 px-1 py-0.5 text-amber-100 ring-1 ring-amber-400/50">
+          <mark className="rounded bg-amber-300/45 px-1 py-0.5 text-amber-950 ring-1 ring-amber-500/50 dark:bg-amber-400/25 dark:text-amber-100 dark:ring-amber-400/50">
             {match}
           </mark>
           {after}
@@ -647,7 +647,7 @@ function ReadingDetailInner() {
     }
 
     return (
-      <p key={idx} onMouseUp={() => handleParagraphMouseUp(p)} className="text-[15.5px] leading-8 text-slate-100">
+      <p key={idx} onMouseUp={() => handleParagraphMouseUp(p)} className="text-[15.5px] leading-8 text-ink">
         {p}
       </p>
     );
@@ -664,10 +664,10 @@ function ReadingDetailInner() {
   if (error || !passage) {
     return (
       <div className="space-y-4">
-        <Link href="/reading" className="inline-flex items-center gap-2 text-sm text-muted hover:text-white">
+        <Link href="/reading" className="inline-flex items-center gap-2 text-sm text-muted hover:text-ink">
           <ArrowLeft size={16} /> Quay lại danh sách
         </Link>
-        <div className="rounded-2xl border border-red-500/40 bg-red-500/10 p-6 text-sm text-red-200">
+        <div className="rounded-2xl border border-red-500/40 bg-red-500/10 p-6 text-sm text-red-700 dark:text-red-200">
           {error || "Không tìm thấy bài đọc"}
         </div>
       </div>
@@ -681,13 +681,13 @@ function ReadingDetailInner() {
       {/* Header */}
       <div className="flex flex-wrap items-start justify-between gap-4 border-b border-line pb-4">
         <div className="space-y-1.5">
-          <Link href="/reading" className="inline-flex items-center gap-1.5 text-xs font-semibold text-muted hover:text-white">
+          <Link href="/reading" className="inline-flex items-center gap-1.5 text-xs font-semibold text-muted hover:text-ink">
             <ArrowLeft size={14} /> Lịch sử bài đọc
           </Link>
           <h1 className="text-xl font-bold tracking-tight sm:text-2xl">{passage.title}</h1>
           <div className="flex flex-wrap items-center gap-2 text-xs text-muted">
             {passage.source_name && (
-              <span className="rounded-lg bg-card px-2.5 py-1 font-medium text-white">{passage.source_name}</span>
+              <span className="rounded-lg bg-card px-2.5 py-1 font-medium text-ink">{passage.source_name}</span>
             )}
             {passage.topic && (
               <span className="rounded-lg bg-brand/15 px-2.5 py-1 font-medium text-brand-hover">{passage.topic}</span>
@@ -712,14 +712,14 @@ function ReadingDetailInner() {
                 <button onClick={saveScore} className="rounded bg-brand px-2 py-0.5 text-xs font-semibold text-white">
                   Lưu
                 </button>
-                <button onClick={() => setEditingScore(false)} className="text-xs text-muted hover:text-white">
+                <button onClick={() => setEditingScore(false)} className="text-xs text-muted hover:text-ink">
                   Huỷ
                 </button>
               </span>
             ) : (
               <button
                 onClick={() => setEditingScore(true)}
-                className="rounded-lg bg-card px-2.5 py-1 font-semibold text-white hover:bg-card-hover"
+                className="rounded-lg bg-card px-2.5 py-1 font-semibold text-ink hover:bg-card-hover"
                 title="Bấm để sửa điểm"
               >
                 Điểm:{" "}
@@ -744,7 +744,7 @@ function ReadingDetailInner() {
               }
             }}
             className={`inline-flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-semibold transition ${
-              activeTool === "vocab" ? "bg-brand text-white" : "border border-line bg-card text-muted hover:text-white"
+              activeTool === "vocab" ? "bg-brand text-white" : "border border-line bg-card text-muted hover:text-ink"
             }`}
           >
             <Languages size={15} /> Tra từ
@@ -763,7 +763,7 @@ function ReadingDetailInner() {
               }
             }}
             className={`inline-flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-semibold transition ${
-              activeTool === "sentence" ? "bg-brand text-white" : "border border-line bg-card text-muted hover:text-white"
+              activeTool === "sentence" ? "bg-brand text-white" : "border border-line bg-card text-muted hover:text-ink"
             }`}
           >
             <SplitSquareVertical size={15} /> Phân tích câu
@@ -780,7 +780,7 @@ function ReadingDetailInner() {
               }
             }}
             className={`inline-flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-semibold transition ${
-              activeTool === "question" ? "bg-brand text-white" : "border border-line bg-card text-muted hover:text-white"
+              activeTool === "question" ? "bg-brand text-white" : "border border-line bg-card text-muted hover:text-ink"
             }`}
           >
             <HelpCircle size={15} /> Hỏi câu sai
@@ -797,7 +797,7 @@ function ReadingDetailInner() {
               }
             }}
             className={`inline-flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-semibold transition ${
-              activeTool === "notes" ? "bg-brand text-white" : "border border-line bg-card text-muted hover:text-white"
+              activeTool === "notes" ? "bg-brand text-white" : "border border-line bg-card text-muted hover:text-ink"
             }`}
           >
             <BookMarked size={15} /> Ghi chú ({notes.length})
@@ -813,7 +813,7 @@ function ReadingDetailInner() {
           <div className="flex items-center gap-3">
             <button
               onClick={() => setMobileSheetOpen(true)}
-              className="rounded-lg bg-brand/20 px-2.5 py-1 font-semibold text-white lg:hidden"
+              className="rounded-lg bg-brand/20 px-2.5 py-1 font-semibold text-brand-hover lg:hidden"
             >
               Mở khung tra / Soạn sẵn
             </button>
@@ -822,7 +822,7 @@ function ReadingDetailInner() {
                 setActiveTool("none");
                 setMobileSheetOpen(false);
               }}
-              className="text-muted hover:text-white"
+              className="text-muted hover:text-ink"
             >
               Tắt
             </button>
@@ -833,7 +833,7 @@ function ReadingDetailInner() {
       {/* Bố cục chính: trên PC chia 2 cột, trên điện thoại hiện popup nổi phía trước */}
       <div className={`grid gap-6 ${showPanel ? "lg:grid-cols-12" : ""}`}>
         <article
-          className={`space-y-4 rounded-2xl border border-line bg-card/50 p-5 sm:p-8 ${
+          className={`space-y-4 rounded-2xl border border-line bg-card/80 p-5 sm:p-8 dark:bg-card/50 ${
             showPanel ? "lg:col-span-7" : "mx-auto w-full max-w-3xl"
           }`}
         >
@@ -851,7 +851,7 @@ function ReadingDetailInner() {
           >
             <div className="max-h-[84vh] w-full max-w-lg space-y-4 overflow-y-auto rounded-2xl border border-line bg-card p-5 shadow-2xl lg:sticky lg:top-6 lg:max-h-[calc(100vh-3rem)] lg:max-w-none lg:shadow-none">
               <div className="flex items-center justify-between border-b border-line pb-3">
-                <h2 className="text-sm font-bold text-white">
+                <h2 className="text-sm font-bold text-ink">
                   {activeTool === "vocab" && "Tra từ & Lưu vào Bộ sách"}
                   {activeTool === "sentence" && "Phân tích câu phức"}
                   {activeTool === "question" && "Giải thích câu làm sai"}
@@ -866,7 +866,7 @@ function ReadingDetailInner() {
                       setActiveTool("none");
                     }
                   }}
-                  className="rounded-lg p-1 text-muted hover:bg-bg hover:text-white"
+                  className="rounded-lg p-1 text-muted hover:bg-bg hover:text-ink"
                 >
                   <X size={16} />
                 </button>
@@ -889,7 +889,7 @@ function ReadingDetailInner() {
                       placeholder="Gõ từ/cụm từ hoặc bấm vào bài..."
                       className="flex-1 rounded-xl border border-line px-3 py-2 text-xs outline-none focus:border-brand"
                     />
-                    <button type="submit" className="rounded-xl bg-brand px-3 py-2 text-xs font-semibold text-white hover:bg-brand-hover">
+                    <button type="submit" className="rounded-xl bg-brand px-3 py-2 text-xs font-semibold text-white hover:bg-brand-hover hover:text-bg">
                       Tra
                     </button>
                   </form>
@@ -907,21 +907,21 @@ function ReadingDetailInner() {
                     <button
                       type="button"
                       onClick={() => setShowManualAdd((v) => !v)}
-                      className="inline-flex items-center gap-1 rounded-xl border border-line bg-bg px-3 py-2 text-[11px] font-semibold text-muted hover:text-white"
+                      className="inline-flex items-center gap-1 rounded-xl border border-line bg-bg px-3 py-2 text-[11px] font-semibold text-muted hover:text-ink"
                     >
                       <Edit3 size={13} /> Tự thêm tay (0 token)
                     </button>
                   </div>
 
                   {batchMsg && (
-                    <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-[11px] text-emerald-200">
+                    <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-[11px] text-emerald-700 dark:text-emerald-200">
                       {batchMsg}
                     </div>
                   )}
 
                   {showManualAdd && (
                     <form onSubmit={saveManualVocab} className="space-y-2 rounded-xl border border-line bg-bg p-3 text-xs">
-                      <div className="font-semibold text-white">Admin tự thêm từ (không tốn API)</div>
+                      <div className="font-semibold text-ink">Admin tự thêm từ (không tốn API)</div>
                       <div className="grid grid-cols-2 gap-2">
                         <input
                           required
@@ -968,7 +968,7 @@ function ReadingDetailInner() {
                   )}
 
                   {vocabError && (
-                    <div className="rounded-xl border border-red-500/40 bg-red-500/10 p-3 text-xs text-red-200">
+                    <div className="rounded-xl border border-red-500/40 bg-red-500/10 p-3 text-xs text-red-700 dark:text-red-200">
                       {vocabError}
                     </div>
                   )}
@@ -977,13 +977,13 @@ function ReadingDetailInner() {
                     <div className="space-y-3 rounded-xl border border-line bg-bg/60 p-3.5">
                       {vocabCached && (
                         <div className="flex items-center justify-between text-[11px]">
-                          <span className="inline-flex items-center gap-1 rounded bg-emerald-500/15 px-2 py-0.5 font-semibold text-emerald-300">
+                          <span className="inline-flex items-center gap-1 rounded bg-emerald-500/15 px-2 py-0.5 font-semibold text-emerald-700 dark:text-emerald-300">
                             <Zap size={11} /> Lấy từ lịch sử / Kho (0 token)
                           </span>
                           {lastLookupTerm.term && (
                             <button
                               onClick={() => lookupTerm(lastLookupTerm.term, lastLookupTerm.sentence, true)}
-                              className="inline-flex items-center gap-1 text-muted hover:text-white"
+                              className="inline-flex items-center gap-1 text-muted hover:text-ink"
                             >
                               <RefreshCw size={11} /> Hỏi lại AI
                             </button>
@@ -994,10 +994,10 @@ function ReadingDetailInner() {
                       <div className="flex items-start justify-between gap-2">
                         <div>
                           <div className="flex items-center gap-2">
-                            <span className="text-lg font-bold text-white">{vocabResult.lemma}</span>
+                            <span className="text-lg font-bold text-ink">{vocabResult.lemma}</span>
                             <button
                               onClick={() => speakWord(vocabResult.lemma)}
-                              className="rounded-lg p-1 text-muted hover:bg-card hover:text-white"
+                              className="rounded-lg p-1 text-muted hover:bg-card hover:text-ink"
                               title="Nghe phát âm"
                             >
                               <Volume2 size={16} />
@@ -1010,7 +1010,7 @@ function ReadingDetailInner() {
                               {vocabResult.cefr_level}
                             </span>
                             {vocabResult.is_awl && (
-                              <span className="rounded bg-emerald-500/20 px-1.5 py-0.5 font-semibold text-emerald-300">
+                              <span className="rounded bg-emerald-500/20 px-1.5 py-0.5 font-semibold text-emerald-700 dark:text-emerald-300">
                                 AWL
                               </span>
                             )}
@@ -1022,7 +1022,7 @@ function ReadingDetailInner() {
                             setEditVocabVi(vocabResult.meaning_in_context || vocabResult.meaning_vi);
                             setEditingVocabMeaning((v) => !v);
                           }}
-                          className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] text-muted hover:bg-card hover:text-white"
+                          className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] text-muted hover:bg-card hover:text-ink"
                           title="Admin sửa nghĩa"
                         >
                           <Edit3 size={12} /> Sửa
@@ -1046,7 +1046,7 @@ function ReadingDetailInner() {
                       ) : (
                         <div className="rounded-xl bg-card p-3 text-sm">
                           <div className="text-xs font-semibold text-brand-hover">Nghĩa trong câu này:</div>
-                          <div className="mt-0.5 font-semibold text-white">
+                          <div className="mt-0.5 font-semibold text-ink">
                             {vocabResult.meaning_in_context || vocabResult.meaning_vi}
                           </div>
                           {vocabResult.meaning_vi && vocabResult.meaning_in_context !== vocabResult.meaning_vi && (
@@ -1061,7 +1061,7 @@ function ReadingDetailInner() {
                       {vocabResult.collocations?.length > 0 && (
                         <div className="text-xs">
                           <span className="font-semibold text-muted">Collocations: </span>
-                          <span className="text-slate-200">{vocabResult.collocations.join(" · ")}</span>
+                          <span className="text-ink/90">{vocabResult.collocations.join(" · ")}</span>
                         </div>
                       )}
 
@@ -1069,11 +1069,11 @@ function ReadingDetailInner() {
                       <div className="flex items-center justify-between rounded-lg bg-card px-2.5 py-1.5 text-[11px]">
                         <span className="text-muted">Trạng thái Kho:</span>
                         {vocabResult.existsInBank ? (
-                          <span className="font-semibold text-emerald-300">
+                          <span className="font-semibold text-emerald-700 dark:text-emerald-300">
                             ✓ Đã có trong Kho{vocabResult.bankSource ? ` (${vocabResult.bankSource})` : ""}
                           </span>
                         ) : (
-                          <span className="font-semibold text-amber-300">○ Chưa có trong Kho</span>
+                          <span className="font-semibold text-amber-700 dark:text-amber-300">○ Chưa có trong Kho</span>
                         )}
                       </div>
 
@@ -1082,8 +1082,8 @@ function ReadingDetailInner() {
                         disabled={vocabResult.existsInBank}
                         className={`flex w-full items-center justify-center gap-2 rounded-xl py-2.5 text-xs font-bold transition ${
                           vocabResult.existsInBank
-                            ? "bg-emerald-500/20 text-emerald-300"
-                            : "bg-brand text-white hover:bg-brand-hover"
+                            ? "bg-emerald-500/20 text-emerald-700 dark:text-emerald-300"
+                            : "bg-brand text-white hover:bg-brand-hover hover:text-bg"
                         }`}
                       >
                         {vocabResult.existsInBank ? (
@@ -1106,7 +1106,7 @@ function ReadingDetailInner() {
                       <button
                         type="button"
                         onClick={() => setVocabHistoryOpen((v) => !v)}
-                        className="flex w-full items-center justify-between text-xs font-semibold text-muted hover:text-white"
+                        className="flex w-full items-center justify-between text-xs font-semibold text-muted hover:text-ink"
                       >
                         <span>Đã tra trong bài này ({vocabNotes.length}) — bấm xem lại 0 token</span>
                         {vocabHistoryOpen ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
@@ -1141,9 +1141,9 @@ function ReadingDetailInner() {
                                   setVocabCached(true);
                                   setAddedBookTitle("");
                                 }}
-                                className="inline-flex items-center gap-1 rounded-lg border border-line bg-bg px-2.5 py-1 text-xs text-slate-200 hover:border-brand hover:text-white"
+                                className="inline-flex items-center gap-1 rounded-lg border border-line bg-bg px-2.5 py-1 text-xs text-ink/90 hover:border-brand hover:text-ink"
                               >
-                                {rj.existsInBank && <Check size={11} className="text-emerald-400" />}
+                                {rj.existsInBank && <Check size={11} className="text-emerald-600 dark:text-emerald-400" />}
                                 {n.target_text}
                               </button>
                             );
@@ -1169,7 +1169,7 @@ function ReadingDetailInner() {
                     <button
                       type="submit"
                       disabled={sentenceLoading || !sentenceInput.trim()}
-                      className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-brand py-2 text-xs font-bold text-white hover:bg-brand-hover disabled:opacity-50"
+                      className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-brand py-2 text-xs font-bold text-white hover:bg-brand-hover hover:text-bg disabled:opacity-50"
                     >
                       {sentenceLoading ? (
                         <>
@@ -1184,7 +1184,7 @@ function ReadingDetailInner() {
                   </form>
 
                   {sentenceError && (
-                    <div className="rounded-xl border border-red-500/40 bg-red-500/10 p-3 text-xs text-red-200">
+                    <div className="rounded-xl border border-red-500/40 bg-red-500/10 p-3 text-xs text-red-700 dark:text-red-200">
                       {sentenceError}
                     </div>
                   )}
@@ -1193,12 +1193,12 @@ function ReadingDetailInner() {
                     <div className="space-y-3 text-xs">
                       {sentenceCached && (
                         <div className="flex items-center justify-between">
-                          <span className="inline-flex items-center gap-1 rounded bg-emerald-500/15 px-2 py-0.5 text-[11px] font-semibold text-emerald-300">
+                          <span className="inline-flex items-center gap-1 rounded bg-emerald-500/15 px-2 py-0.5 text-[11px] font-semibold text-emerald-700 dark:text-emerald-300">
                             <Zap size={11} /> Lấy từ lịch sử (0 token)
                           </span>
                           <button
                             onClick={() => analyzeSentence(undefined, true)}
-                            className="inline-flex items-center gap-1 text-[11px] text-muted hover:text-white"
+                            className="inline-flex items-center gap-1 text-[11px] text-muted hover:text-ink"
                           >
                             <RefreshCw size={11} /> Phân tích lại
                           </button>
@@ -1206,22 +1206,22 @@ function ReadingDetailInner() {
                       )}
                       <div className="rounded-xl bg-bg p-3">
                         <div className="font-semibold text-brand-hover">Dịch nghĩa học thuật</div>
-                        <p className="mt-1 leading-relaxed text-white">{sentenceResult.translation_vi}</p>
+                        <p className="mt-1 leading-relaxed text-ink">{sentenceResult.translation_vi}</p>
                       </div>
                       <div className="space-y-1.5 rounded-xl bg-bg p-3">
                         <div>
                           <span className="font-semibold text-muted">Chủ ngữ chính: </span>
-                          <span className="text-white">{sentenceResult.subject}</span>
+                          <span className="text-ink">{sentenceResult.subject}</span>
                         </div>
                         <div>
                           <span className="font-semibold text-muted">Động từ chính: </span>
-                          <span className="text-white">{sentenceResult.main_verb}</span>
+                          <span className="text-ink">{sentenceResult.main_verb}</span>
                         </div>
                       </div>
                       {sentenceResult.clauses?.length > 0 && (
                         <div className="space-y-1">
                           <div className="font-semibold text-muted">Các mệnh đề / cụm bổ nghĩa:</div>
-                          <ul className="list-disc space-y-1 pl-4 text-slate-200">
+                          <ul className="list-disc space-y-1 pl-4 text-ink/90">
                             {sentenceResult.clauses.map((c, i) => <li key={i}>{c}</li>)}
                           </ul>
                         </div>
@@ -1229,7 +1229,7 @@ function ReadingDetailInner() {
                       {sentenceResult.grammar_points?.length > 0 && (
                         <div className="space-y-1">
                           <div className="font-semibold text-muted">Điểm ngữ pháp đáng chú ý:</div>
-                          <ul className="list-disc space-y-1 pl-4 text-slate-200">
+                          <ul className="list-disc space-y-1 pl-4 text-ink/90">
                             {sentenceResult.grammar_points.map((g, i) => <li key={i}>{g}</li>)}
                           </ul>
                         </div>
@@ -1267,7 +1267,7 @@ function ReadingDetailInner() {
                     <button
                       type="submit"
                       disabled={questionLoading || !questionInput.trim()}
-                      className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-brand py-2 text-xs font-bold text-white hover:bg-brand-hover disabled:opacity-50"
+                      className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-brand py-2 text-xs font-bold text-white hover:bg-brand-hover hover:text-bg disabled:opacity-50"
                     >
                       {questionLoading ? (
                         <>
@@ -1282,7 +1282,7 @@ function ReadingDetailInner() {
                   </form>
 
                   {questionError && (
-                    <div className="rounded-xl border border-red-500/40 bg-red-500/10 p-3 text-xs text-red-200">
+                    <div className="rounded-xl border border-red-500/40 bg-red-500/10 p-3 text-xs text-red-700 dark:text-red-200">
                       {questionError}
                     </div>
                   )}
@@ -1291,35 +1291,35 @@ function ReadingDetailInner() {
                     <div className="space-y-3 text-xs">
                       {questionCached && (
                         <div className="flex items-center justify-between">
-                          <span className="inline-flex items-center gap-1 rounded bg-emerald-500/15 px-2 py-0.5 text-[11px] font-semibold text-emerald-300">
+                          <span className="inline-flex items-center gap-1 rounded bg-emerald-500/15 px-2 py-0.5 text-[11px] font-semibold text-emerald-700 dark:text-emerald-300">
                             <Zap size={11} /> Lấy từ lịch sử (0 token)
                           </span>
                           <button
                             onClick={() => explainQuestion(undefined, true)}
-                            className="inline-flex items-center gap-1 text-[11px] text-muted hover:text-white"
+                            className="inline-flex items-center gap-1 text-[11px] text-muted hover:text-ink"
                           >
                             <RefreshCw size={11} /> Hỏi lại AI
                           </button>
                         </div>
                       )}
                       {questionResult.evidence_quote && (
-                        <div className="rounded-xl border border-amber-400/40 bg-amber-400/10 p-3">
-                          <div className="font-semibold text-amber-300">Câu dẫn chứng trong bài:</div>
-                          <p className="mt-1 italic text-amber-100">“{questionResult.evidence_quote}”</p>
+                        <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-3 dark:border-amber-400/40 dark:bg-amber-400/10">
+                          <div className="font-semibold text-amber-800 dark:text-amber-300">Câu dẫn chứng trong bài:</div>
+                          <p className="mt-1 italic text-amber-950 dark:text-amber-100">“{questionResult.evidence_quote}”</p>
                         </div>
                       )}
                       <div className="rounded-xl bg-bg p-3">
                         <div className="font-semibold text-brand-hover">Giải thích</div>
-                        <p className="mt-1 leading-relaxed text-white">{questionResult.explanation_vi}</p>
+                        <p className="mt-1 leading-relaxed text-ink">{questionResult.explanation_vi}</p>
                       </div>
                       {questionResult.paraphrases?.length > 0 && (
                         <div className="space-y-1.5 rounded-xl bg-bg p-3">
                           <div className="font-semibold text-muted">Cặp Paraphrase cần nhớ:</div>
                           {questionResult.paraphrases.map((pr, i) => (
-                            <div key={i} className="flex flex-wrap items-center gap-1.5 text-slate-200">
+                            <div key={i} className="flex flex-wrap items-center gap-1.5 text-ink/90">
                               <span className="rounded bg-card px-1.5 py-0.5">{pr.question_phrase}</span>
                               <span className="text-muted">↔</span>
-                              <span className="rounded bg-card px-1.5 py-0.5 text-emerald-300">{pr.passage_phrase}</span>
+                              <span className="rounded bg-card px-1.5 py-0.5 text-emerald-700 dark:text-emerald-300">{pr.passage_phrase}</span>
                             </div>
                           ))}
                         </div>
@@ -1380,18 +1380,18 @@ function ReadingDetailInner() {
                                   setEditingNoteId(editingNoteId === n.id ? null : n.id);
                                   setEditingNoteText(mainText);
                                 }}
-                                className="text-muted hover:text-white"
+                                className="text-muted hover:text-ink"
                                 title="Admin sửa ghi chú"
                               >
                                 <Edit3 size={13} />
                               </button>
-                              <button onClick={() => deleteNote(n.id)} className="text-muted hover:text-red-300" title="Xoá ghi chú">
+                              <button onClick={() => deleteNote(n.id)} className="text-muted hover:text-red-600 dark:hover:text-red-300" title="Xoá ghi chú">
                                 <Trash2 size={13} />
                               </button>
                             </div>
                           </div>
 
-                          <div className="font-semibold text-white">{n.target_text}</div>
+                          <div className="font-semibold text-ink">{n.target_text}</div>
 
                           {editingNoteId === n.id ? (
                             <div className="space-y-2">
@@ -1402,7 +1402,7 @@ function ReadingDetailInner() {
                                 className="w-full rounded-lg border border-line px-2.5 py-1.5 text-xs outline-none focus:border-brand"
                               />
                               <div className="flex justify-end gap-2">
-                                <button onClick={() => setEditingNoteId(null)} className="text-muted hover:text-white">
+                                <button onClick={() => setEditingNoteId(null)} className="text-muted hover:text-ink">
                                   Huỷ
                                 </button>
                                 <button
@@ -1441,16 +1441,16 @@ function ReadingDetailInner() {
                               <div className="space-y-2 border-t border-line/70 pt-2">
                                 <div className="flex flex-wrap items-center gap-2 text-muted">
                                   {vocabObj.ipa && <span>{vocabObj.ipa}</span>}
-                                  <button onClick={() => speakWord(vocabObj.lemma)} className="hover:text-white" title="Nghe">
+                                  <button onClick={() => speakWord(vocabObj.lemma)} className="hover:text-ink" title="Nghe">
                                     <Volume2 size={14} />
                                   </button>
                                   {vocabObj.pos && <span className="rounded bg-card px-1.5 py-0.5">{vocabObj.pos}</span>}
                                   <span className="rounded bg-brand/20 px-1.5 py-0.5 text-brand-hover">{vocabObj.cefr_level}</span>
-                                  {vocabObj.is_awl && <span className="rounded bg-emerald-500/20 px-1.5 py-0.5 text-emerald-300">AWL</span>}
+                                  {vocabObj.is_awl && <span className="rounded bg-emerald-500/20 px-1.5 py-0.5 text-emerald-700 dark:text-emerald-300">AWL</span>}
                                 </div>
-                                {vocabObj.definition_en && <div className="text-slate-300">{vocabObj.definition_en}</div>}
+                                {vocabObj.definition_en && <div className="text-ink/85">{vocabObj.definition_en}</div>}
                                 {vocabObj.collocations.length > 0 && (
-                                  <div className="text-slate-300">
+                                  <div className="text-ink/85">
                                     <span className="text-muted">Collocations: </span>
                                     {vocabObj.collocations.join(" · ")}
                                   </div>
@@ -1460,11 +1460,11 @@ function ReadingDetailInner() {
                                 )}
                                 <div className="flex items-center justify-between pt-1">
                                   {vocabObj.existsInBank ? (
-                                    <span className="font-semibold text-emerald-300">✓ Đã có trong Kho</span>
+                                    <span className="font-semibold text-emerald-700 dark:text-emerald-300">✓ Đã có trong Kho</span>
                                   ) : (
                                     <button
                                       onClick={() => openBookPicker(vocabObj)}
-                                      className="inline-flex items-center gap-1 rounded-lg bg-brand px-2.5 py-1 font-semibold text-white hover:bg-brand-hover"
+                                      className="inline-flex items-center gap-1 rounded-lg bg-brand px-2.5 py-1 font-semibold text-white hover:bg-brand-hover hover:text-bg"
                                     >
                                       <Plus size={12} /> Thêm vào Kho
                                     </button>
@@ -1477,7 +1477,7 @@ function ReadingDetailInner() {
                           {isExpanded && n.kind === "sentence" && (() => {
                             const s = res as Partial<SentenceBreakdown>;
                             return (
-                              <div className="space-y-2 border-t border-line/70 pt-2 text-slate-200">
+                              <div className="space-y-2 border-t border-line/70 pt-2 text-ink/90">
                                 {s.subject && (
                                   <div><span className="text-muted">Chủ ngữ chính: </span>{s.subject}</div>
                                 )}
@@ -1503,7 +1503,7 @@ function ReadingDetailInner() {
                             return (
                               <div className="space-y-2 border-t border-line/70 pt-2">
                                 {q.evidence_quote && (
-                                  <div className="rounded-lg border border-amber-400/30 bg-amber-400/10 p-2 italic text-amber-100">
+                                  <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-2 italic text-amber-950 dark:border-amber-400/30 dark:bg-amber-400/10 dark:text-amber-100">
                                     “{q.evidence_quote}”
                                   </div>
                                 )}
@@ -1514,7 +1514,7 @@ function ReadingDetailInner() {
                                       <div key={i} className="flex flex-wrap items-center gap-1">
                                         <span className="rounded bg-card px-1.5 py-0.5">{pr.question_phrase}</span>
                                         <span>↔</span>
-                                        <span className="rounded bg-card px-1.5 py-0.5 text-emerald-300">{pr.passage_phrase}</span>
+                                        <span className="rounded bg-card px-1.5 py-0.5 text-emerald-700 dark:text-emerald-300">{pr.passage_phrase}</span>
                                       </div>
                                     ))}
                                   </div>
@@ -1526,7 +1526,7 @@ function ReadingDetailInner() {
                                       setHighlightQuote(q.evidence_quote!);
                                       setMobileSheetOpen(false);
                                     }}
-                                    className="text-[11px] font-semibold text-amber-300 hover:underline"
+                                    className="text-[11px] font-semibold text-amber-700 hover:underline dark:text-amber-300"
                                   >
                                     Highlight dẫn chứng trong bài
                                   </button>
@@ -1551,18 +1551,18 @@ function ReadingDetailInner() {
           <div className="w-full max-w-md rounded-2xl border border-line bg-card p-6 shadow-2xl">
             <div className="mb-4 flex items-center justify-between">
               <div>
-                <h3 className="text-base font-bold text-white">
+                <h3 className="text-base font-bold text-ink">
                   Chọn bộ sách lưu từ “{(pendingVocabToAdd ?? vocabResult)!.lemma}”
                 </h3>
                 <p className="mt-0.5 text-xs text-muted">Từ sẽ được xếp vào đúng bộ trong Kho từ vựng.</p>
               </div>
-              <button onClick={() => setShowBookModal(false)} className="rounded-lg p-1 text-muted hover:text-white">
+              <button onClick={() => setShowBookModal(false)} className="rounded-lg p-1 text-muted hover:text-ink">
                 <X size={18} />
               </button>
             </div>
 
             {bookModalError && (
-              <div className="mb-3 rounded-xl border border-red-500/40 bg-red-500/10 px-3 py-2 text-xs text-red-200">
+              <div className="mb-3 rounded-xl border border-red-500/40 bg-red-500/10 px-3 py-2 text-xs text-red-700 dark:text-red-200">
                 {bookModalError}
               </div>
             )}
@@ -1577,8 +1577,8 @@ function ReadingDetailInner() {
                   }}
                   className={`flex cursor-pointer items-center justify-between rounded-xl border p-3 text-xs transition ${
                     !creatingBook && selectedBookId === b.id
-                      ? "border-brand bg-brand/15 text-white"
-                      : "border-line bg-bg text-slate-200 hover:border-brand/50"
+                      ? "border-brand bg-brand/15 text-ink"
+                      : "border-line bg-bg text-ink/90 hover:border-brand/50"
                   }`}
                 >
                   <div>
@@ -1611,8 +1611,8 @@ function ReadingDetailInner() {
               ) : (
                 <div className="space-y-2 rounded-xl border border-brand/40 bg-bg p-3 text-xs">
                   <div className="flex items-center justify-between">
-                    <span className="font-semibold text-white">Tạo bộ sách mới</span>
-                    <button onClick={() => setCreatingBook(false)} className="text-muted hover:text-white">
+                    <span className="font-semibold text-ink">Tạo bộ sách mới</span>
+                    <button onClick={() => setCreatingBook(false)} className="text-muted hover:text-ink">
                       Huỷ
                     </button>
                   </div>
@@ -1638,14 +1638,14 @@ function ReadingDetailInner() {
             <div className="mt-5 flex justify-end gap-2">
               <button
                 onClick={() => setShowBookModal(false)}
-                className="rounded-xl border border-line px-4 py-2 text-xs font-semibold text-muted hover:text-white"
+                className="rounded-xl border border-line px-4 py-2 text-xs font-semibold text-muted hover:text-ink"
               >
                 Huỷ
               </button>
               <button
                 onClick={confirmAddToBook}
                 disabled={addingWord || (creatingBook && !newBookTitle.trim())}
-                className="inline-flex items-center gap-1.5 rounded-xl bg-brand px-4 py-2 text-xs font-bold text-white hover:bg-brand-hover disabled:opacity-50"
+                className="inline-flex items-center gap-1.5 rounded-xl bg-brand px-4 py-2 text-xs font-bold text-white hover:bg-brand-hover hover:text-bg disabled:opacity-50"
               >
                 {addingWord ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
                 Lưu vào bộ này

@@ -132,7 +132,7 @@ export default function Home() {
             <Link
               key={item.href + item.title}
               href={item.href}
-              className="flex items-center justify-between gap-3 rounded-xl border border-transparent bg-card/40 p-3 transition hover:border-line hover:bg-card"
+              className="flex items-center justify-between gap-3 rounded-xl border border-line/60 bg-card/80 p-3 transition hover:border-line hover:bg-card dark:border-transparent dark:bg-card/40"
             >
               <div className="flex min-w-0 items-center gap-3.5">
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-card text-brand-hover">
@@ -172,7 +172,7 @@ export default function Home() {
             <div className="text-sm text-muted">Phân tích bài đọc & lưu từ vựng</div>
           </Link>
 
-          <div className="rounded-2xl bg-card/50 p-5 opacity-60">
+          <div className="rounded-2xl bg-card/80 p-5 opacity-60 dark:bg-card/50">
             <PenLine size={30} strokeWidth={1.4} />
             <div className="mt-3 font-bold">Writing</div>
             <div className="text-sm text-muted">Sắp có</div>

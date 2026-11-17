@@ -167,11 +167,11 @@ export default function ActivityMonitor() {
             <div className="flex items-center gap-2">
               <div className="shrink-0">
                 {l.status === "running" && <Loader2 size={14} className="animate-spin text-brand-hover" />}
-                {l.status === "done" && <CheckCircle2 size={14} className="text-emerald-400" />}
-                {l.status === "error" && <XCircle size={14} className="text-rose-400" />}
+                {l.status === "done" && <CheckCircle2 size={14} className="text-emerald-600 dark:text-emerald-400" />}
+                {l.status === "error" && <XCircle size={14} className="text-rose-600 dark:text-rose-400" />}
               </div>
               <div className="min-w-0 flex-1">
-                <div className="truncate text-xs font-semibold text-white" title={l.label}>
+                <div className="truncate text-xs font-semibold text-ink" title={l.label}>
                   {l.label}
                 </div>
                 <div className="flex items-center gap-1.5 text-[10px] text-muted">
@@ -182,7 +182,7 @@ export default function ActivityMonitor() {
               </div>
               <button
                 onClick={() => setLogs((prev) => prev.filter((x) => x.id !== l.id))}
-                className="rounded p-0.5 text-muted hover:bg-line hover:text-white"
+                className="rounded p-0.5 text-muted hover:bg-line hover:text-ink"
                 aria-label="Đóng"
               >
                 <X size={13} />

@@ -41,7 +41,7 @@ function WordCards({
                   <span className="text-sm font-normal text-muted">
                     {w.ipa} · {w.pos}
                   </span>
-                  <button onClick={() => speak(w.word)} title="Phát âm" className="text-muted hover:text-white">
+                  <button onClick={() => speak(w.word)} title="Phát âm" className="text-muted hover:text-ink">
                     <Volume2 size={17} />
                   </button>
                 </div>
@@ -88,7 +88,7 @@ function WordCards({
                   <span className="text-sm font-normal text-muted">
                     {w.ipa} · {w.pos}
                   </span>
-                  <button onClick={() => speak(w.word)} title="Phát âm" className="text-muted hover:text-white">
+                  <button onClick={() => speak(w.word)} title="Phát âm" className="text-muted hover:text-ink">
                     <Volume2 size={17} />
                   </button>
                 </div>
@@ -225,7 +225,7 @@ export default function Daily() {
         <button
           onClick={() => switchMode("today")}
           className={`rounded-full px-5 py-2 text-sm font-bold transition ${
-            mode === "today" ? "bg-white text-bg" : "bg-card text-muted hover:text-white"
+            mode === "today" ? "bg-ink text-bg" : "bg-card text-muted hover:text-ink"
           }`}
         >
           Hôm nay
@@ -233,7 +233,7 @@ export default function Daily() {
         <button
           onClick={() => switchMode("yesterday")}
           className={`rounded-full px-5 py-2 text-sm font-bold transition ${
-            mode === "yesterday" ? "bg-white text-bg" : "bg-card text-muted hover:text-white"
+            mode === "yesterday" ? "bg-ink text-bg" : "bg-card text-muted hover:text-ink"
           }`}
         >
           Hôm qua
@@ -241,7 +241,7 @@ export default function Daily() {
         <button
           onClick={() => switchMode("7d")}
           className={`inline-flex items-center gap-1.5 rounded-full px-5 py-2 text-sm font-bold transition ${
-            mode === "7d" ? "bg-white text-bg" : "bg-card text-muted hover:text-white"
+            mode === "7d" ? "bg-ink text-bg" : "bg-card text-muted hover:text-ink"
           }`}
         >
           <History size={15} /> 7 ngày qua
@@ -272,7 +272,7 @@ export default function Daily() {
         <div className="flex items-center gap-3 rounded-2xl bg-card p-8 text-muted">
           <Loader2 className="animate-spin text-brand-hover" size={22} />
           <div>
-            <div className="font-bold text-white">
+            <div className="font-bold text-ink">
               {generating ? "Đang tạo 10 từ vựng hôm nay..." : "Đang tải dữ liệu..."}
             </div>
             <div className="text-sm">
@@ -284,12 +284,12 @@ export default function Daily() {
         </div>
       )}
 
-      {err && <div className="rounded-xl bg-rose-400/15 p-4 text-sm text-rose-300">Lỗi tải từ hằng ngày: {err}</div>}
+      {err && <div className="rounded-xl bg-rose-500/15 p-4 text-sm text-rose-700 dark:bg-rose-400/15 dark:text-rose-300">Lỗi tải từ hằng ngày: {err}</div>}
 
       {!loading && !err && mode !== "7d" && (
         allSingle.length === 0 ? (
           <div className="rounded-2xl bg-card p-10 text-center text-muted">
-            Ngày <b className="text-white">{date}</b> chưa có từ vựng hằng ngày nào được lưu.
+            Ngày <b className="text-ink">{date}</b> chưa có từ vựng hằng ngày nào được lưu.
           </div>
         ) : (
           <WordCards news={news} ielts={ielts} date={date} speak={speak} />

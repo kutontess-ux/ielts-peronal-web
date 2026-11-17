@@ -1,4 +1,4 @@
-﻿// DỮ LIỆU MẪU – chỉ để xem giao diện, sau này thay bằng Supabase
+// DỮ LIỆU MẪU – chỉ để xem giao diện, sau này thay bằng Supabase
 export type Word = {
   id: number;
   word: string;
@@ -60,10 +60,10 @@ export const LEVEL_INFO: Record<string, { title: string; desc: string }> = {
 };
 
 export const levelColor: Record<string, string> = {
-  A2: "bg-slate-400/20 text-slate-300",
-  C2: "bg-pink-400/25 text-pink-300",
-  B1: "bg-emerald-400/20 text-emerald-300",
-  B2: "bg-sky-400/20 text-sky-300",
-  C1: "bg-violet-400/25 text-violet-300",
+  A2: "bg-slate-500/15 text-slate-700 dark:bg-slate-400/20 dark:text-slate-300",
+  C2: "bg-pink-500/15 text-pink-700 dark:bg-pink-400/25 dark:text-pink-300",
+  B1: "bg-emerald-500/15 text-emerald-700 dark:bg-emerald-400/20 dark:text-emerald-300",
+  B2: "bg-sky-500/15 text-sky-700 dark:bg-sky-400/20 dark:text-sky-300",
+  C1: "bg-violet-500/15 text-violet-700 dark:bg-violet-400/25 dark:text-violet-300",
 };
 

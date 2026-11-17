@@ -22,14 +22,22 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#0a092d",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#f0f2f8" },
+    { media: "(prefers-color-scheme: dark)", color: "#0a092d" },
+  ],
   width: "device-width",
   initialScale: 1,
 };
 
+const THEME_INIT_SCRIPT = `(function(){try{var t=localStorage.getItem("ielts_theme_v1");var d=t==="light"?"light":"dark";var r=document.documentElement;r.classList.toggle("dark",d==="dark");r.classList.toggle("light",d==="light");r.setAttribute("data-theme",d);}catch(e){}})();`;
+
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="vi" className={`${outfit.variable} h-full antialiased`}>
+    <html lang="vi" data-theme="dark" className={`${outfit.variable} dark h-full antialiased`} suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
+      </head>
       <body className="flex min-h-full flex-col md:flex-row">
         <Suspense fallback={<aside className="hidden w-64 shrink-0 border-r border-line bg-bg md:flex" />}>
           <Sidebar />

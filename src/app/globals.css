@@ -1,29 +1,66 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  color-scheme: light;
+  --bg: #f0f2f8;
+  --card: #ffffff;
+  --card-hover: #e7ebf5;
+  --line: #d6dceb;
+  --ink: #1a1d2e;
+  --muted: #586380;
+  --placeholder: #8a94b0;
+  --brand: #4255ff;
+  --brand-hover: #3244e6;
+}
+
+.dark,
+[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #0a092d;
+  --card: #262642;
+  --card-hover: #32325a;
+  --line: #33335a;
+  --ink: #ffffff;
+  --muted: #b2b5d0;
+  --placeholder: #7d86a8;
+  --brand: #4255ff;
+  --brand-hover: #8c9bff;
+}
+
 @theme inline {
-  /* Bảng màu lấy theo ảnh Quizlet dark */
-  --color-bg: #0a092d;
-  --color-card: #262642;
-  --color-card-hover: #32325a;
-  --color-line: #33335a;
-  --color-muted: #b2b5d0;
-  --color-brand: #4255ff;
-  --color-brand-hover: #8c9bff;
+  --color-bg: var(--bg);
+  --color-card: var(--card);
+  --color-card-hover: var(--card-hover);
+  --color-line: var(--line);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-brand: var(--brand);
+  --color-brand-hover: var(--brand-hover);
   --font-sans: var(--font-main), "Helvetica Neue", Arial, sans-serif;
 }
 
-body {
-  background: var(--color-bg);
-  color: #ffffff;
-  font-family: var(--font-sans);
-}
+@layer base {
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--font-sans);
+  }
 
-input, textarea, select {
-  background: #0a092d;
-  color: #fff;
-}
-input::placeholder, textarea::placeholder {
-  color: #7d86a8;
+  input, textarea, select {
+    background: var(--bg);
+    color: var(--ink);
+  }
+
+  option {
+    background: var(--card);
+    color: var(--ink);
+  }
+
+  input::placeholder, textarea::placeholder {
+    color: var(--placeholder);
+  }
 }
 
 .no-scrollbar::-webkit-scrollbar { display: none; }

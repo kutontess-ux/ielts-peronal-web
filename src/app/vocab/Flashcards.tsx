@@ -135,13 +135,13 @@ export default function Flashcards({
             <div className="text-2xl font-bold text-brand-hover">{pct}%</div>
             <div className="mt-1 text-xs text-muted">Hoàn thành</div>
           </div>
-          <div className="rounded-2xl bg-emerald-400/10 p-4">
-            <div className="text-2xl font-bold text-emerald-300">{knownList.length}</div>
-            <div className="mt-1 text-xs text-emerald-300/80">Đã biết</div>
+          <div className="rounded-2xl bg-emerald-500/15 p-4 dark:bg-emerald-400/10">
+            <div className="text-2xl font-bold text-emerald-700 dark:text-emerald-300">{knownList.length}</div>
+            <div className="mt-1 text-xs text-emerald-700/80 dark:text-emerald-300/80">Đã biết</div>
           </div>
-          <div className="rounded-2xl bg-orange-400/10 p-4">
-            <div className="text-2xl font-bold text-orange-300">{unknownList.length}</div>
-            <div className="mt-1 text-xs text-orange-300/80">Cần học lại</div>
+          <div className="rounded-2xl bg-orange-500/15 p-4 dark:bg-orange-400/10">
+            <div className="text-2xl font-bold text-orange-700 dark:text-orange-300">{unknownList.length}</div>
+            <div className="mt-1 text-xs text-orange-700/80 dark:text-orange-300/80">Cần học lại</div>
           </div>
         </div>
 
@@ -149,7 +149,7 @@ export default function Flashcards({
           {unknownList.length > 0 && (
             <button
               onClick={() => restart(unknownList)}
-              className="inline-flex items-center gap-2 rounded-full bg-brand px-6 py-3 text-sm font-bold hover:bg-brand-hover hover:text-bg"
+              className="inline-flex items-center gap-2 rounded-full bg-brand px-6 py-3 text-sm font-bold text-white hover:bg-brand-hover hover:text-bg"
             >
               <RotateCcw size={16} /> Chỉ học lại {unknownList.length} từ chưa biết
             </button>
@@ -157,7 +157,7 @@ export default function Flashcards({
           {starredWords.length > 0 && (
             <button
               onClick={() => restart(starredWords)}
-              className="inline-flex items-center gap-2 rounded-full bg-yellow-400/20 px-6 py-3 text-sm font-bold text-yellow-300 hover:bg-yellow-400/30"
+              className="inline-flex items-center gap-2 rounded-full bg-amber-500/15 px-6 py-3 text-sm font-bold text-amber-700 hover:bg-amber-500/25 dark:bg-yellow-400/20 dark:text-yellow-300 dark:hover:bg-yellow-400/30"
             >
               <Star size={16} /> Học {starredWords.length} từ gắn sao
             </button>
@@ -176,7 +176,7 @@ export default function Flashcards({
           </button>
           <Link
             href="/"
-            className="inline-flex items-center gap-2 rounded-full bg-bg px-6 py-3 text-sm font-bold text-muted hover:text-white"
+            className="inline-flex items-center gap-2 rounded-full bg-bg px-6 py-3 text-sm font-bold text-muted hover:text-ink"
           >
             <Home size={16} /> Về Trang chủ
           </Link>
@@ -212,7 +212,7 @@ export default function Flashcards({
       <div className="text-3xl font-bold text-brand-hover">{card.vi}</div>
       <div className="mt-3 text-lg">{card.en}</div>
       {card.example && <div className="mt-6 rounded-xl bg-bg/60 p-4 italic text-muted">“{card.example}”</div>}
-      {card.awl && <div className="mt-4 text-xs font-bold text-orange-300">Academic Word List</div>}
+      {card.awl && <div className="mt-4 text-xs font-bold text-orange-600 dark:text-orange-300">Academic Word List</div>}
     </div>
   );
 
@@ -220,15 +220,15 @@ export default function Flashcards({
     <div className="mx-auto max-w-3xl">
       {/* Thanh trên cùng */}
       <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-        <button onClick={onBack} className="inline-flex items-center gap-1.5 text-sm font-semibold text-muted hover:text-white">
+        <button onClick={onBack} className="inline-flex items-center gap-1.5 text-sm font-semibold text-muted hover:text-ink">
           <ArrowLeft size={16} strokeWidth={1.75} /> {title}
         </button>
         <div className="font-bold">
           {idx + 1} / {deck.length}
         </div>
         <div className="flex items-center gap-3 text-xs font-bold">
-          <span className="rounded-full bg-orange-400/15 px-3 py-1 text-orange-300">Chưa biết: {unknownList.length}</span>
-          <span className="rounded-full bg-emerald-400/15 px-3 py-1 text-emerald-300">Đã biết: {knownList.length}</span>
+          <span className="rounded-full bg-orange-500/15 px-3 py-1 text-orange-700 dark:bg-orange-400/15 dark:text-orange-300">Chưa biết: {unknownList.length}</span>
+          <span className="rounded-full bg-emerald-500/15 px-3 py-1 text-emerald-700 dark:bg-emerald-400/15 dark:text-emerald-300">Đã biết: {knownList.length}</span>
         </div>
       </div>
 
@@ -249,11 +249,11 @@ export default function Flashcards({
                 {card.level} · {card.topic}
               </span>
               <div className="flex gap-3" onClick={(e) => e.stopPropagation()}>
-                <button title="Phát âm (A)" onClick={() => speak(card.word)} className="hover:text-white">
+                <button title="Phát âm (A)" onClick={() => speak(card.word)} className="hover:text-ink">
                   <Volume2 size={21} strokeWidth={1.6} />
                 </button>
-                <button title="Gắn sao (S)" onClick={() => setStar((s) => ({ ...s, [card.id]: !s[card.id] }))} className="hover:text-white">
-                  <Star size={21} strokeWidth={1.6} className={star[card.id] ? "fill-yellow-300 text-yellow-300" : ""} />
+                <button title="Gắn sao (S)" onClick={() => setStar((s) => ({ ...s, [card.id]: !s[card.id] }))} className="hover:text-ink">
+                  <Star size={21} strokeWidth={1.6} className={star[card.id] ? "fill-amber-400 text-amber-400 dark:fill-yellow-300 dark:text-yellow-300" : ""} />
                 </button>
               </div>
             </div>
@@ -277,7 +277,7 @@ export default function Flashcards({
             onClick={undo}
             disabled={history.length === 0}
             title="Quay lại thẻ trước"
-            className="flex h-11 w-11 items-center justify-center rounded-full bg-card text-muted hover:bg-card-hover hover:text-white disabled:opacity-30"
+            className="flex h-11 w-11 items-center justify-center rounded-full bg-card text-muted hover:bg-card-hover hover:text-ink disabled:opacity-30"
           >
             <Undo2 size={18} />
           </button>
@@ -285,7 +285,7 @@ export default function Flashcards({
             onClick={() => setAutoplay((a) => !a)}
             title="Tự động phát"
             className={`inline-flex h-11 items-center gap-1.5 rounded-full px-4 text-sm font-semibold transition ${
-              autoplay ? "bg-brand text-white" : "bg-card text-muted hover:bg-card-hover hover:text-white"
+              autoplay ? "bg-brand text-white" : "bg-card text-muted hover:bg-card-hover hover:text-ink"
             }`}
           >
             {autoplay ? <Pause size={16} /> : <Play size={16} />}
@@ -296,13 +296,13 @@ export default function Flashcards({
         <div className="flex items-center gap-3">
           <button
             onClick={() => mark(false)}
-            className="inline-flex items-center gap-2 rounded-full border-2 border-orange-400/60 px-6 py-2.5 font-bold text-orange-300 hover:bg-orange-400/10"
+            className="inline-flex items-center gap-2 rounded-full border-2 border-orange-500/50 px-6 py-2.5 font-bold text-orange-700 hover:bg-orange-500/10 dark:border-orange-400/60 dark:text-orange-300 dark:hover:bg-orange-400/10"
           >
             <X size={18} strokeWidth={2} /> Chưa biết
           </button>
           <button
             onClick={() => mark(true)}
-            className="inline-flex items-center gap-2 rounded-full border-2 border-emerald-400/60 px-6 py-2.5 font-bold text-emerald-300 hover:bg-emerald-400/10"
+            className="inline-flex items-center gap-2 rounded-full border-2 border-emerald-500/50 px-6 py-2.5 font-bold text-emerald-700 hover:bg-emerald-500/10 dark:border-emerald-400/60 dark:text-emerald-300 dark:hover:bg-emerald-400/10"
           >
             <Check size={18} strokeWidth={2} /> Đã biết
           </button>
@@ -313,7 +313,7 @@ export default function Flashcards({
             onClick={() => setMeaningFirst((m) => !m)}
             title="Đổi mặt trước (Từ ↔ Nghĩa)"
             className={`inline-flex h-11 items-center gap-1.5 rounded-full px-4 text-sm font-semibold transition ${
-              meaningFirst ? "bg-white text-bg" : "bg-card text-muted hover:bg-card-hover hover:text-white"
+              meaningFirst ? "bg-ink text-bg" : "bg-card text-muted hover:bg-card-hover hover:text-ink"
             }`}
           >
             <ArrowLeftRight size={16} /> {meaningFirst ? "Nghĩa trước" : "Từ trước"}
@@ -321,7 +321,7 @@ export default function Flashcards({
           <button
             onClick={shuffleDeck}
             title="Trộn thẻ"
-            className="flex h-11 w-11 items-center justify-center rounded-full bg-card text-muted hover:bg-card-hover hover:text-white"
+            className="flex h-11 w-11 items-center justify-center rounded-full bg-card text-muted hover:bg-card-hover hover:text-ink"
           >
             <Shuffle size={18} />
           </button>

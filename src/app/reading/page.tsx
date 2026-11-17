@@ -130,16 +130,16 @@ export default function ReadingHistoryPage() {
             setStudiedAt(new Date().toISOString().slice(0, 10));
             setShowAdd(true);
           }}
-          className="inline-flex items-center gap-2 rounded-xl bg-brand px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-hover"
+          className="inline-flex items-center gap-2 rounded-xl bg-brand px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-hover hover:text-bg"
         >
           <Plus size={18} /> Thêm bài đọc mới
         </button>
       </div>
 
       {needsMigration && (
-        <div className="rounded-2xl border border-amber-500/40 bg-amber-500/10 p-4 text-sm text-amber-200">
+        <div className="rounded-2xl border border-amber-500/40 bg-amber-500/10 p-4 text-sm text-amber-800 dark:text-amber-200">
           <p className="font-semibold">Cần cập nhật bảng Reading trong Supabase (chỉ làm 1 lần):</p>
-          <p className="mt-1 text-xs text-amber-200/80">
+          <p className="mt-1 text-xs text-amber-800/80 dark:text-amber-200/80">
             Mở file <code>app/supabase/schema.sql</code>, copy phần tạo bảng <code>reading_passages</code> và{" "}
             <code>reading_notes</code> ở cuối file rồi chạy trong <b>Supabase → SQL Editor</b>, sau đó tải lại trang.
           </p>
@@ -147,7 +147,7 @@ export default function ReadingHistoryPage() {
       )}
 
       {error && (
-        <div className="rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-200">
+        <div className="rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-700 dark:text-red-200">
           {error}
         </div>
       )}
@@ -188,7 +188,7 @@ export default function ReadingHistoryPage() {
               >
                 <Link href={`/reading/${p.id}`} className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="truncate text-base font-bold text-white">{p.title}</span>
+                    <span className="truncate text-base font-bold text-ink">{p.title}</span>
                     {p.source_name && (
                       <span className="rounded-lg bg-bg px-2 py-0.5 text-xs font-medium text-muted">
                         {p.source_name}
@@ -206,7 +206,7 @@ export default function ReadingHistoryPage() {
                       <FileText size={13} /> {p.word_count} từ
                     </span>
                     {p.notes_count > 0 && (
-                      <span className="inline-flex items-center gap-1.5 text-emerald-300">
+                      <span className="inline-flex items-center gap-1.5 text-emerald-700 dark:text-emerald-300">
                         <CheckCircle2 size={13} /> {p.notes_count} ghi chú đã lưu
                       </span>
                     )}
@@ -216,7 +216,7 @@ export default function ReadingHistoryPage() {
                 <div className="flex items-center gap-3">
                   {hasScore ? (
                     <div className="rounded-xl bg-bg px-3 py-1.5 text-right">
-                      <div className="text-sm font-bold text-white">
+                      <div className="text-sm font-bold text-ink">
                         {p.score_correct}/{p.score_total}
                       </div>
                       <div className="text-[11px] text-muted">{pct}% đúng</div>
@@ -228,7 +228,7 @@ export default function ReadingHistoryPage() {
                   <button
                     onClick={() => handleDelete(p.id, p.title)}
                     title="Xoá bài đọc"
-                    className="rounded-lg p-2 text-muted opacity-60 transition hover:bg-red-500/15 hover:text-red-300 group-hover:opacity-100"
+                    className="rounded-lg p-2 text-muted opacity-60 transition hover:bg-red-500/15 hover:text-red-600 dark:hover:text-red-300 group-hover:opacity-100"
                   >
                     <Trash2 size={16} />
                   </button>
@@ -251,7 +251,7 @@ export default function ReadingHistoryPage() {
               <button
                 type="button"
                 onClick={() => setShowAdd(false)}
-                className="rounded-lg p-1.5 text-muted hover:bg-bg hover:text-white"
+                className="rounded-lg p-1.5 text-muted hover:bg-bg hover:text-ink"
               >
                 <X size={18} />
               </button>
@@ -344,14 +344,14 @@ export default function ReadingHistoryPage() {
               <button
                 type="button"
                 onClick={() => setShowAdd(false)}
-                className="rounded-xl border border-line px-4 py-2 text-sm font-semibold text-muted hover:text-white"
+                className="rounded-xl border border-line px-4 py-2 text-sm font-semibold text-muted hover:text-ink"
               >
                 Huỷ
               </button>
               <button
                 type="submit"
                 disabled={saving}
-                className="rounded-xl bg-brand px-5 py-2 text-sm font-semibold text-white transition hover:bg-brand-hover disabled:opacity-50"
+                className="rounded-xl bg-brand px-5 py-2 text-sm font-semibold text-white transition hover:bg-brand-hover hover:text-bg disabled:opacity-50"
               >
                 {saving ? "Đang lưu..." : "Lưu & Mở bài đọc"}
               </button>

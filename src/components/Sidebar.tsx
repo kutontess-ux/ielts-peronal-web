@@ -8,6 +8,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { DUE_EVENT } from "@/lib/due-events";
+import ThemeToggle from "@/components/ThemeToggle";
 
 type Item = { href: string; label: string; icon: LucideIcon; exact?: boolean; badge?: number; soon?: boolean };
 
@@ -32,7 +33,7 @@ function NavLink({
       href={item.href}
       onClick={onClick}
       className={`flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-semibold transition ${
-        active ? "bg-card text-white" : "text-muted hover:bg-card/60 hover:text-white"
+        active ? "bg-card text-ink shadow-xs dark:shadow-none" : "text-muted hover:bg-card/60 hover:text-ink"
       } ${item.soon ? "opacity-60" : ""}`}
     >
       <Icon size={19} strokeWidth={1.6} />
@@ -99,9 +100,10 @@ export default function Sidebar() {
           IELTS <span className="text-brand-hover">Personal</span>
         </Link>
         <div className="flex items-center gap-2">
+          <ThemeToggle variant="icon" />
           <Link
             href="/notifications"
-            className="relative rounded-xl border border-line bg-card p-2 text-muted hover:text-white"
+            className="relative rounded-xl border border-line bg-card p-2 text-muted hover:text-ink"
             aria-label="Thông báo"
           >
             <Bell size={18} />
@@ -113,7 +115,7 @@ export default function Sidebar() {
           </Link>
           <button
             onClick={() => setMobileMenuOpen(true)}
-            className="rounded-xl border border-line bg-card p-2 text-muted hover:text-white"
+            className="rounded-xl border border-line bg-card p-2 text-muted hover:text-ink"
             aria-label="Mở menu"
           >
             <Menu size={18} />
@@ -132,7 +134,7 @@ export default function Sidebar() {
               </span>
               <button
                 onClick={() => setMobileMenuOpen(false)}
-                className="rounded-lg p-1.5 text-muted hover:bg-card hover:text-white"
+                className="rounded-lg p-1.5 text-muted hover:bg-card hover:text-ink"
               >
                 <X size={18} />
               </button>
@@ -150,6 +152,9 @@ export default function Sidebar() {
             {SKILLS.map((i) => (
               <NavLink key={i.href} item={i} path={path} onClick={() => setMobileMenuOpen(false)} />
             ))}
+            <div className="mt-auto space-y-2 pt-3">
+              <ThemeToggle variant="switch" />
+            </div>
           </div>
         </div>
       )}
@@ -196,11 +201,14 @@ export default function Sidebar() {
         <div className="px-3 pb-1 text-xs font-semibold text-muted">Kỹ năng</div>
         {SKILLS.map((i) => <NavLink key={i.href} item={i} path={path} />)}
 
-        <div className="mt-auto rounded-xl bg-card p-3 text-xs text-muted">
-          <div className="mb-1 flex items-center gap-2 font-bold text-white">
-            <Target size={16} strokeWidth={1.75} /> Mục tiêu: Band 6.5
+        <div className="mt-auto space-y-2.5 pt-3">
+          <ThemeToggle variant="switch" />
+          <div className="rounded-xl border border-line/60 bg-card p-3 text-xs text-muted dark:border-transparent">
+            <div className="mb-1 flex items-center gap-2 font-bold text-ink">
+              <Target size={16} strokeWidth={1.75} /> Mục tiêu: Band 6.5
+            </div>
+            IELTS Academic
           </div>
-          IELTS Academic
         </div>
       </aside>
     </>

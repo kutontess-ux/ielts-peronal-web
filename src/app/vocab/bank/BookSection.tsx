@@ -259,7 +259,7 @@ export default function BookSection({
           <div className="text-sm text-muted">Mỗi bộ sách là một thư mục từ vựng riêng, không làm chật thanh tab.</div>
           <button
             onClick={() => setCreating((c) => !c)}
-            className="inline-flex items-center gap-2 rounded-full bg-brand px-5 py-2 text-sm font-bold hover:bg-brand-hover hover:text-bg"
+            className="inline-flex items-center gap-2 rounded-full bg-brand px-5 py-2 text-sm font-bold text-white hover:bg-brand-hover hover:text-bg"
           >
             <Plus size={16} strokeWidth={2} /> Tạo bộ sách mới
           </button>
@@ -293,7 +293,7 @@ export default function BookSection({
               className="w-full rounded-xl border border-line px-4 py-2.5 text-sm outline-none focus:border-brand-hover"
             />
             <div className="flex gap-2">
-              <button type="submit" className="rounded-full bg-brand px-5 py-2 text-sm font-bold hover:bg-brand-hover hover:text-bg">
+              <button type="submit" className="rounded-full bg-brand px-5 py-2 text-sm font-bold text-white hover:bg-brand-hover hover:text-bg">
                 Tạo bộ sách
               </button>
               <button type="button" onClick={() => setCreating(false)} className="rounded-full bg-line px-5 py-2 text-sm font-semibold">
@@ -330,7 +330,7 @@ export default function BookSection({
                         setEditingBadge({ key: badgeKey, title: b.title });
                       }}
                     />
-                    <span className="rounded-full bg-sky-400/20 px-2.5 py-0.5 text-xs font-bold text-sky-300">{b.band}</span>
+                    <span className="rounded-full bg-sky-500/15 px-2.5 py-0.5 text-xs font-bold text-sky-700 dark:bg-sky-400/20 dark:text-sky-300">{b.band}</span>
                   </div>
                 </div>
                 <div className="mt-4 text-lg font-bold">{b.title}</div>
@@ -367,7 +367,7 @@ export default function BookSection({
   // Chi tiết 1 bộ sách
   return (
     <div className="space-y-6">
-      <button onClick={() => setActiveBookId(null)} className="inline-flex items-center gap-1 text-sm font-semibold text-muted hover:text-white">
+      <button onClick={() => setActiveBookId(null)} className="inline-flex items-center gap-1 text-sm font-semibold text-muted hover:text-ink">
         <ArrowLeft size={16} strokeWidth={1.75} /> Quay lại Bộ sách
       </button>
 
@@ -380,7 +380,7 @@ export default function BookSection({
             <div>
               <div className="flex flex-wrap items-center gap-2">
                 <h2 className="text-lg font-bold sm:text-xl">{activeBook.title}</h2>
-                <span className="rounded-full bg-sky-400/20 px-2.5 py-0.5 text-xs font-bold text-sky-300">{activeBook.band}</span>
+                <span className="rounded-full bg-sky-500/15 px-2.5 py-0.5 text-xs font-bold text-sky-700 dark:bg-sky-400/20 dark:text-sky-300">{activeBook.band}</span>
               </div>
               <p className="mt-1 line-clamp-2 text-xs text-muted sm:text-sm">{activeBook.desc}</p>
               <div className="mt-1.5 text-xs font-bold text-brand-hover">
@@ -392,7 +392,7 @@ export default function BookSection({
           <button
             type="button"
             onClick={() => setToolsOpen((v) => !v)}
-            className="inline-flex items-center gap-1.5 rounded-full border border-line bg-bg px-3.5 py-1.5 text-xs font-semibold text-muted transition hover:border-brand hover:text-white"
+            className="inline-flex items-center gap-1.5 rounded-full border border-line bg-bg px-3.5 py-1.5 text-xs font-semibold text-muted transition hover:border-brand hover:text-ink"
           >
             {toolsOpen ? "Thu gọn công cụ & lọc" : "Mở công cụ & lọc"}
             {toolsOpen ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
@@ -417,7 +417,7 @@ export default function BookSection({
                   <button
                     onClick={seed3000}
                     disabled={seedBusy}
-                    className="inline-flex items-center gap-2 rounded-full bg-brand px-5 py-2 text-sm font-bold hover:bg-brand-hover hover:text-bg disabled:opacity-40"
+                    className="inline-flex items-center gap-2 rounded-full bg-brand px-5 py-2 text-sm font-bold text-white hover:bg-brand-hover hover:text-bg disabled:opacity-40"
                   >
                     {seedBusy ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} strokeWidth={2} />}
                     {seedBusy ? "Đang nạp 30 từ..." : "Nạp 30 từ Oxford 3000"}
@@ -445,7 +445,7 @@ export default function BookSection({
             <button
               onClick={agentFind}
               disabled={!agentPrompt.trim() || agentBusy !== ""}
-              className="inline-flex items-center gap-2 rounded-full bg-brand px-5 py-2 text-sm font-bold hover:bg-brand-hover hover:text-bg disabled:opacity-40"
+              className="inline-flex items-center gap-2 rounded-full bg-brand px-5 py-2 text-sm font-bold text-white hover:bg-brand-hover hover:text-bg disabled:opacity-40"
             >
               {agentBusy === "find" ? <Loader2 size={15} className="animate-spin" /> : <Bot size={15} />}
               {agentBusy === "find" ? "Agent đang tìm..." : "Cho Agent tìm"}
@@ -456,12 +456,12 @@ export default function BookSection({
             <div className="mt-4 space-y-3 border-t border-line pt-4">
               <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
                 <span>
-                  Agent tìm thấy <b className="text-emerald-300">{agentCandidates.length} từ mới</b>
+                  Agent tìm thấy <b className="text-emerald-700 dark:text-emerald-300">{agentCandidates.length} từ mới</b>
                   {agentSkipped > 0 ? ` (đã tự loại ${agentSkipped} từ trùng với kho)` : ""} · Đang chọn {chosenCandidates.length}
                 </span>
                 <button
                   onClick={() => setAgentOff(agentOff.size ? new Set() : new Set(agentCandidates.map((c) => c.norm_key)))}
-                  className="text-xs font-semibold text-muted hover:text-white"
+                  className="text-xs font-semibold text-muted hover:text-ink"
                 >
                   {agentOff.size ? "Chọn tất cả" : "Bỏ chọn tất cả"}
                 </button>
@@ -537,7 +537,7 @@ export default function BookSection({
               <span className="text-xs font-semibold text-muted">CEFR:</span>
               <button
                 onClick={() => setBookLevels([])}
-                className={`rounded-full px-3 py-1 text-xs font-semibold ${bookLevels.length === 0 ? "bg-brand text-white" : "bg-bg text-muted hover:text-white"}`}
+                className={`rounded-full px-3 py-1 text-xs font-semibold ${bookLevels.length === 0 ? "bg-brand text-white" : "bg-bg text-muted hover:text-ink"}`}
               >
                 Tất cả
               </button>
@@ -545,7 +545,7 @@ export default function BookSection({
                 <button
                   key={l}
                   onClick={() => toggleLevel(l)}
-                  className={`rounded-full px-3 py-1 text-xs font-semibold ${bookLevels.includes(l) ? "bg-brand text-white" : "bg-bg text-muted hover:text-white"}`}
+                  className={`rounded-full px-3 py-1 text-xs font-semibold ${bookLevels.includes(l) ? "bg-brand text-white" : "bg-bg text-muted hover:text-ink"}`}
                 >
                   {l} ({bookWords.filter((w) => w.level === l).length})
                 </button>
@@ -556,13 +556,13 @@ export default function BookSection({
           </div>
         )}
 
-        {err && <div className="mt-4 rounded-xl bg-rose-400/15 p-3 text-sm text-rose-300">{err}</div>}
-        {msg && <div className="mt-4 flex items-center gap-2 rounded-xl bg-emerald-400/15 p-3 text-sm text-emerald-300"><Check size={16} /> {msg}</div>}
+        {err && <div className="mt-4 rounded-xl bg-rose-500/15 p-3 text-sm text-rose-700 dark:bg-rose-400/15 dark:text-rose-300">{err}</div>}
+        {msg && <div className="mt-4 flex items-center gap-2 rounded-xl bg-emerald-500/15 p-3 text-sm text-emerald-700 dark:bg-emerald-400/15 dark:text-emerald-300"><Check size={16} /> {msg}</div>}
       </div>
 
       {bookWords.length === 0 ? (
         <div className="rounded-2xl bg-card/60 p-10 text-center text-muted">
-          Bộ sách này chưa có từ nào. Hãy dùng khung <b className="text-white">“Nhờ Agent tìm từ”</b> ở trên{activeBook.id === "book-3000" ? " hoặc bấm “Nạp thêm 30 từ vào sách”" : ""} để thêm từ!
+          Bộ sách này chưa có từ nào. Hãy dùng khung <b className="text-ink">“Nhờ Agent tìm từ”</b> ở trên{activeBook.id === "book-3000" ? " hoặc bấm “Nạp thêm 30 từ vào sách”" : ""} để thêm từ!
         </div>
       ) : (
         <>

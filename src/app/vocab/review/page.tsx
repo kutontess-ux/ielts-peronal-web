@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
@@ -8,10 +8,10 @@ import { notifyDueUpdated } from "@/lib/due-events";
 import type { ReviewWord } from "@/app/api/reviews/route";
 
 const GRADES = [
-  { key: "again", label: "Quên", next: "< 1 phút", cls: "border-rose-400/60 text-rose-300 hover:bg-rose-400/10" },
-  { key: "hard", label: "Khó", next: "1 ngày", cls: "border-orange-400/60 text-orange-300 hover:bg-orange-400/10" },
-  { key: "good", label: "Tốt", next: "3+ ngày", cls: "border-sky-400/60 text-sky-300 hover:bg-sky-400/10" },
-  { key: "easy", label: "Dễ", next: "7+ ngày", cls: "border-emerald-400/60 text-emerald-300 hover:bg-emerald-400/10" },
+  { key: "again", label: "Quên", next: "< 1 phút", cls: "border-rose-500/50 text-rose-700 hover:bg-rose-500/10 dark:border-rose-400/60 dark:text-rose-300 dark:hover:bg-rose-400/10" },
+  { key: "hard", label: "Khó", next: "1 ngày", cls: "border-orange-500/50 text-orange-700 hover:bg-orange-500/10 dark:border-orange-400/60 dark:text-orange-300 dark:hover:bg-orange-400/10" },
+  { key: "good", label: "Tốt", next: "3+ ngày", cls: "border-sky-500/50 text-sky-700 hover:bg-sky-500/10 dark:border-sky-400/60 dark:text-sky-300 dark:hover:bg-sky-400/10" },
+  { key: "easy", label: "Dễ", next: "7+ ngày", cls: "border-emerald-500/50 text-emerald-700 hover:bg-emerald-500/10 dark:border-emerald-400/60 dark:text-emerald-300 dark:hover:bg-emerald-400/10" },
 ] as const;
 
 export default function Review() {
@@ -91,7 +91,7 @@ export default function Review() {
         <Repeat size={44} strokeWidth={1.3} className="mx-auto text-brand-hover" />
         <h1 className="mt-4 text-2xl font-bold">Chưa có từ nào trong kho</h1>
         <p className="mt-2 text-muted">Hãy nạp từ vựng vào kho trước, sau đó quay lại đây để ôn tập ngắt quãng.</p>
-        <Link href="/vocab/bank" className="mt-6 inline-block rounded-full bg-brand px-6 py-3 font-bold hover:bg-brand-hover hover:text-bg">
+        <Link href="/vocab/bank" className="mt-6 inline-block rounded-full bg-brand px-6 py-3 font-bold text-white hover:bg-brand-hover hover:text-bg">
           Đi tới Kho từ vựng
         </Link>
       </div>
@@ -109,7 +109,7 @@ export default function Review() {
             : "Hiện tại không có từ nào đến hạn ôn. Hãy quay lại sau hoặc nạp thêm từ mới."}
         </p>
         <div className="mt-6 flex justify-center gap-3">
-          <Link href="/vocab/bank" className="rounded-full bg-brand px-6 py-3 font-bold hover:bg-brand-hover hover:text-bg">
+          <Link href="/vocab/bank" className="rounded-full bg-brand px-6 py-3 font-bold text-white hover:bg-brand-hover hover:text-bg">
             Xem Kho từ vựng
           </Link>
           <button onClick={load} className="rounded-full bg-line px-6 py-3 font-bold hover:bg-card-hover">
@@ -130,7 +130,7 @@ export default function Review() {
             <Repeat size={24} strokeWidth={1.6} className="text-brand-hover" /> Ôn tập ngắt quãng
           </h1>
           <p className="text-sm text-muted">
-            Còn <b className="text-white">{dueCount} từ</b> cần ôn hôm nay
+            Còn <b className="text-ink">{dueCount} từ</b> cần ôn hôm nay
           </p>
         </div>
         <div className="font-bold">
@@ -146,7 +146,7 @@ export default function Review() {
           <span className={`rounded-full px-3 py-1 text-xs font-bold ${levelColor[card.level]}`}>
             {card.level} · {card.topic}
           </span>
-          <button onClick={speak} title="Phát âm" className="text-muted hover:text-white">
+          <button onClick={speak} title="Phát âm" className="text-muted hover:text-ink">
             <Volume2 size={21} strokeWidth={1.6} />
           </button>
         </div>

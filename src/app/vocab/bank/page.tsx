@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { createElement, useCallback, useEffect, useMemo, useState } from "react";
 import { ArrowLeft, BookMarked, Bot, Check, ChevronDown, Loader2, Package, RotateCcw, Search, Trash2, Upload } from "lucide-react";
 import { LEVEL_INFO, levelColor, type Word } from "@/lib/mock";
 import { topicIcon } from "@/lib/icons";
@@ -27,6 +27,143 @@ type PreviewItem = {
 };
 type Preview = { items: PreviewItem[]; summary: { total: number; new: number; duplicate: number; invalid: number } };
 
+function WordCard({
+  w,
+  onDelete,
+  picking,
+  checked,
+  onToggleSelect,
+}: {
+  w: Word;
+  onDelete?: (w: Word) => void;
+  picking: boolean;
+  checked: boolean;
+  onToggleSelect?: (id: number) => void;
+}) {
+  const [flipped, setFlipped] = useState(false);
+
+  const handleActivate = () => {
+    if (picking) {
+      onToggleSelect?.(w.id);
+    } else {
+      setFlipped((prev) => !prev);
+    }
+  };
+
+  const borderCls = checked
+    ? "border-rose-400"
+    : "border-line/70 dark:border-transparent";
+
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      aria-pressed={picking ? checked : flipped}
+      aria-label={picking ? `Chọn ${w.word}` : flipped ? `Úp thẻ ${w.word}` : `Lật thẻ ${w.word}`}
+      onClick={handleActivate}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          handleActivate();
+        }
+      }}
+      className="group cursor-pointer select-none [perspective:1000px] focus:outline-none"
+    >
+      <div
+        className={`grid h-full transition-transform duration-500 [transform-style:preserve-3d] ${
+          !picking && flipped ? "[transform:rotateY(180deg)]" : ""
+        }`}
+      >
+        {/* Mặt trước: chỉ hiển thị từ vựng và cấp độ CEFR */}
+        <div
+          className={`col-start-1 row-start-1 flex min-h-[168px] flex-col justify-between rounded-2xl border-2 bg-card p-4 transition-colors group-hover:bg-card-hover [backface-visibility:hidden] [transform:rotateY(0deg)] ${borderCls} ${
+            !picking && flipped ? "pointer-events-none" : ""
+          }`}
+        >
+          <div className="flex items-start justify-between gap-2">
+            <div>
+              {picking && (
+                <input
+                  type="checkbox"
+                  checked={checked}
+                  onChange={() => onToggleSelect?.(w.id)}
+                  onClick={(e) => e.stopPropagation()}
+                  className="mt-1 h-4 w-4 accent-rose-500"
+                />
+              )}
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className={`rounded-full px-2.5 py-0.5 text-xs font-bold ${levelColor[w.level]}`}>{w.level}</span>
+              {onDelete && !picking && (
+                <button
+                  type="button"
+                  title="Xoá từ này"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onDelete(w);
+                  }}
+                  className="rounded-full p-1 text-muted opacity-0 transition hover:bg-rose-500/20 hover:text-rose-600 dark:hover:text-rose-300 group-hover:opacity-100"
+                >
+                  <Trash2 size={14} />
+                </button>
+              )}
+            </div>
+          </div>
+
+          <div className="my-2 flex flex-1 items-center justify-center text-center">
+            <div className="text-xl font-bold tracking-tight text-ink">{w.word}</div>
+          </div>
+
+          <div className="text-center text-[11px] font-medium text-muted/75">
+            {picking ? "Bấm để chọn" : "Bấm để lật"}
+          </div>
+        </div>
+
+        {/* Mặt sau: hiển thị đầy đủ thông tin từ vựng */}
+        <div
+          className={`col-start-1 row-start-1 flex min-h-[168px] flex-col justify-between rounded-2xl border-2 bg-card p-4 transition-colors group-hover:bg-card-hover [backface-visibility:hidden] [transform:rotateY(180deg)] ${borderCls} ${
+            !picking && flipped ? "" : "pointer-events-none"
+          }`}
+        >
+          <div>
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <div className="text-lg font-bold">{w.word}</div>
+                <div className="text-xs text-muted">{w.ipa} · {w.pos}</div>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className={`rounded-full px-2.5 py-0.5 text-xs font-bold ${levelColor[w.level]}`}>{w.level}</span>
+                {onDelete && !picking && (
+                  <button
+                    type="button"
+                    title="Xoá từ này"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onDelete(w);
+                    }}
+                    className="rounded-full p-1 text-muted opacity-0 transition hover:bg-rose-500/20 hover:text-rose-600 dark:hover:text-rose-300 group-hover:opacity-100"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                )}
+              </div>
+            </div>
+            <div className="mt-2 text-sm font-semibold text-brand-hover">{w.vi}</div>
+            <div className="mt-1 line-clamp-2 text-xs text-muted">{w.en}</div>
+          </div>
+
+          <div className="mt-3 flex flex-wrap gap-1.5">
+            <span className="inline-flex items-center gap-1 rounded-full bg-line px-2.5 py-0.5 text-[11px] font-semibold">
+              {createElement(topicIcon(w.topic), { size: 12, strokeWidth: 1.75 })} {w.topic}
+            </span>
+            {w.awl && <span className="rounded-full bg-orange-500/15 px-2.5 py-0.5 text-[11px] font-bold text-orange-700 dark:bg-orange-400/20 dark:text-orange-300">AWL</span>}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function WordGrid({
   list,
   onDelete,
@@ -39,63 +176,19 @@ function WordGrid({
   onToggleSelect?: (id: number) => void;
 }) {
   if (list.length === 0) return <div className="py-10 text-center text-muted">Không tìm thấy từ nào.</div>;
+  const picking = !!selectedIds;
   return (
     <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-      {list.map((w) => {
-        const Ic = topicIcon(w.topic);
-        const picking = !!selectedIds;
-        const checked = selectedIds?.has(w.id) ?? false;
-        return (
-          <div
-            key={w.id}
-            onClick={() => picking && onToggleSelect?.(w.id)}
-            className={`group relative rounded-2xl border-2 bg-card p-4 transition hover:bg-card-hover ${
-              picking ? "cursor-pointer" : ""
-            } ${checked ? "border-rose-400" : "border-transparent"}`}
-          >
-            <div className="flex items-start justify-between gap-2">
-              <div className="flex items-start gap-2.5">
-                {picking && (
-                  <input
-                    type="checkbox"
-                    checked={checked}
-                    onChange={() => onToggleSelect?.(w.id)}
-                    onClick={(e) => e.stopPropagation()}
-                    className="mt-1.5 h-4 w-4 accent-rose-500"
-                  />
-                )}
-                <div>
-                  <div className="text-lg font-bold">{w.word}</div>
-                  <div className="text-xs text-muted">{w.ipa} · {w.pos}</div>
-                </div>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <span className={`rounded-full px-2.5 py-0.5 text-xs font-bold ${levelColor[w.level]}`}>{w.level}</span>
-                {onDelete && !picking && (
-                  <button
-                    title="Xoá từ này"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onDelete(w);
-                    }}
-                    className="rounded-full p-1 text-muted opacity-0 transition hover:bg-rose-400/20 hover:text-rose-300 group-hover:opacity-100"
-                  >
-                    <Trash2 size={14} />
-                  </button>
-                )}
-              </div>
-            </div>
-            <div className="mt-2 text-sm font-semibold text-brand-hover">{w.vi}</div>
-            <div className="mt-1 line-clamp-2 text-xs text-muted">{w.en}</div>
-            <div className="mt-3 flex flex-wrap gap-1.5">
-              <span className="inline-flex items-center gap-1 rounded-full bg-line px-2.5 py-0.5 text-[11px] font-semibold">
-                <Ic size={12} strokeWidth={1.75} /> {w.topic}
-              </span>
-              {w.awl && <span className="rounded-full bg-orange-400/20 px-2.5 py-0.5 text-[11px] font-bold text-orange-300">AWL</span>}
-            </div>
-          </div>
-        );
-      })}
+      {list.map((w) => (
+        <WordCard
+          key={w.id}
+          w={w}
+          onDelete={onDelete}
+          picking={picking}
+          checked={selectedIds?.has(w.id) ?? false}
+          onToggleSelect={onToggleSelect}
+        />
+      ))}
     </div>
   );
 }
@@ -113,7 +206,7 @@ function LevelBar({ list }: { list: Word[] }) {
 
 function Chip({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
   return (
-    <button onClick={onClick} className={`rounded-full px-3.5 py-1.5 text-sm font-semibold transition ${active ? "bg-brand text-white" : "bg-bg text-muted hover:text-white"}`}>
+    <button onClick={onClick} className={`rounded-full px-3.5 py-1.5 text-sm font-semibold transition ${active ? "bg-brand text-white" : "bg-bg text-muted hover:text-ink"}`}>
       {children}
     </button>
   );
@@ -163,28 +256,28 @@ function ImportPanel({ onSaved }: { onSaved: () => void }) {
       <div className="font-bold">Dán danh sách từ (mỗi dòng 1 từ, hoặc cách nhau dấu phẩy) hoặc dán cả đoạn văn</div>
       <textarea value={text} onChange={(e) => setText(e.target.value)} className="h-32 w-full rounded-xl border border-line p-3 outline-none focus:border-brand-hover" placeholder={"sustainable\nmitigate\ncarbon footprint\n..."} />
       <div className="flex flex-wrap items-center gap-3">
-        <button onClick={check} disabled={!text.trim() || busy !== ""} className="inline-flex items-center gap-2 rounded-full bg-brand px-5 py-2.5 text-sm font-bold hover:bg-brand-hover hover:text-bg disabled:opacity-40">
+        <button onClick={check} disabled={!text.trim() || busy !== ""} className="inline-flex items-center gap-2 rounded-full bg-brand px-5 py-2.5 text-sm font-bold text-white hover:bg-brand-hover hover:text-bg disabled:opacity-40">
           {busy === "check" ? <Loader2 size={16} className="animate-spin" /> : <Bot size={16} strokeWidth={1.75} />}
           {busy === "check" ? "Agent đang kiểm tra..." : "Cho agent kiểm tra"}
         </button>
         <span className="text-sm text-muted">Agent: loại trùng → thêm nghĩa → xếp cấp độ & chủ đề. Chưa lưu gì cho đến khi bạn bấm Lưu. Tối đa 300 từ/lần.</span>
       </div>
-      {err && <div className="rounded-xl bg-rose-400/15 p-3 text-sm text-rose-300">{err}</div>}
-      {done && <div className="flex items-center gap-2 rounded-xl bg-emerald-400/15 p-3 text-sm text-emerald-300"><Check size={16} /> {done}</div>}
+      {err && <div className="rounded-xl bg-rose-500/15 p-3 text-sm text-rose-700 dark:bg-rose-400/15 dark:text-rose-300">{err}</div>}
+      {done && <div className="flex items-center gap-2 rounded-xl bg-emerald-500/15 p-3 text-sm text-emerald-700 dark:bg-emerald-400/15 dark:text-emerald-300"><Check size={16} /> {done}</div>}
 
       {prev && (
         <div className="space-y-4">
           <div className="grid grid-cols-3 gap-3 text-center text-sm">
-            <div className="rounded-xl bg-emerald-400/15 p-3"><b className="text-lg text-emerald-300">{prev.summary.new}</b><br />từ mới</div>
-            <div className="rounded-xl bg-amber-400/15 p-3"><b className="text-lg text-amber-300">{prev.summary.duplicate}</b><br />trùng lặp (bỏ qua)</div>
-            <div className="rounded-xl bg-rose-400/15 p-3"><b className="text-lg text-rose-300">{prev.summary.invalid}</b><br />không hợp lệ (bỏ qua)</div>
+            <div className="rounded-xl bg-emerald-500/15 p-3 dark:bg-emerald-400/15"><b className="text-lg text-emerald-700 dark:text-emerald-300">{prev.summary.new}</b><br />từ mới</div>
+            <div className="rounded-xl bg-amber-500/15 p-3 dark:bg-amber-400/15"><b className="text-lg text-amber-700 dark:text-amber-300">{prev.summary.duplicate}</b><br />trùng lặp (bỏ qua)</div>
+            <div className="rounded-xl bg-rose-500/15 p-3 dark:bg-rose-400/15"><b className="text-lg text-rose-700 dark:text-rose-300">{prev.summary.invalid}</b><br />không hợp lệ (bỏ qua)</div>
           </div>
 
           {news.length > 0 && (
             <>
               <div className="flex items-center justify-between text-sm">
                 <span className="font-semibold">Duyệt từ mới ({chosen.length}/{news.length} được chọn)</span>
-                <button className="text-muted hover:text-white" onClick={() => setOff(off.size ? new Set() : new Set(news.map((n) => n.norm_key!)))}>
+                <button className="text-muted hover:text-ink" onClick={() => setOff(off.size ? new Set() : new Set(news.map((n) => n.norm_key!)))}>
                   {off.size ? "Chọn tất cả" : "Bỏ chọn tất cả"}
                 </button>
               </div>
@@ -200,7 +293,7 @@ function ImportPanel({ onSaved }: { onSaved: () => void }) {
                           <span className="text-xs text-muted">{i.ipa} · {i.pos}</span>
                           <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${levelColor[i.cefr_level ?? "B2"]}`}>{i.cefr_level}</span>
                           <span className="rounded-full bg-line px-2 py-0.5 text-[11px]">{i.topic}</span>
-                          {i.is_awl && <span className="rounded-full bg-orange-400/20 px-2 py-0.5 text-[11px] font-bold text-orange-300">AWL</span>}
+                          {i.is_awl && <span className="rounded-full bg-orange-500/15 px-2 py-0.5 text-[11px] font-bold text-orange-700 dark:bg-orange-400/20 dark:text-orange-300">AWL</span>}
                         </div>
                         <div className="text-sm text-brand-hover">{i.meaning_vi}</div>
                         <div className="truncate text-xs text-muted">{i.definition_en}</div>
@@ -371,7 +464,7 @@ export default function Bank() {
           <Package size={26} strokeWidth={1.5} className="text-brand-hover" />
           Kho từ vựng <span className="text-base font-medium text-muted">({words.length} từ)</span>
         </h1>
-        <button onClick={() => setImporting(!importing)} className="inline-flex items-center gap-2 rounded-full bg-brand px-5 py-2.5 text-sm font-bold hover:bg-brand-hover hover:text-bg">
+        <button onClick={() => setImporting(!importing)} className="inline-flex items-center gap-2 rounded-full bg-brand px-5 py-2.5 text-sm font-bold text-white hover:bg-brand-hover hover:text-bg">
           <Upload size={17} strokeWidth={1.75} /> Nạp từ vựng hàng loạt
         </button>
       </div>
@@ -379,7 +472,7 @@ export default function Bank() {
       {importing && <ImportPanel onSaved={load} />}
 
       {loading && <div className="flex items-center gap-2 py-10 text-muted"><Loader2 className="animate-spin" size={18} /> Đang tải kho từ vựng...</div>}
-      {loadErr && <div className="rounded-xl bg-rose-400/15 p-4 text-sm text-rose-300">Không tải được kho: {loadErr}</div>}
+      {loadErr && <div className="rounded-xl bg-rose-500/15 p-4 text-sm text-rose-700 dark:bg-rose-400/15 dark:text-rose-300">Không tải được kho: {loadErr}</div>}
 
       {!loading && !loadErr && words.length === 0 && tab !== "book" && (
         <div className="rounded-2xl bg-card p-10 text-center">
@@ -393,7 +486,7 @@ export default function Bank() {
         <>
           <div className="flex flex-wrap gap-2">
             {([["all", "Tất cả"], ["topic", "Chủ đề"], ["level", "Cấp độ"], ["book", "Bộ sách"]] as [Tab, string][]).map(([k, l]) => (
-              <button key={k} onClick={() => changeTab(k)} className={`inline-flex items-center gap-1.5 rounded-full px-5 py-2 text-sm font-bold transition ${tab === k ? "bg-white text-bg" : "bg-card text-muted hover:text-white"}`}>
+              <button key={k} onClick={() => changeTab(k)} className={`inline-flex items-center gap-1.5 rounded-full px-5 py-2 text-sm font-bold transition ${tab === k ? "bg-ink text-bg" : "bg-card text-muted hover:text-ink"}`}>
                 {k === "book" && <BookMarked size={15} strokeWidth={1.8} />}
                 {l}
               </button>
@@ -408,14 +501,14 @@ export default function Bank() {
                   <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Tìm từ, nghĩa hoặc định nghĩa..." className="w-full rounded-full border border-line py-2.5 pl-11 pr-5 outline-none focus:border-brand-hover" />
                 </div>
                 <button onClick={() => setShowFilters(!showFilters)} className="inline-flex items-center gap-2 rounded-full bg-card px-4 py-2.5 text-sm font-semibold hover:bg-card-hover">
-                  Bộ lọc{activeCount > 0 && <span className="rounded-full bg-brand px-2 text-xs">{activeCount}</span>}
+                  Bộ lọc{activeCount > 0 && <span className="rounded-full bg-brand px-2 text-xs text-white">{activeCount}</span>}
                   <ChevronDown size={16} strokeWidth={1.75} className={showFilters ? "rotate-180" : ""} />
                 </button>
                 <div className="ml-auto flex flex-wrap items-center gap-3">
                   <button
                     onClick={() => { setSelectMode((v) => !v); setSelectedIds(new Set()); }}
                     className={`inline-flex items-center gap-1.5 rounded-full px-4 py-2.5 text-sm font-semibold transition ${
-                      selectMode ? "bg-rose-500 text-white" : "bg-card text-muted hover:text-white"
+                      selectMode ? "bg-rose-500 text-white" : "bg-card text-muted hover:text-ink"
                     }`}
                   >
                     <Trash2 size={15} /> {selectMode ? "Huỷ chọn" : "Chọn xoá"}
@@ -460,7 +553,7 @@ export default function Bank() {
                       </div>
                     </div>
                   </div>
-                  <button onClick={reset} className="inline-flex items-center gap-1.5 text-sm font-semibold text-muted hover:text-white"><RotateCcw size={15} strokeWidth={1.75} /> Xoá bộ lọc</button>
+                  <button onClick={reset} className="inline-flex items-center gap-1.5 text-sm font-semibold text-muted hover:text-ink"><RotateCcw size={15} strokeWidth={1.75} /> Xoá bộ lọc</button>
                 </div>
               )}
 
@@ -472,7 +565,7 @@ export default function Bank() {
           {(tab === "topic" || tab === "level") && sel && (
             <div className="space-y-4">
               <div className="flex flex-wrap items-center gap-3">
-                <button onClick={() => openSel(null)} className="inline-flex items-center gap-1 text-sm font-semibold text-muted hover:text-white">
+                <button onClick={() => openSel(null)} className="inline-flex items-center gap-1 text-sm font-semibold text-muted hover:text-ink">
                   <ArrowLeft size={16} strokeWidth={1.75} /> Quay lại tất cả {tab === "topic" ? "chủ đề" : "cấp độ"}
                 </button>
                 <div className="ml-auto"><ExportButton words={selected} filename={`tu-vung-${sel.value}`} label={`Xuất ${selected.length} từ`} /></div>
@@ -497,7 +590,7 @@ export default function Bank() {
                   onClick={() => setShowSubFilters((v) => !v)}
                   className="inline-flex items-center gap-2 rounded-full bg-card px-4 py-2 text-sm font-semibold hover:bg-card-hover"
                 >
-                  Bộ lọc{subFilter.length > 0 && <span className="rounded-full bg-brand px-2 text-xs">{subFilter.length}</span>}
+                  Bộ lọc{subFilter.length > 0 && <span className="rounded-full bg-brand px-2 text-xs text-white">{subFilter.length}</span>}
                   <ChevronDown size={16} strokeWidth={1.75} className={showSubFilters ? "rotate-180 transition" : "transition"} />
                 </button>
               </div>

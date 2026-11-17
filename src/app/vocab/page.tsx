@@ -78,10 +78,10 @@ export default function VocabLearn() {
             <div className="mt-1 text-xl font-bold">Bạn có {stats.dueCount} từ sắp quên cần ôn hôm nay</div>
             <div className="text-sm text-muted">Ôn đúng lúc để nhớ lâu hơn</div>
           </div>
-          <span className="shrink-0 rounded-full bg-brand px-6 py-2.5 text-sm font-bold">Ôn ngay</span>
+          <span className="shrink-0 rounded-full bg-brand px-6 py-2.5 text-sm font-bold text-white">Ôn ngay</span>
         </Link>
       ) : (
-        <div className="flex items-center gap-3 rounded-3xl bg-card p-5 text-emerald-300">
+        <div className="flex items-center gap-3 rounded-3xl bg-card p-5 text-emerald-700 dark:text-emerald-300">
           <CheckCircle2 size={22} strokeWidth={1.75} />
           <div>
             <div className="font-bold">Đã hoàn thành ôn tập hôm nay</div>
@@ -93,8 +93,8 @@ export default function VocabLearn() {
       <section className="grid gap-4 md:grid-cols-3">
         {[
           ["Cần ôn hôm nay", `${stats.dueCount} từ`, "text-brand-hover"],
-          ["Đã thuộc (≥ 7 ngày)", `${stats.masteredCount} / ${stats.totalWords}`, "text-emerald-300"],
-          ["Tổng từ trong kho", `${stats.totalWords} từ`, "text-orange-300"],
+          ["Đã thuộc (≥ 7 ngày)", `${stats.masteredCount} / ${stats.totalWords}`, "text-emerald-600 dark:text-emerald-300"],
+          ["Tổng từ trong kho", `${stats.totalWords} từ`, "text-orange-600 dark:text-orange-300"],
         ].map(([l, v, c]) => (
           <div key={l} className="rounded-2xl bg-card p-5">
             <div className="text-sm text-muted">{l}</div>
@@ -112,7 +112,7 @@ export default function VocabLearn() {
         ) : words.length === 0 ? (
           <div className="rounded-2xl bg-card p-8 text-center">
             <p className="text-muted">Kho từ vựng chưa có từ nào.</p>
-            <Link href="/vocab/bank" className="mt-4 inline-block rounded-full bg-brand px-6 py-2.5 text-sm font-bold">
+            <Link href="/vocab/bank" className="mt-4 inline-block rounded-full bg-brand px-6 py-2.5 text-sm font-bold text-white">
               Đi nạp từ vựng
             </Link>
           </div>

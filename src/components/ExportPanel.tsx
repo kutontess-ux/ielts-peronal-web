@@ -39,7 +39,7 @@ export default function ExportButton({
     <>
       <button
         onClick={() => setOpen(true)}
-        className="inline-flex items-center gap-2 rounded-full bg-brand px-5 py-2.5 text-sm font-bold hover:bg-brand-hover hover:text-bg"
+        className="inline-flex items-center gap-2 rounded-full bg-brand px-5 py-2.5 text-sm font-bold text-white hover:bg-brand-hover hover:text-bg"
       >
         <FileText size={17} strokeWidth={1.75} /> {label}
       </button>
@@ -52,7 +52,7 @@ export default function ExportButton({
                 <div className="text-lg font-bold">Xuất {words.length} từ để nhập vào Quizlet</div>
                 <div className="text-sm text-muted">Quizlet → Tạo học phần → Nhập → dán văn bản vào</div>
               </div>
-              <button onClick={() => setOpen(false)} className="rounded-full p-2 text-muted hover:bg-line hover:text-white">
+              <button onClick={() => setOpen(false)} className="rounded-full p-2 text-muted hover:bg-line hover:text-ink">
                 <X size={20} strokeWidth={1.75} />
               </button>
             </div>
@@ -63,7 +63,7 @@ export default function ExportButton({
                 <button
                   key={k}
                   onClick={() => setO((p) => ({ ...p, separator: k }))}
-                  className={`rounded-full px-4 py-1.5 text-sm font-semibold ${o.separator === k ? "bg-white text-bg" : "bg-bg text-muted hover:text-white"}`}
+                  className={`rounded-full px-4 py-1.5 text-sm font-semibold ${o.separator === k ? "bg-ink text-bg" : "bg-bg text-muted hover:text-ink"}`}
                 >
                   {l}
                 </button>
@@ -76,7 +76,7 @@ export default function ExportButton({
                 <button
                   key={k}
                   onClick={() => toggle(k)}
-                  className={`rounded-full px-4 py-1.5 text-sm font-semibold ${o[k] ? "bg-brand text-white" : "bg-bg text-muted hover:text-white"}`}
+                  className={`rounded-full px-4 py-1.5 text-sm font-semibold ${o[k] ? "bg-brand text-white" : "bg-bg text-muted hover:text-ink"}`}
                 >
                   {l}
                 </button>
@@ -90,7 +90,7 @@ export default function ExportButton({
             />
 
             <div className="mt-4 flex flex-wrap gap-3">
-              <button onClick={copy} className="inline-flex items-center gap-2 rounded-full bg-brand px-5 py-2.5 text-sm font-bold hover:bg-brand-hover hover:text-bg">
+              <button onClick={copy} className="inline-flex items-center gap-2 rounded-full bg-brand px-5 py-2.5 text-sm font-bold text-white hover:bg-brand-hover hover:text-bg">
                 {copied ? <Check size={17} strokeWidth={1.75} /> : <Copy size={17} strokeWidth={1.75} />}
                 {copied ? "Đã sao chép" : "Sao chép"}
               </button>

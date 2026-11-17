@@ -127,7 +127,7 @@ export function BadgePickerModal({
       <div className="w-full max-w-md rounded-3xl border border-line bg-card p-6" onClick={(e) => e.stopPropagation()}>
         <div className="mb-4 flex items-center justify-between">
           <div className="font-bold">Đổi icon / ảnh: {title}</div>
-          <button onClick={onClose} className="rounded-full p-1.5 text-muted hover:bg-line hover:text-white">
+          <button onClick={onClose} className="rounded-full p-1.5 text-muted hover:bg-line hover:text-ink">
             <X size={18} />
           </button>
         </div>
@@ -141,7 +141,7 @@ export function BadgePickerModal({
                 key={name}
                 onClick={() => { onSelect({ type: "icon", name }); onClose(); }}
                 className={`flex h-11 items-center justify-center rounded-xl border transition ${
-                  active ? "border-brand-hover bg-brand/20 text-white" : "border-line bg-bg text-muted hover:text-white"
+                  active ? "border-brand-hover bg-brand/20 text-brand-hover" : "border-line bg-bg text-muted hover:text-ink"
                 }`}
               >
                 <Ic size={20} strokeWidth={1.5} />
@@ -152,7 +152,7 @@ export function BadgePickerModal({
 
         <div className="mt-5 mb-2 text-xs font-semibold text-muted">Hoặc dùng ảnh riêng</div>
         <div className="flex gap-2">
-          <label className="inline-flex cursor-pointer items-center gap-2 rounded-full bg-brand px-4 py-2 text-xs font-bold hover:bg-brand-hover hover:text-bg">
+          <label className="inline-flex cursor-pointer items-center gap-2 rounded-full bg-brand px-4 py-2 text-xs font-bold text-white hover:bg-brand-hover hover:text-bg">
             <Upload size={14} /> Tải ảnh từ máy
             <input type="file" accept="image/*" onChange={handleFile} className="hidden" />
           </label>
@@ -179,7 +179,7 @@ export function BadgePickerModal({
           <button
             disabled={!imgUrl.trim()}
             onClick={() => { onSelect({ type: "image", src: imgUrl.trim() }); onClose(); }}
-            className="rounded-full bg-line px-4 py-2 text-xs font-bold hover:bg-brand disabled:opacity-40"
+            className="rounded-full bg-line px-4 py-2 text-xs font-bold hover:bg-brand hover:text-white disabled:opacity-40"
           >
             Dùng
           </button>
