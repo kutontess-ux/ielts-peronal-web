@@ -128,22 +128,34 @@ async function ensureProfile(
 
   const { data: inserted, error: insErr } = await db
     .from("profiles")
-    .insert({
-      id: user.id,
-      email,
-      full_name: fullName,
-      avatar_url: avatarUrl,
-      role: defaultRole,
-      is_active: true,
-      daily_ai_limit: 10,
-    })
+    .upsert(
+      {
+        id: user.id,
+        email,
+        full_name: fullName,
+        avatar_url: avatarUrl,
+        role: defaultRole,
+        is_active: true,
+        daily_ai_limit: 10,
+      },
+      { onConflict: "id", ignoreDuplicates: true }
+    )
     .select("id,email,full_name,avatar_url,role,is_active,daily_ai_limit,created_at")
+    .maybeSingle();
+
+  if (inserted) return inserted as UserProfile;
+
+  // Nếu một request song song khác vừa tạo hồ sơ cho user này cùng lúc thì đọc lại
+  const { data: racedRow, error: racedErr } = await db
+    .from("profiles")
+    .select("id,email,full_name,avatar_url,role,is_active,daily_ai_limit,created_at")
+    .eq("id", user.id)
     .single();
 
-  if (insErr || !inserted) {
-    throw new Error(insErr?.message || "Không tạo được hồ sơ người dùng");
+  if (racedErr || !racedRow) {
+    throw new Error(insErr?.message || racedErr?.message || "Không tạo được hồ sơ người dùng");
   }
-  return inserted as UserProfile;
+  return racedRow as UserProfile;
 }
 
 export async function requireAuth(): Promise<
