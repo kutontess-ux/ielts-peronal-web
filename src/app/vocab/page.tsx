@@ -424,7 +424,7 @@ function StudySetModal({
             <div className="space-y-3">
               {selectedWordsList.length > 0 && (
                 <div className="flex flex-wrap items-center gap-2">
-                  <div className="relative min-w-[200px] flex-1">
+                  <div className="relative min-w-0 w-full sm:min-w-[200px] sm:flex-1">
                     <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
                     <input
                       value={currentQuery}
@@ -633,7 +633,7 @@ function StudySetModal({
           ) : (
             <div className="space-y-3">
               <div className="flex flex-wrap items-center gap-2">
-                <div className="relative min-w-[200px] flex-1">
+                <div className="relative min-w-0 w-full sm:min-w-[200px] sm:flex-1">
                   <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
                   <input
                     value={query}
@@ -716,7 +716,7 @@ function StudySetModal({
           )}
         </div>
 
-        <div className="flex items-center justify-end gap-2 border-t border-line px-6 py-4">
+        <div className="flex items-center justify-end gap-2 border-t border-line px-4 py-3 sm:px-6 sm:py-4">
           <button
             type="button"
             onClick={onClose}
@@ -1096,13 +1096,13 @@ export default function VocabLearn() {
             </button>
 
             <div className="flex flex-wrap items-start justify-between gap-4 rounded-3xl border border-line bg-card p-5 sm:p-6">
-              <div className="flex items-start gap-3.5">
+              <div className="flex min-w-0 items-start gap-3.5">
                 <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-brand/15 text-brand-hover">
                   <FolderOpen size={24} strokeWidth={1.75} />
                 </div>
-                <div>
-                  <h2 className="text-lg font-bold sm:text-xl">{activeFolder.name}</h2>
-                  <p className="text-xs text-muted">
+                <div className="min-w-0 flex-1">
+                  <h2 className="break-words text-lg font-bold sm:text-xl">{activeFolder.name}</h2>
+                  <p className="break-words text-xs text-muted">
                     {visibleSets.length} học phần
                     {activeFolder.desc ? ` · ${activeFolder.desc}` : ""}
                   </p>
@@ -1409,7 +1409,7 @@ export default function VocabLearn() {
                             aria-label={`Chọn thư mục cho ${s.title}`}
                             value={s.folderId ?? ""}
                             onChange={(e) => moveStudySetToFolder(s.id, e.target.value || null)}
-                            className="rounded-full border border-line bg-bg px-2.5 py-0.5 text-[11px] font-medium text-muted outline-none hover:border-brand-hover"
+                            className="max-w-full rounded-full border border-line bg-bg px-2.5 py-0.5 text-[11px] font-medium text-muted outline-none hover:border-brand-hover"
                           >
                             <option value="">Chưa có thư mục</option>
                             {folders.map((f) => (

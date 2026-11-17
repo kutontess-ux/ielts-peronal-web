@@ -101,18 +101,18 @@ export default function Home() {
     <div className="space-y-10">
       <section>
         <h2 className="mb-4 text-lg font-bold">Tiếp tục học</h2>
-        <div className="no-scrollbar flex gap-4 overflow-x-auto pb-2">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {JUMP.map((j) => (
             <div
               key={j.title}
-              className="flex min-h-44 w-[82vw] shrink-0 flex-col justify-between rounded-3xl border border-line bg-card p-5 sm:w-[340px] sm:p-6"
+              className="flex min-h-40 flex-col justify-between rounded-3xl border border-line bg-card p-5 sm:p-6"
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <div className="text-lg font-bold sm:text-xl">{j.title}</div>
                   <div className="mt-1 line-clamp-2 text-sm text-muted">{j.sub}</div>
                 </div>
-                <j.icon size={38} strokeWidth={1.2} className="shrink-0 text-brand-hover" />
+                <j.icon size={36} strokeWidth={1.2} className="shrink-0 text-brand-hover" />
               </div>
               <Link
                 href={j.href}

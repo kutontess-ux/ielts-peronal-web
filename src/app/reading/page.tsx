@@ -186,7 +186,7 @@ export default function ReadingHistoryPage() {
                 key={p.id}
                 className="group flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-line bg-card p-4 transition hover:border-brand/60 hover:bg-card-hover sm:gap-4"
               >
-                <Link href={`/reading/${p.id}`} className="min-w-[200px] flex-1">
+                <Link href={`/reading/${p.id}`} className="min-w-0 basis-full sm:basis-0 sm:flex-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="break-words text-base font-bold text-ink">{p.title}</span>
                     {p.source_name && (

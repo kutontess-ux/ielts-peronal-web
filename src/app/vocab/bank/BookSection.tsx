@@ -475,7 +475,7 @@ export default function BookSection({
               onChange={(e) => setAgentPrompt(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && agentFind()}
               placeholder="Ví dụ: Tìm 15 từ C1 chủ đề Artificial Intelligence hoặc collocations Writing Task 2..."
-              className="min-w-[260px] flex-1 rounded-full border border-line px-4 py-2 text-sm outline-none focus:border-brand-hover"
+              className="min-w-0 w-full rounded-full border border-line px-4 py-2 text-sm outline-none focus:border-brand-hover sm:min-w-[240px] sm:flex-1"
             />
             <button
               onClick={agentFind}

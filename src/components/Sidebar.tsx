@@ -160,7 +160,7 @@ export default function Sidebar() {
       )}
 
       {/* Thanh điều hướng dưới cùng trên điện thoại */}
-      <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 border-t border-line bg-bg/95 px-1 py-1.5 backdrop-blur md:hidden">
+      <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 border-t border-line bg-bg/95 px-1 pt-1.5 pb-[max(0.375rem,env(safe-area-inset-bottom))] backdrop-blur md:hidden">
         {MOBILE_TABS.map((tab) => {
           const active = tab.exact ? path === tab.href : path.startsWith(tab.href);
           const Icon = tab.icon;
@@ -168,7 +168,7 @@ export default function Sidebar() {
             <Link
               key={tab.href}
               href={tab.href}
-              className={`relative flex flex-col items-center justify-center gap-0.5 rounded-xl py-1 text-[11px] font-semibold transition ${
+              className={`relative flex min-w-0 flex-col items-center justify-center gap-0.5 rounded-xl px-0.5 py-1 text-[11px] font-semibold transition ${
                 active ? "text-brand-hover" : "text-muted"
               }`}
             >
@@ -180,7 +180,7 @@ export default function Sidebar() {
                   </span>
                 ) : null}
               </div>
-              <span className="truncate">{tab.label}</span>
+              <span className="max-w-full truncate">{tab.label}</span>
             </Link>
           );
         })}

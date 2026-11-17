@@ -155,9 +155,9 @@ export default function Flashcards({
     const starredWords = deck.filter((w) => star[w.id]);
 
     return (
-      <div className="mx-auto max-w-2xl rounded-3xl border border-line bg-card p-8 text-center md:p-10">
+      <div className="mx-auto max-w-2xl rounded-3xl border border-line bg-card p-6 text-center sm:p-8 md:p-10">
         <PartyPopper size={56} strokeWidth={1.2} className="mx-auto text-brand-hover" />
-        <h1 className="mt-4 text-3xl font-bold">Chúc mừng! Bạn đã học xong bộ thẻ</h1>
+        <h1 className="mt-4 text-2xl font-bold sm:text-3xl">Chúc mừng! Bạn đã học xong bộ thẻ</h1>
         <p className="mt-2 text-muted">{title} · {deck.length} thẻ</p>
 
         {srsMsg && (
@@ -166,17 +166,17 @@ export default function Flashcards({
           </div>
         )}
 
-        <div className="mt-6 grid grid-cols-3 gap-4">
-          <div className="rounded-2xl bg-bg p-4">
-            <div className="text-2xl font-bold text-brand-hover">{pct}%</div>
+        <div className="mt-6 grid grid-cols-3 gap-2.5 sm:gap-4">
+          <div className="rounded-2xl bg-bg p-3 sm:p-4">
+            <div className="text-xl font-bold text-brand-hover sm:text-2xl">{pct}%</div>
             <div className="mt-1 text-xs text-muted">Hoàn thành</div>
           </div>
-          <div className="rounded-2xl bg-emerald-500/15 p-4 dark:bg-emerald-400/10">
-            <div className="text-2xl font-bold text-emerald-700 dark:text-emerald-300">{knownList.length}</div>
+          <div className="rounded-2xl bg-emerald-500/15 p-3 sm:p-4 dark:bg-emerald-400/10">
+            <div className="text-xl font-bold text-emerald-700 sm:text-2xl dark:text-emerald-300">{knownList.length}</div>
             <div className="mt-1 text-xs text-emerald-700/80 dark:text-emerald-300/80">Đã biết</div>
           </div>
-          <div className="rounded-2xl bg-orange-500/15 p-4 dark:bg-orange-400/10">
-            <div className="text-2xl font-bold text-orange-700 dark:text-orange-300">{unknownList.length}</div>
+          <div className="rounded-2xl bg-orange-500/15 p-3 sm:p-4 dark:bg-orange-400/10">
+            <div className="text-xl font-bold text-orange-700 sm:text-2xl dark:text-orange-300">{unknownList.length}</div>
             <div className="mt-1 text-xs text-orange-700/80 dark:text-orange-300/80">Cần học lại</div>
           </div>
         </div>
@@ -355,16 +355,16 @@ export default function Flashcards({
           </button>
         </div>
 
-        <div className="flex items-center gap-2.5 sm:gap-3">
+        <div className="order-first flex w-full items-center justify-center gap-2.5 sm:order-none sm:w-auto sm:gap-3">
           <button
             onClick={() => mark(false)}
-            className="inline-flex items-center gap-2 rounded-full border-2 border-orange-500/50 px-4 py-2.5 text-sm font-bold text-orange-700 hover:bg-orange-500/10 dark:border-orange-400/60 dark:text-orange-300 dark:hover:bg-orange-400/10 sm:px-6 sm:text-base"
+            className="inline-flex flex-1 items-center justify-center gap-2 rounded-full border-2 border-orange-500/50 px-4 py-2.5 text-sm font-bold text-orange-700 hover:bg-orange-500/10 dark:border-orange-400/60 dark:text-orange-300 dark:hover:bg-orange-400/10 sm:flex-initial sm:px-6 sm:text-base"
           >
             <X size={18} strokeWidth={2} /> Chưa biết
           </button>
           <button
             onClick={() => mark(true)}
-            className="inline-flex items-center gap-2 rounded-full border-2 border-emerald-500/50 px-4 py-2.5 text-sm font-bold text-emerald-700 hover:bg-emerald-500/10 dark:border-emerald-400/60 dark:text-emerald-300 dark:hover:bg-emerald-400/10 sm:px-6 sm:text-base"
+            className="inline-flex flex-1 items-center justify-center gap-2 rounded-full border-2 border-emerald-500/50 px-4 py-2.5 text-sm font-bold text-emerald-700 hover:bg-emerald-500/10 dark:border-emerald-400/60 dark:text-emerald-300 dark:hover:bg-emerald-400/10 sm:flex-initial sm:px-6 sm:text-base"
           >
             <Check size={18} strokeWidth={2} /> Đã biết
           </button>
