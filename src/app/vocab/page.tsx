@@ -948,6 +948,7 @@ export default function VocabLearn() {
   });
   const [folderSetsModalOpen, setFolderSetsModalOpen] = useState(false);
   const [activeFolderId, setActiveFolderId] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<"sets" | "folders">("sets");
   const [setFilter, setSetFilter] = useState<"all" | "unfoldered">("all");
   const [enrollingId, setEnrollingId] = useState<string | null>(null);
   const [srsBanner, setSrsBanner] = useState<{ text: string; isErr?: boolean } | null>(null);
@@ -1200,11 +1201,77 @@ export default function VocabLearn() {
           </div>
         )}
 
-        {!activeFolder && folders.length > 0 && (
-          <div className="mb-6">
-            <div className="mb-2.5 text-xs font-bold uppercase tracking-wider text-muted">
-              Thư mục ({folders.length})
+        {!activeFolder && (
+          <div className="mb-5 flex flex-wrap items-center justify-between gap-3 border-b border-line">
+            <div className="flex items-center gap-6">
+              <button
+                type="button"
+                onClick={() => setActiveTab("sets")}
+                className={`relative inline-flex items-center gap-2 pb-3 text-sm font-bold transition ${
+                  activeTab === "sets" ? "text-brand-hover" : "text-muted hover:text-ink"
+                }`}
+              >
+                <Layers size={16} /> Học phần ({studySets.length})
+                {activeTab === "sets" && (
+                  <span className="absolute inset-x-0 bottom-0 h-0.5 rounded-full bg-brand-hover" />
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab("folders")}
+                className={`relative inline-flex items-center gap-2 pb-3 text-sm font-bold transition ${
+                  activeTab === "folders" ? "text-brand-hover" : "text-muted hover:text-ink"
+                }`}
+              >
+                <Folder size={16} /> Thư mục ({folders.length})
+                {activeTab === "folders" && (
+                  <span className="absolute inset-x-0 bottom-0 h-0.5 rounded-full bg-brand-hover" />
+                )}
+              </button>
             </div>
+
+            {activeTab === "sets" && folders.length > 0 && studySets.length > 0 && (
+              <div className="flex gap-1.5 pb-2.5">
+                <button
+                  type="button"
+                  onClick={() => setSetFilter("all")}
+                  className={`rounded-full px-3 py-1 text-xs font-bold transition ${
+                    setFilter === "all" ? "bg-ink text-bg" : "bg-card text-muted hover:text-ink"
+                  }`}
+                >
+                  Tất cả ({studySets.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSetFilter("unfoldered")}
+                  className={`rounded-full px-3 py-1 text-xs font-bold transition ${
+                    setFilter === "unfoldered" ? "bg-ink text-bg" : "bg-card text-muted hover:text-ink"
+                  }`}
+                >
+                  Chưa vào thư mục ({unfolderedSets.length})
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {!activeFolder && activeTab === "folders" ? (
+          folders.length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-line bg-card p-10 text-center">
+              <FolderPlus size={40} strokeWidth={1.3} className="mx-auto text-brand-hover" />
+              <div className="mt-3 text-lg font-bold">Chưa có thư mục nào</div>
+              <p className="mx-auto mt-1 max-w-md text-sm text-muted">
+                Tạo thư mục để gom các học phần cùng chủ đề (ví dụ: Reading, Writing Task 1, Environment...) giống Quizlet.
+              </p>
+              <button
+                type="button"
+                onClick={() => setFolderModal({ open: true, editing: null })}
+                className="mt-5 inline-flex items-center gap-2 rounded-full bg-brand px-6 py-2.5 text-sm font-bold text-white hover:bg-brand-hover hover:text-bg"
+              >
+                <FolderPlus size={16} strokeWidth={2} /> Tạo thư mục đầu tiên
+              </button>
+            </div>
+          ) : (
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
               {folders.map((f) => {
                 const count = folderSetCounts.get(f.id) ?? 0;
@@ -1215,8 +1282,8 @@ export default function VocabLearn() {
                     className="group flex cursor-pointer items-center justify-between gap-3 rounded-2xl border-2 border-transparent bg-card p-4 transition hover:border-brand-hover"
                   >
                     <div className="flex min-w-0 items-center gap-3">
-                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand/15 text-brand-hover">
-                        <Folder size={20} strokeWidth={1.75} />
+                      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand/15 text-brand-hover">
+                        <Folder size={22} strokeWidth={1.75} />
                       </div>
                       <div className="min-w-0">
                         <div className="truncate font-bold">{f.name}</div>
@@ -1259,38 +1326,8 @@ export default function VocabLearn() {
                 );
               })}
             </div>
-          </div>
-        )}
-
-        {!activeFolder && folders.length > 0 && studySets.length > 0 && (
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-            <div className="text-xs font-bold uppercase tracking-wider text-muted">
-              Học phần ({visibleSets.length})
-            </div>
-            <div className="flex gap-1.5">
-              <button
-                type="button"
-                onClick={() => setSetFilter("all")}
-                className={`rounded-full px-3 py-1 text-xs font-bold transition ${
-                  setFilter === "all" ? "bg-ink text-bg" : "bg-card text-muted hover:text-ink"
-                }`}
-              >
-                Tất cả ({studySets.length})
-              </button>
-              <button
-                type="button"
-                onClick={() => setSetFilter("unfoldered")}
-                className={`rounded-full px-3 py-1 text-xs font-bold transition ${
-                  setFilter === "unfoldered" ? "bg-ink text-bg" : "bg-card text-muted hover:text-ink"
-                }`}
-              >
-                Chưa vào thư mục ({unfolderedSets.length})
-              </button>
-            </div>
-          </div>
-        )}
-
-        {loading ? (
+          )
+        ) : loading ? (
           <div className="flex items-center gap-2 py-8 text-muted">
             <Loader2 className="animate-spin" size={18} /> Đang tải học phần...
           </div>
