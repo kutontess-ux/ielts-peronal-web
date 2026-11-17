@@ -4,6 +4,9 @@ import { NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import type { User } from "@supabase/supabase-js";
 import { supabaseAdmin } from "@/lib/supabase";
+import { autoClaimLegacyIfAny } from "@/lib/legacy-claim";
+
+let legacyCheckedForAdmin = false;
 
 export type UserProfile = {
   id: string;
@@ -179,11 +182,17 @@ export async function requireAuth(): Promise<
       };
     }
 
+    const isAdmin = profile.role === "admin";
+    if (isAdmin && !legacyCheckedForAdmin) {
+      await autoClaimLegacyIfAny(db, user.id);
+      legacyCheckedForAdmin = true;
+    }
+
     return {
       ctx: {
         user,
         profile,
-        isAdmin: profile.role === "admin",
+        isAdmin,
         db,
       },
     };

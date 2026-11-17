@@ -22,7 +22,10 @@ export async function proxy(request: NextRequest) {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
   if (!url || !anonKey) {
-    return NextResponse.next();
+    const loginUrl = request.nextUrl.clone();
+    loginUrl.pathname = "/login";
+    loginUrl.searchParams.set("setup", "missing_env");
+    return NextResponse.redirect(loginUrl);
   }
 
   let response = NextResponse.next({ request });

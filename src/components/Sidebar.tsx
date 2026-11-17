@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import {
-  BarChart3, Bell, BookOpen, Home, Layers, LogOut, Menu, Newspaper, Package, PenLine, Repeat, Shield, Target, X,
+  BarChart3, Bell, BookOpen, Home, Layers, LogIn, LogOut, Menu, Newspaper, Package, PenLine, Repeat, Shield, Target, X,
   type LucideIcon,
 } from "lucide-react";
 import { DUE_EVENT, isNotifSeenToday, markNotifSeenToday, NOTIF_SEEN_EVENT } from "@/lib/due-events";
@@ -64,14 +64,27 @@ function NavLink({
 
 function UserFooter({
   me,
+  meLoaded,
   signingOut,
   onSignOut,
 }: {
   me: MeInfo | null;
+  meLoaded: boolean;
   signingOut: boolean;
   onSignOut: () => void;
 }) {
-  if (!me) return null;
+  if (!me) {
+    if (!meLoaded) return null;
+    return (
+      <Link
+        href="/login"
+        className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand px-3 py-2.5 text-xs font-bold text-white transition hover:bg-brand-hover hover:text-bg"
+      >
+        <LogIn size={14} />
+        Đăng nhập Google
+      </Link>
+    );
+  }
   const displayName = me.profile.full_name || me.profile.email.split("@")[0] || "Người dùng";
   const quotaText = me.isAdmin
     ? `AI hôm nay: ${me.aiUsage.usedToday} lượt · Không giới hạn`
@@ -114,6 +127,7 @@ export default function Sidebar() {
   const [notifSeen, setNotifSeen] = useState(true);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [me, setMe] = useState<MeInfo | null>(null);
+  const [meLoaded, setMeLoaded] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
 
   // Chỉ cập nhật trạng thái đã xem thông báo khi đổi route
@@ -156,6 +170,8 @@ export default function Sidebar() {
         }
       } catch {
         // bỏ qua lỗi mạng tạm thời
+      } finally {
+        if (active) setMeLoaded(true);
       }
     };
 
@@ -232,6 +248,14 @@ export default function Sidebar() {
           IELTS <span className="text-brand-hover">Personal</span>
         </Link>
         <div className="flex items-center gap-2">
+          {meLoaded && !me && (
+            <Link
+              href="/login"
+              className="inline-flex items-center gap-1 rounded-xl bg-brand px-2.5 py-1.5 text-xs font-bold text-white"
+            >
+              <LogIn size={14} /> Đăng nhập
+            </Link>
+          )}
           <ThemeToggle variant="icon" />
           <Link
             href="/notifications"
@@ -286,7 +310,7 @@ export default function Sidebar() {
             ))}
             <div className="mt-auto space-y-2.5 pt-3">
               <ThemeToggle variant="switch" />
-              <UserFooter me={me} signingOut={signingOut} onSignOut={handleSignOut} />
+              <UserFooter me={me} meLoaded={meLoaded} signingOut={signingOut} onSignOut={handleSignOut} />
             </div>
           </div>
         </div>
@@ -342,7 +366,7 @@ export default function Sidebar() {
             </div>
             IELTS Academic
           </div>
-          <UserFooter me={me} signingOut={signingOut} onSignOut={handleSignOut} />
+          <UserFooter me={me} meLoaded={meLoaded} signingOut={signingOut} onSignOut={handleSignOut} />
         </div>
       </aside>
     </>

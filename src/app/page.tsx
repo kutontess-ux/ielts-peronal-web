@@ -17,25 +17,38 @@ export default function Home() {
   const [dueCount, setDueCount] = useState<number | null>(null);
   const [totalWords, setTotalWords] = useState<number | null>(null);
   const [recentPassages, setRecentPassages] = useState<ReadingItem[]>([]);
+  const [authMsg, setAuthMsg] = useState("");
 
   useEffect(() => {
     let active = true;
     (async () => {
       const [revRes, readingRes] = await Promise.allSettled([
-        fetch("/api/reviews", { cache: "no-store" }).then((r) => r.json()),
-        fetch("/api/reading", { cache: "no-store" }).then((r) => r.json()),
+        fetch("/api/reviews", { cache: "no-store" }),
+        fetch("/api/reading", { cache: "no-store" }),
       ]);
       if (!active) return;
 
       if (revRes.status === "fulfilled") {
-        setDueCount(revRes.value.dueCount ?? 0);
-        setTotalWords(revRes.value.totalWords ?? null);
+        const r = revRes.value;
+        const body = await r.json().catch(() => ({}));
+        if (!active) return;
+        if (!r.ok) {
+          setAuthMsg(body?.error || "Bạn cần đăng nhập để xem dữ liệu học tập của mình.");
+          setDueCount(0);
+        } else {
+          setDueCount(body.dueCount ?? 0);
+          setTotalWords(body.totalWords ?? null);
+        }
       } else {
         setDueCount(0);
       }
 
       if (readingRes.status === "fulfilled") {
-        setRecentPassages((readingRes.value.passages ?? []).slice(0, 2));
+        const r = readingRes.value;
+        const body = await r.json().catch(() => ({}));
+        if (active && r.ok) {
+          setRecentPassages((body.passages ?? []).slice(0, 2));
+        }
       }
     })();
     return () => {
@@ -99,6 +112,17 @@ export default function Home() {
 
   return (
     <div className="space-y-10">
+      {authMsg && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-amber-500/40 bg-amber-500/10 p-4 text-sm text-amber-800 dark:text-amber-200">
+          <span>{authMsg} (Dữ liệu trong cơ sở dữ liệu vẫn còn nguyên vẹn.)</span>
+          <Link
+            href="/login"
+            className="rounded-full bg-brand px-4 py-1.5 text-xs font-bold text-white hover:bg-brand-hover hover:text-bg"
+          >
+            Đi tới trang Đăng nhập
+          </Link>
+        </div>
+      )}
       <section>
         <h2 className="mb-4 text-lg font-bold">Tiếp tục học</h2>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">

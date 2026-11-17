@@ -1,16 +1,38 @@
 "use client";
 
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { BookOpenCheck, Loader2, ShieldCheck } from "lucide-react";
+import { AlertTriangle, BookOpenCheck, Loader2, ShieldCheck } from "lucide-react";
 import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
+
+type AuthStatus = {
+  authConfigured: boolean;
+  secretConfigured: boolean;
+  adminEmailsConfigured: boolean;
+  migrationReady: boolean;
+};
 
 function LoginCard() {
   const searchParams = useSearchParams();
   const nextPath = searchParams.get("next") || "/";
   const initialError = searchParams.get("error") || "";
+  const setupParam = searchParams.get("setup") || "";
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(initialError);
+  const [status, setStatus] = useState<AuthStatus | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    fetch("/api/auth/status", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => {
+        if (active && j) setStatus(j as AuthStatus);
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const handleGoogleLogin = async () => {
     setLoading(true);
@@ -33,6 +55,10 @@ function LoginCard() {
     }
   };
 
+  const missingEnv = setupParam === "missing_env" || (status !== null && !status.authConfigured);
+  const missingMigration = status !== null && !status.migrationReady;
+  const missingAdminEmail = status !== null && !status.adminEmailsConfigured;
+
   return (
     <div className="flex min-h-[75vh] items-center justify-center px-4">
       <div className="w-full max-w-md rounded-3xl border border-line bg-card p-8 text-center shadow-2xl">
@@ -44,8 +70,34 @@ function LoginCard() {
           IELTS <span className="text-brand-hover">Personal</span>
         </h1>
         <p className="mt-2 text-sm text-muted">
-          Đăng nhập bằng tài khoản Google để lưu tiến độ ôn tập Leitner, học phần Flashcard và bài đọc Reading riêng của bạn.
+          Đăng nhập bằng tài khoản Google để truy cập kho từ vựng và dữ liệu học tập của bạn.
         </p>
+
+        {(missingEnv || missingMigration || missingAdminEmail) && (
+          <div className="mt-4 space-y-1.5 rounded-2xl border border-amber-500/40 bg-amber-500/10 p-3.5 text-left text-xs text-amber-800 dark:text-amber-200">
+            <div className="flex items-center gap-1.5 font-bold">
+              <AlertTriangle size={14} /> Cần hoàn tất cấu hình 1 lần (dữ liệu cũ vẫn an toàn):
+            </div>
+            <ul className="list-disc space-y-1 pl-4">
+              {missingEnv && (
+                <li>
+                  Thiếu biến môi trường <code className="font-bold">NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY</code> (hoặc{" "}
+                  <code className="font-bold">NEXT_PUBLIC_SUPABASE_ANON_KEY</code>) trên Vercel/env.
+                </li>
+              )}
+              {missingMigration && (
+                <li>
+                  Chưa chạy file SQL <code className="font-bold">supabase/migrations/20261118_multi_user_admin.sql</code> trong Supabase SQL Editor.
+                </li>
+              )}
+              {missingAdminEmail && (
+                <li>
+                  Chưa đặt <code className="font-bold">ADMIN_EMAILS</code> (email Google của bạn để làm Admin và giữ toàn bộ dữ liệu cũ).
+                </li>
+              )}
+            </ul>
+          </div>
+        )}
 
         {error && (
           <div className="mt-4 rounded-xl bg-rose-500/15 px-3.5 py-2.5 text-left text-xs text-rose-700 dark:text-rose-300">
@@ -56,8 +108,8 @@ function LoginCard() {
         <button
           type="button"
           onClick={handleGoogleLogin}
-          disabled={loading}
-          className="mt-6 flex w-full items-center justify-center gap-3 rounded-2xl border border-line bg-bg px-5 py-3.5 text-sm font-bold text-ink transition hover:border-brand hover:bg-card-hover disabled:opacity-60"
+          disabled={loading || missingEnv}
+          className="mt-6 flex w-full items-center justify-center gap-3 rounded-2xl border border-line bg-bg px-5 py-3.5 text-sm font-bold text-ink transition hover:border-brand hover:bg-card-hover disabled:opacity-50"
         >
           {loading ? (
             <Loader2 size={18} className="animate-spin" />
@@ -86,7 +138,7 @@ function LoginCard() {
 
         <div className="mt-5 flex items-center justify-center gap-1.5 text-xs text-muted">
           <ShieldCheck size={14} className="text-emerald-500" />
-          Dữ liệu học tập được tách riêng an toàn cho từng tài khoản
+          Dữ liệu cũ của bạn vẫn nguyên vẹn và sẽ tự gán cho tài khoản Admin
         </div>
       </div>
     </div>
