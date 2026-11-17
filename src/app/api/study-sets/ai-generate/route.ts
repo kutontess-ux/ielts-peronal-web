@@ -67,16 +67,16 @@ export async function POST(req: Request) {
     let suggestedTitle = "";
     let suggestedDesc = "";
 
-    // Chia nhỏ tối đa 25 từ/lượt (tối đa 3 lượt) để AI không bị cắt ngắn output khi user xin 30–60 từ
-    const MAX_PER_CALL = 25;
-    for (let pass = 0; pass < 4 && collected.length < targetCount; pass++) {
+    // Chia nhỏ tối đa 30 từ/lượt (xin dư nhẹ +5 để bù phần AI bỏ sót hoặc trùng giữa các lượt, tối đa 5 lượt)
+    const MAX_PER_CALL = 30;
+    for (let pass = 0; pass < 5 && collected.length < targetCount; pass++) {
       const remaining = targetCount - collected.length;
-      const batchCount = Math.min(MAX_PER_CALL, remaining);
+      const batchCount = Math.min(MAX_PER_CALL, remaining + 5);
       const excludeLemmas = collected.map((c) => c.lemma);
 
       const res = await askJson<AiGenerateResponse>(
         buildSystemPrompt(batchCount, excludeLemmas, pass === 0),
-        `${cleanPrompt.slice(0, 1200)}\n\n(Lượt này hãy trả đúng ${batchCount} từ/cụm từ khác với các từ đã liệt kê.)`
+        `${cleanPrompt.slice(0, 1200)}\n\n(Lượt này hãy trả đúng ${batchCount} từ/cụm từ hoàn toàn mới, không trùng các từ đã liệt kê.)`
       );
 
       if (pass === 0) {

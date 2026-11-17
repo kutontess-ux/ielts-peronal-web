@@ -57,14 +57,14 @@ export async function POST(req: Request) {
     const items: Array<AgentItem & { lemma: string; norm_key: string }> = [];
     let skippedDup = 0;
 
-    const MAX_PER_CALL = 25;
-    for (let pass = 0; pass < 4 && items.length < targetCount; pass++) {
+    const MAX_PER_CALL = 30;
+    for (let pass = 0; pass < 5 && items.length < targetCount; pass++) {
       const remaining = targetCount - items.length;
-      const batchCount = Math.min(MAX_PER_CALL, remaining);
+      const batchCount = Math.min(MAX_PER_CALL, remaining + 5);
 
       const res = await askJson<{ items: AgentItem[] }>(
         buildAgentSystem(batchCount, excludeLemmas),
-        `${cleanPrompt}\n\n(Lượt này hãy trả đúng ${batchCount} từ/cụm từ khác với các từ đã liệt kê.)`
+        `${cleanPrompt}\n\n(Lượt này hãy trả đúng ${batchCount} từ/cụm từ hoàn toàn mới, không trùng các từ đã liệt kê.)`
       );
 
       const rawBatch = (res.items ?? []).filter((i) => i.lemma);
@@ -79,6 +79,7 @@ export async function POST(req: Request) {
       const existingDbKeys = new Set<string>((existingRows ?? []).map((r) => r.norm_key as string));
 
       let addedThisPass = 0;
+      let skippedThisPass = 0;
       for (const item of rawBatch) {
         if (items.length >= targetCount) break;
         const lemma = item.lemma.toLowerCase().trim();
@@ -89,13 +90,14 @@ export async function POST(req: Request) {
 
         if (existingDbKeys.has(k)) {
           skippedDup++;
+          skippedThisPass++;
           continue;
         }
         items.push({ ...item, lemma, norm_key: k });
         addedThisPass++;
       }
 
-      if (addedThisPass === 0 && skippedDup === 0) break;
+      if (addedThisPass === 0 && skippedThisPass === 0) break;
     }
 
     return NextResponse.json({ items, skippedDup });
