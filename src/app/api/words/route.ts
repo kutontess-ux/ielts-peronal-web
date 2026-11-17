@@ -1,40 +1,110 @@
 import { NextResponse } from "next/server";
-import { supabaseAdmin } from "@/lib/supabase";
+import { requireAdmin, requireAuth } from "@/lib/supabase-server";
 import type { Word } from "@/lib/mock";
 
-// Trả toàn bộ kho từ vựng (dùng cá nhân nên số lượng nhỏ, lọc ở phía trình duyệt)
-export async function GET() {
-  try {
-    const { data, error } = await supabaseAdmin()
-      .from("words")
-      .select("id,lemma,ipa,pos,meaning_vi,definition_en,example,cefr_level,topic,is_awl,source")
-      .eq("status", "approved")
-      .order("created_at", { ascending: false })
-      .limit(5000);
-    if (error) throw new Error(error.message);
+function mapWord(r: {
+  id: number;
+  lemma: string;
+  ipa: string | null;
+  pos: string | null;
+  meaning_vi: string | null;
+  definition_en: string | null;
+  example: string | null;
+  cefr_level: string | null;
+  topic: string | null;
+  is_awl: boolean;
+  source: string | null;
+}): Word {
+  return {
+    id: r.id,
+    word: r.lemma,
+    ipa: r.ipa ?? "",
+    pos: r.pos ?? "",
+    vi: r.meaning_vi ?? "",
+    en: r.definition_en ?? "",
+    example: r.example ?? "",
+    level: (r.cefr_level ?? "B2") as Word["level"],
+    topic: r.topic ?? "Other",
+    awl: r.is_awl,
+    source: r.source ?? "import",
+  };
+}
 
-    const words: Word[] = (data ?? []).map((r) => ({
-      id: r.id,
-      word: r.lemma,
-      ipa: r.ipa ?? "",
-      pos: r.pos ?? "",
-      vi: r.meaning_vi ?? "",
-      en: r.definition_en ?? "",
-      example: r.example ?? "",
-      level: (r.cefr_level ?? "B2") as Word["level"],
-      topic: r.topic ?? "Other",
-      awl: r.is_awl,
-      source: r.source ?? "import",
-    }));
-    return NextResponse.json({ words });
+// Trả kho từ vựng dùng chung (hỗ trợ cả phân trang server lẫn tải đầy đủ >10.000 từ theo lô 1.000)
+export async function GET(req: Request) {
+  try {
+    const auth = await requireAuth();
+    if (auth.errorResponse) return auth.errorResponse;
+    const { ctx } = auth;
+
+    const { searchParams } = new URL(req.url);
+    const pageParam = searchParams.get("page");
+    const q = (searchParams.get("q") ?? "").trim();
+    const level = (searchParams.get("level") ?? "").trim();
+    const topic = (searchParams.get("topic") ?? "").trim();
+
+    if (pageParam) {
+      const page = Math.max(1, Number(pageParam) || 1);
+      const pageSize = Math.min(200, Math.max(10, Number(searchParams.get("pageSize")) || 30));
+      const from = (page - 1) * pageSize;
+      const to = from + pageSize - 1;
+
+      let query = ctx.db
+        .from("words")
+        .select("id,lemma,ipa,pos,meaning_vi,definition_en,example,cefr_level,topic,is_awl,source", {
+          count: "exact",
+        })
+        .eq("status", "approved");
+
+      if (q) {
+        query = query.or(`lemma.ilike.%${q}%,meaning_vi.ilike.%${q}%`);
+      }
+      if (level) query = query.eq("cefr_level", level);
+      if (topic) query = query.eq("topic", topic);
+
+      const { data, count, error } = await query
+        .order("created_at", { ascending: false })
+        .range(from, to);
+      if (error) throw new Error(error.message);
+
+      return NextResponse.json({
+        words: (data ?? []).map(mapWord),
+        total: count ?? 0,
+        page,
+        pageSize,
+      });
+    }
+
+    // Tải toàn bộ kho qua từng batch 1.000 dòng để không bị cắt ở ngưỡng 1.000/5.000 khi kho lên 10.000+ từ
+    const allRows: Word[] = [];
+    const CHUNK = 1000;
+    for (let from = 0; from < 20000; from += CHUNK) {
+      const { data, error } = await ctx.db
+        .from("words")
+        .select("id,lemma,ipa,pos,meaning_vi,definition_en,example,cefr_level,topic,is_awl,source")
+        .eq("status", "approved")
+        .order("created_at", { ascending: false })
+        .range(from, from + CHUNK - 1);
+
+      if (error) throw new Error(error.message);
+      const batch = data ?? [];
+      for (const r of batch) allRows.push(mapWord(r));
+      if (batch.length < CHUNK) break;
+    }
+
+    return NextResponse.json({ words: allRows, total: allRows.length });
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message }, { status: 500 });
   }
 }
 
-// Xoá 1 hoặc nhiều từ khỏi kho (kèm xoá cascade ở daily_words và reviews)
+// Chỉ Admin mới được xoá từ khỏi kho chung
 export async function DELETE(req: Request) {
   try {
+    const auth = await requireAdmin();
+    if (auth.errorResponse) return auth.errorResponse;
+    const { ctx } = auth;
+
     const { searchParams } = new URL(req.url);
     const singleId = searchParams.get("id");
     let ids: number[] = [];
@@ -50,7 +120,7 @@ export async function DELETE(req: Request) {
       return NextResponse.json({ error: "Thiếu id từ cần xoá" }, { status: 400 });
     }
 
-    const { error } = await supabaseAdmin().from("words").delete().in("id", ids);
+    const { error } = await ctx.db.from("words").delete().in("id", ids);
     if (error) throw new Error(error.message);
 
     return NextResponse.json({ deleted: ids.length });

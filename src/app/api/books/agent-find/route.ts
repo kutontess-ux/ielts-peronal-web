@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { supabaseAdmin } from "@/lib/supabase";
+import { requireAuth } from "@/lib/supabase-server";
+import { consumeAiQuota } from "@/lib/ai-quota";
 import { askJson, TOPICS, type Enriched } from "@/lib/ai";
 import { normKey } from "@/lib/normalize";
 
@@ -10,14 +11,17 @@ type AgentItem = Omit<Enriched, "input" | "valid">;
 // Agent tìm từ vựng theo yêu cầu tự nhiên của người dùng, chống trùng kho hiện có, trả về danh sách duyệt
 export async function POST(req: Request) {
   try {
+    const auth = await requireAuth();
+    if (auth.errorResponse) return auth.errorResponse;
+    const { ctx } = auth;
+
     const { prompt } = (await req.json()) as { prompt: string };
     if (!prompt?.trim()) {
       return NextResponse.json({ error: "Hãy nhập yêu cầu tìm từ cho Agent" }, { status: 400 });
     }
 
-    const db = supabaseAdmin();
-    const { data: existingRows } = await db.from("words").select("lemma,norm_key");
-    const haveKeys = new Set((existingRows ?? []).map((r) => r.norm_key as string));
+    const quotaErr = await consumeAiQuota(ctx, "agent-find");
+    if (quotaErr) return quotaErr;
 
     const system = `Bạn là trợ lý từ vựng IELTS Academic cho người Việt trình độ B1 hướng tới band 6.5 (và nâng dần lên 7.0).
 Nhiệm vụ: Dựa theo yêu cầu của người dùng, tìm các từ vựng / cụm từ tiếng Anh phù hợp nhất (nếu người dùng không nêu số lượng thì chọn 15–20 từ; tối đa 35 từ).
@@ -39,8 +43,15 @@ Trả về JSON dạng {"items":[...]}.`;
 
     const res = await askJson<{ items: AgentItem[] }>(system, prompt.trim().slice(0, 1000));
 
+    const lemKeys = Array.from(
+      new Set((res.items ?? []).map((i) => normKey(String(i.lemma ?? ""))).filter(Boolean))
+    );
+    const { data: existingRows } = lemKeys.length
+      ? await ctx.db.from("words").select("norm_key").in("norm_key", lemKeys)
+      : { data: [] as { norm_key: string }[] };
+    const seen = new Set<string>((existingRows ?? []).map((r) => r.norm_key as string));
+
     const items = [];
-    const seen = new Set<string>(haveKeys);
     let skippedDup = 0;
 
     for (const item of res.items ?? []) {

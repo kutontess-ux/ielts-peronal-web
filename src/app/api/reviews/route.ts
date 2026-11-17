@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { supabaseAdmin } from "@/lib/supabase";
+import { requireAuth } from "@/lib/supabase-server";
+import type { supabaseAdmin } from "@/lib/supabase";
 import type { Word } from "@/lib/mock";
 import {
   clampLevel,
@@ -42,11 +43,14 @@ function toVnDateKey(ms: number): string {
   return `${y}-${m}-${d}`;
 }
 
-async function loadUserSettings(db: ReturnType<typeof supabaseAdmin>): Promise<UserSettings> {
+async function loadUserSettings(
+  db: ReturnType<typeof supabaseAdmin>,
+  userId: string
+): Promise<UserSettings> {
   const { data, error } = await db
     .from("user_settings")
     .select("daily_review_limit,daily_new_limit,session_size")
-    .eq("id", 1)
+    .eq("user_id", userId)
     .maybeSingle();
 
   if (error || !data) return DEFAULT_USER_SETTINGS;
@@ -60,28 +64,35 @@ async function loadUserSettings(db: ReturnType<typeof supabaseAdmin>): Promise<U
 // Lấy danh sách từ đến hạn ôn tập theo thứ tự ưu tiên: level ASC, next_review_at ASC
 export async function GET() {
   try {
-    const db = supabaseAdmin();
+    const auth = await requireAuth();
+    if (auth.errorResponse) return auth.errorResponse;
+    const { ctx } = auth;
+    const db = ctx.db;
+    const userId = ctx.user.id;
+
     const nowMs = Date.now();
     const nowIso = new Date(nowMs).toISOString();
     const { startIso } = getVnDayBounds(nowMs);
 
     const [settings, dueRes, statsRes, wordsCountRes, reviewedTodayRes] = await Promise.all([
-      loadUserSettings(db),
+      loadUserSettings(db, userId),
       db
         .from("reviews")
         .select(
           "word_id,level,next_review_at,level5_streak,lapses,words!inner(id,lemma,ipa,pos,meaning_vi,definition_en,example,cefr_level,topic,is_awl,synonyms,status)"
         )
+        .eq("user_id", userId)
         .eq("words.status", "approved")
         .lte("next_review_at", nowIso)
         .order("level", { ascending: true })
         .order("next_review_at", { ascending: true })
         .limit(200),
-      db.from("reviews").select("level"),
+      db.from("reviews").select("level").eq("user_id", userId),
       db.from("words").select("id", { count: "exact", head: true }).eq("status", "approved"),
       db
         .from("reviews")
         .select("word_id", { count: "exact", head: true })
+        .eq("user_id", userId)
         .gte("last_reviewed_at", startIso),
     ]);
 
@@ -89,10 +100,10 @@ export async function GET() {
     if (statsRes.error) throw new Error(statsRes.error.message);
     if (wordsCountRes.error) throw new Error(wordsCountRes.error.message);
 
-    // Đếm tổng số từ quá hạn thực tế (không giới hạn bởi .limit(200))
     const { count: overdueExactCount, error: overdueErr } = await db
       .from("reviews")
       .select("word_id,words!inner(status)", { count: "exact", head: true })
+      .eq("user_id", userId)
       .eq("words.status", "approved")
       .lte("next_review_at", nowIso);
 
@@ -149,9 +160,15 @@ export async function GET() {
   }
 }
 
-// Chuyển từ vào hàng chờ ôn tập Leitner (tự động dời lịch sang các ngày trống nếu chạm ngưỡng ngày)
+// Chuyển từ vào hàng chờ ôn tập Leitner
 export async function PUT(req: Request) {
   try {
+    const auth = await requireAuth();
+    if (auth.errorResponse) return auth.errorResponse;
+    const { ctx } = auth;
+    const db = ctx.db;
+    const userId = ctx.user.id;
+
     const body = (await req.json().catch(() => ({}))) as { wordIds?: number[] };
     const ids = Array.from(
       new Set((body.wordIds ?? []).map(Number).filter((n) => Number.isFinite(n) && n > 0))
@@ -160,16 +177,15 @@ export async function PUT(req: Request) {
       return NextResponse.json({ error: "Chưa có từ nào để chuyển" }, { status: 400 });
     }
 
-    const db = supabaseAdmin();
     const nowMs = Date.now();
     const nowIso = new Date(nowMs).toISOString();
     const { startUtcMs, startIso } = getVnDayBounds(nowMs);
-    const settings = await loadUserSettings(db);
+    const settings = await loadUserSettings(db, userId);
 
-    // Lọc ra các từ chưa có trong reviews
     const { data: existingRows, error: exErr } = await db
       .from("reviews")
       .select("word_id")
+      .eq("user_id", userId)
       .in("word_id", ids);
     if (exErr) throw new Error(exErr.message);
 
@@ -180,12 +196,12 @@ export async function PUT(req: Request) {
       return NextResponse.json({ ok: true, enrolled: 0, deferred: 0, totalRequested: ids.length });
     }
 
-    // Đếm tải hiện tại theo từng ngày trong tương lai để phân bổ hợp lý
     const [{ data: scheduledRows }, { count: reviewedTodayCount }] = await Promise.all([
-      db.from("reviews").select("next_review_at,last_reviewed_at"),
+      db.from("reviews").select("next_review_at,last_reviewed_at").eq("user_id", userId),
       db
         .from("reviews")
         .select("word_id", { count: "exact", head: true })
+        .eq("user_id", userId)
         .gte("last_reviewed_at", startIso),
     ]);
 
@@ -193,7 +209,6 @@ export async function PUT(req: Request) {
     const totalLoadByDay = new Map<string, number>();
     const newLoadByDay = new Map<string, number>();
 
-    // Tính số đã ôn hôm nay vào tải của hôm nay
     totalLoadByDay.set(todayKey, reviewedTodayCount ?? 0);
 
     for (const r of scheduledRows ?? []) {
@@ -226,8 +241,9 @@ export async function PUT(req: Request) {
           const nextReviewIso =
             dayOffset === 0
               ? nowIso
-              : new Date(targetStartMs + 8 * 60 * 60 * 1000).toISOString(); // 08:00 sáng VN ngày được xếp
+              : new Date(targetStartMs + 8 * 60 * 60 * 1000).toISOString();
           return {
+            user_id: userId,
             word_id,
             level: 1,
             next_review_at: nextReviewIso,
@@ -238,9 +254,9 @@ export async function PUT(req: Request) {
         dayOffset += 1;
       }
 
-      // Fallback nếu toàn bộ 365 ngày đều đầy
       deferred += 1;
       return {
+        user_id: userId,
         word_id,
         level: 1,
         next_review_at: new Date(startUtcMs + 365 * DAY_MS).toISOString(),
@@ -254,7 +270,7 @@ export async function PUT(req: Request) {
       const chunk = toInsert.slice(i, i + 500);
       const { data, error } = await db
         .from("reviews")
-        .upsert(chunk, { onConflict: "word_id", ignoreDuplicates: true })
+        .upsert(chunk, { onConflict: "user_id,word_id", ignoreDuplicates: true })
         .select("word_id");
       if (error) throw new Error(error.message);
       enrolled += data?.length ?? 0;
@@ -272,11 +288,14 @@ export async function PUT(req: Request) {
   }
 }
 
-// Xoá toàn bộ danh sách từ cần ôn tập ngắt quãng (giữ nguyên từ trong Kho)
+// Xoá toàn bộ danh sách từ cần ôn tập ngắt quãng của riêng user hiện tại
 export async function DELETE() {
   try {
-    const db = supabaseAdmin();
-    const { error } = await db.from("reviews").delete().gt("word_id", 0);
+    const auth = await requireAuth();
+    if (auth.errorResponse) return auth.errorResponse;
+    const { ctx } = auth;
+
+    const { error } = await ctx.db.from("reviews").delete().eq("user_id", ctx.user.id);
     if (error) throw new Error(error.message);
     return NextResponse.json({ ok: true });
   } catch (e) {
@@ -287,6 +306,12 @@ export async function DELETE() {
 // Cập nhật lịch ôn tập ngắt quãng theo Leitner 5 cấp độ
 export async function POST(req: Request) {
   try {
+    const auth = await requireAuth();
+    if (auth.errorResponse) return auth.errorResponse;
+    const { ctx } = auth;
+    const db = ctx.db;
+    const userId = ctx.user.id;
+
     const body = (await req.json()) as {
       wordId?: number;
       isCorrect?: boolean;
@@ -298,7 +323,6 @@ export async function POST(req: Request) {
     let isCorrect: boolean | null =
       typeof body.isCorrect === "boolean" ? body.isCorrect : null;
 
-    // Tương thích ngược nếu tab trình duyệt cũ còn cache giao diện 4 nút grade
     if (isCorrect === null && typeof body.grade === "string") {
       if (body.grade === "good" || body.grade === "easy") isCorrect = true;
       else if (body.grade === "again" || body.grade === "hard") isCorrect = false;
@@ -308,10 +332,10 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Dữ liệu không hợp lệ" }, { status: 400 });
     }
 
-    const db = supabaseAdmin();
     const { data: existing } = await db
       .from("reviews")
       .select("level,level5_streak,lapses")
+      .eq("user_id", userId)
       .eq("word_id", wordId)
       .maybeSingle();
 
@@ -330,6 +354,7 @@ export async function POST(req: Request) {
 
     const { error } = await db.from("reviews").upsert(
       {
+        user_id: userId,
         word_id: wordId,
         level: next.level,
         next_review_at: nextReviewAt,
@@ -337,7 +362,7 @@ export async function POST(req: Request) {
         lapses: prevLapses + next.lapsesDelta,
         last_reviewed_at: new Date(now).toISOString(),
       },
-      { onConflict: "word_id" }
+      { onConflict: "user_id,word_id" }
     );
     if (error) throw new Error(error.message);
 

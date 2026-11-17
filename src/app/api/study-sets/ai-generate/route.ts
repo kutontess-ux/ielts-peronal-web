@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { supabaseAdmin } from "@/lib/supabase";
+import { requireAuth } from "@/lib/supabase-server";
+import { consumeAiQuota } from "@/lib/ai-quota";
 import { askJson, TOPICS, type Enriched } from "@/lib/ai";
 import { normKey } from "@/lib/normalize";
 
@@ -16,11 +17,18 @@ type AiGenerateResponse = {
 // AI phân tích nhu cầu người dùng, gợi ý tên học phần & tạo danh sách flashcard IELTS chi tiết
 export async function POST(req: Request) {
   try {
+    const auth = await requireAuth();
+    if (auth.errorResponse) return auth.errorResponse;
+    const { ctx } = auth;
+
     const { prompt } = (await req.json()) as { prompt?: string };
     const cleanPrompt = prompt?.trim();
     if (!cleanPrompt) {
       return NextResponse.json({ error: "Hãy mô tả chủ đề hoặc loại từ vựng bạn muốn AI tạo" }, { status: 400 });
     }
+
+    const quotaErr = await consumeAiQuota(ctx, "study-set-ai");
+    if (quotaErr) return quotaErr;
 
     const system = `Bạn là trợ lý thiết kế học phần Flashcard IELTS Academic cho người Việt (trình độ B1 → band 6.5–7.5+).
 Nhiệm vụ: Đọc kỹ yêu cầu của người dùng, hiểu đúng mục tiêu học (chủ đề, kỹ năng Speaking/Writing/Reading, cấp độ CEFR, số lượng từ, cụm collocation hoặc từ đơn), rồi tạo một bộ flashcard chất lượng cao.
@@ -45,8 +53,12 @@ Trả về JSON dạng {"suggested_title":"...","suggested_desc":"...","items":[
 
     const res = await askJson<AiGenerateResponse>(system, cleanPrompt.slice(0, 1200));
 
-    const db = supabaseAdmin();
-    const { data: existingRows, error: dbErr } = await db.from("words").select("id,norm_key");
+    const lemKeys = Array.from(
+      new Set((res.items ?? []).map((r) => normKey(String(r.lemma ?? ""))).filter(Boolean))
+    );
+    const { data: existingRows, error: dbErr } = lemKeys.length
+      ? await ctx.db.from("words").select("id,norm_key").in("norm_key", lemKeys)
+      : { data: [], error: null };
     if (dbErr) throw new Error(dbErr.message);
 
     const existingMap = new Map<string, number>();

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { supabaseAdmin } from "@/lib/supabase";
+import { requireAuth } from "@/lib/supabase-server";
 
 type Item = {
   lemma: string; norm_key: string; ipa?: string; pos?: string; meaning_vi?: string;
@@ -10,6 +10,10 @@ type Item = {
 // Bước 2: người dùng đã duyệt -> ghi vào kho. Trùng khoá chuẩn hoá thì bỏ qua (an toàn tuyệt đối).
 export async function POST(req: Request) {
   try {
+    const auth = await requireAuth();
+    if (auth.errorResponse) return auth.errorResponse;
+    const { ctx } = auth;
+
     const { items, stats, source } = (await req.json()) as {
       items: Item[];
       stats?: { total: number; duplicates: number; invalid: number };
@@ -32,17 +36,17 @@ export async function POST(req: Request) {
       synonyms: i.synonyms ?? [],
       status: "approved",
       source: source || "import",
+      created_by: ctx.user.id,
     }));
 
-    const db = supabaseAdmin();
-    const { data, error } = await db
+    const { data, error } = await ctx.db
       .from("words")
       .upsert(rows, { onConflict: "norm_key", ignoreDuplicates: true })
       .select("id");
     if (error) throw new Error(error.message);
 
     const added = data?.length ?? 0;
-    await db.from("imports").insert({
+    await ctx.db.from("imports").insert({
       total: stats?.total ?? items.length,
       added,
       duplicates: (stats?.duplicates ?? 0) + (items.length - added),

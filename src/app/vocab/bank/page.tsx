@@ -23,11 +23,15 @@ const LEVEL_BAR: Record<string, string> = {
 };
 
 type PreviewItem = {
-  input: string; status: "new" | "duplicate" | "invalid"; lemma: string; norm_key?: string;
+  input: string; status: "new" | "duplicate" | "invalid"; lemma: string; norm_key?: string; existingId?: number;
   ipa?: string; pos?: string; meaning_vi?: string; definition_en?: string; example?: string;
   cefr_level?: string; topic?: string; is_awl?: boolean; collocations?: string[]; synonyms?: string[];
 };
-type Preview = { items: PreviewItem[]; summary: { total: number; new: number; duplicate: number; invalid: number } };
+type Preview = {
+  items: PreviewItem[];
+  existingIds?: number[];
+  summary: { total: number; new: number; duplicate: number; invalid: number };
+};
 
 function getPageNumbers(current: number, total: number): (number | "...")[] {
   if (total <= 7) {
@@ -353,7 +357,7 @@ function Chip({ active, onClick, children }: { active: boolean; onClick: () => v
 /* ---------- Nạp hàng loạt: dán -> agent kiểm tra -> duyệt -> lưu ---------- */
 function ImportPanel({ onSaved }: { onSaved: () => void }) {
   const [text, setText] = useState("");
-  const [busy, setBusy] = useState<"" | "check" | "save">("");
+  const [busy, setBusy] = useState<"" | "check" | "save" | "enroll">("");
   const [err, setErr] = useState("");
   const [prev, setPrev] = useState<Preview | null>(null);
   const [off, setOff] = useState<Set<string>>(new Set());
@@ -372,6 +376,7 @@ function ImportPanel({ onSaved }: { onSaved: () => void }) {
 
   const news = prev?.items.filter((i) => i.status === "new") ?? [];
   const chosen = news.filter((i) => !off.has(i.norm_key!));
+  const existingIds = prev?.existingIds ?? [];
 
   const save = async () => {
     if (!prev) return;
@@ -383,9 +388,28 @@ function ImportPanel({ onSaved }: { onSaved: () => void }) {
       });
       const j = await r.json();
       if (!r.ok) throw new Error(j.error);
-      setDone(`Đã lưu ${j.added} từ vào kho${j.skipped ? ` (bỏ qua ${j.skipped} từ trùng)` : ""}.`);
+      setDone(`Đã lưu ${j.added} từ mới vào kho${j.skipped ? ` (bỏ qua ${j.skipped} từ trùng)` : ""}.`);
       setPrev(null); setText(""); onSaved(); notifyDueUpdated();
     } catch (e) { setErr((e as Error).message); }
+    setBusy("");
+  };
+
+  const enrollExisting = async () => {
+    if (existingIds.length === 0 || busy !== "") return;
+    setBusy("enroll"); setErr("");
+    try {
+      const res = await enrollWordsInSrs(existingIds);
+      notifyDueUpdated();
+      setDone(
+        res.enrolled > 0
+          ? res.deferred > 0
+            ? `Đã chuyển ${res.enrolled} từ có sẵn vào Ôn tập (${res.deferred} từ được dời lịch sang từ ${res.scheduledFromDay ?? "ngày sau"} do hôm nay đã đủ chỉ tiêu).`
+            : `Đã chuyển ${res.enrolled} từ có sẵn vào Ôn tập ngắt quãng (không tốn lượt AI).`
+          : "Các từ có sẵn này đều đã nằm trong hàng đợi Ôn tập ngắt quãng của bạn."
+      );
+    } catch (e) {
+      setErr((e as Error).message);
+    }
     setBusy("");
   };
 
@@ -398,7 +422,7 @@ function ImportPanel({ onSaved }: { onSaved: () => void }) {
           {busy === "check" ? <Loader2 size={16} className="animate-spin" /> : <Bot size={16} strokeWidth={1.75} />}
           {busy === "check" ? "Agent đang kiểm tra..." : "Cho agent kiểm tra"}
         </button>
-        <span className="text-sm text-muted">Agent: loại trùng → thêm nghĩa → xếp cấp độ & chủ đề. Chưa lưu gì cho đến khi bạn bấm Lưu. Tối đa 300 từ/lần.</span>
+        <span className="text-sm text-muted">Từ đã có trong kho chung được lấy miễn phí (0 lượt AI); chỉ từ mới hoàn toàn mới dùng AI. Tối đa 300 từ/lần.</span>
       </div>
       {err && <div className="rounded-xl bg-rose-500/15 p-3 text-sm text-rose-700 dark:bg-rose-400/15 dark:text-rose-300">{err}</div>}
       {done && <div className="flex items-center gap-2 rounded-xl bg-emerald-500/15 p-3 text-sm text-emerald-700 dark:bg-emerald-400/15 dark:text-emerald-300"><Check size={16} /> {done}</div>}
@@ -407,9 +431,26 @@ function ImportPanel({ onSaved }: { onSaved: () => void }) {
         <div className="space-y-4">
           <div className="grid grid-cols-3 gap-3 text-center text-sm">
             <div className="rounded-xl bg-emerald-500/15 p-3 dark:bg-emerald-400/15"><b className="text-lg text-emerald-700 dark:text-emerald-300">{prev.summary.new}</b><br />từ mới</div>
-            <div className="rounded-xl bg-amber-500/15 p-3 dark:bg-amber-400/15"><b className="text-lg text-amber-700 dark:text-amber-300">{prev.summary.duplicate}</b><br />trùng lặp (bỏ qua)</div>
+            <div className="rounded-xl bg-amber-500/15 p-3 dark:bg-amber-400/15"><b className="text-lg text-amber-700 dark:text-amber-300">{prev.summary.duplicate}</b><br />đã có / trùng lặp</div>
             <div className="rounded-xl bg-rose-500/15 p-3 dark:bg-rose-400/15"><b className="text-lg text-rose-700 dark:text-rose-300">{prev.summary.invalid}</b><br />không hợp lệ (bỏ qua)</div>
           </div>
+
+          {existingIds.length > 0 && (
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line bg-bg/70 px-4 py-3 text-sm">
+              <div className="text-muted">
+                Có <b className="text-ink">{existingIds.length}</b> từ đã tồn tại sẵn trong kho chung — bạn có thể học ngay với <b className="text-emerald-600 dark:text-emerald-400">0 lượt AI</b>.
+              </div>
+              <button
+                type="button"
+                onClick={enrollExisting}
+                disabled={busy !== ""}
+                className="inline-flex items-center gap-1.5 rounded-full bg-brand px-4 py-2 text-xs font-bold text-white hover:bg-brand-hover hover:text-bg disabled:opacity-40"
+              >
+                {busy === "enroll" ? <Loader2 size={14} className="animate-spin" /> : <Repeat size={14} />}
+                Đưa {existingIds.length} từ có sẵn vào Ôn tập
+              </button>
+            </div>
+          )}
 
           {news.length > 0 && (
             <>
@@ -458,6 +499,7 @@ export default function Bank() {
   const [tab, setTab] = useState<Tab>("all");
   const [sel, setSel] = useState<Sel>(null);
   const [importing, setImporting] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   // Bộ lọc cho tab Tất cả
   const [q, setQ] = useState("");
@@ -482,6 +524,7 @@ export default function Bank() {
   const [editingTopicBadge, setEditingTopicBadge] = useState<string | null>(null);
 
   const deleteWord = async (w: Word) => {
+    if (!isAdmin) return;
     if (!window.confirm(`Xoá từ "${w.word}" khỏi kho?`)) return;
     setActivityLabel("/api/words", `Đang xoá từ "${w.word}"...`);
     const r = await fetch(`/api/words?id=${w.id}`, { method: "DELETE" });
@@ -492,7 +535,7 @@ export default function Bank() {
   };
 
   const deleteSelected = async () => {
-    if (selectedIds.size === 0) return;
+    if (!isAdmin || selectedIds.size === 0) return;
     if (!window.confirm(`Xoá ${selectedIds.size} từ đã chọn khỏi kho?`)) return;
     const ids = Array.from(selectedIds);
     setActivityLabel("/api/words", `Đang xoá ${ids.length} từ khỏi kho...`);
@@ -554,7 +597,7 @@ export default function Bank() {
   const renderGrid = (list: Word[]) => (
     <WordGrid
       list={list}
-      onDelete={deleteWord}
+      onDelete={isAdmin ? deleteWord : undefined}
       selectedIds={selectMode ? selectedIds : undefined}
       onToggleSelect={toggleSelectId}
       onTogglePage={togglePageIds}
@@ -570,7 +613,22 @@ export default function Bank() {
     } catch (e) { setLoadErr((e as Error).message); }
     setLoading(false);
   }, []);
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    const t = setTimeout(() => {
+      void load();
+    }, 0);
+    let active = true;
+    fetch("/api/me", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => {
+        if (active && j) setIsAdmin(Boolean(j.isAdmin));
+      })
+      .catch(() => {});
+    return () => {
+      clearTimeout(t);
+      active = false;
+    };
+  }, [load]);
 
   const allTopics = Array.from(new Set(words.map((w) => w.topic))).sort();
   const allPos = Array.from(new Set(words.map((w) => w.pos).filter(Boolean)));
@@ -699,12 +757,14 @@ export default function Bank() {
                         {enrollingSelected ? <Loader2 size={14} className="animate-spin" /> : <Repeat size={14} />}
                         Chuyển {selectedIds.size} từ vào ôn tập
                       </button>
-                      <button
-                        onClick={deleteSelected}
-                        className="inline-flex items-center gap-1.5 rounded-full bg-rose-500 px-4 py-2.5 text-sm font-bold text-white hover:bg-rose-400"
-                      >
-                        Xoá {selectedIds.size} từ
-                      </button>
+                      {isAdmin && (
+                        <button
+                          onClick={deleteSelected}
+                          className="inline-flex items-center gap-1.5 rounded-full bg-rose-500 px-4 py-2.5 text-sm font-bold text-white hover:bg-rose-400"
+                        >
+                          Xoá {selectedIds.size} từ
+                        </button>
+                      )}
                     </>
                   )}
                   <select value={sort} onChange={(e) => setSort(e.target.value as Sort)} className="rounded-full border border-line px-4 py-2.5 text-sm">

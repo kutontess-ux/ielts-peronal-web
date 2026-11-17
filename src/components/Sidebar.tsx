@@ -1,16 +1,30 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import {
-  BarChart3, Bell, BookOpen, Home, Layers, Menu, Newspaper, Package, PenLine, Repeat, Target, X,
+  BarChart3, Bell, BookOpen, Home, Layers, LogOut, Menu, Newspaper, Package, PenLine, Repeat, Shield, Target, X,
   type LucideIcon,
 } from "lucide-react";
 import { DUE_EVENT, isNotifSeenToday, markNotifSeenToday, NOTIF_SEEN_EVENT } from "@/lib/due-events";
+import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
 import ThemeToggle from "@/components/ThemeToggle";
 
 type Item = { href: string; label: string; icon: LucideIcon; exact?: boolean; badge?: number; soon?: boolean };
+
+type MeInfo = {
+  profile: {
+    id: string;
+    email: string;
+    full_name: string;
+    avatar_url: string | null;
+    role: "admin" | "member";
+    daily_ai_limit: number;
+  };
+  isAdmin: boolean;
+  aiUsage: { usedToday: number; limit: number | null };
+};
 
 const SKILLS: Item[] = [
   { href: "/reading", label: "Reading", icon: BookOpen },
@@ -48,23 +62,78 @@ function NavLink({
   );
 }
 
+function UserFooter({
+  me,
+  signingOut,
+  onSignOut,
+}: {
+  me: MeInfo | null;
+  signingOut: boolean;
+  onSignOut: () => void;
+}) {
+  if (!me) return null;
+  const displayName = me.profile.full_name || me.profile.email.split("@")[0] || "Người dùng";
+  const quotaText = me.isAdmin
+    ? `AI hôm nay: ${me.aiUsage.usedToday} lượt · Không giới hạn`
+    : `AI hôm nay: ${me.aiUsage.usedToday}/${me.aiUsage.limit ?? me.profile.daily_ai_limit}`;
+
+  return (
+    <div className="rounded-xl border border-line/60 bg-card p-3 text-xs dark:border-transparent">
+      <div className="flex items-center justify-between gap-2">
+        <span className="truncate font-bold text-ink">{displayName}</span>
+        <span
+          className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold ${
+            me.isAdmin
+              ? "bg-brand/15 text-brand-hover"
+              : "bg-line text-muted"
+          }`}
+        >
+          {me.isAdmin ? "Admin" : "Thành viên"}
+        </span>
+      </div>
+      <div className="mt-0.5 truncate text-[11px] text-muted">{me.profile.email}</div>
+      <div className="mt-1.5 text-[11px] font-medium text-muted">{quotaText}</div>
+      <button
+        type="button"
+        onClick={onSignOut}
+        disabled={signingOut}
+        className="mt-2.5 flex w-full items-center justify-center gap-1.5 rounded-lg border border-line bg-bg px-2.5 py-1.5 text-xs font-semibold text-muted transition hover:border-rose-400/50 hover:text-rose-500 disabled:opacity-50"
+      >
+        <LogOut size={13} />
+        {signingOut ? "Đang đăng xuất..." : "Đăng xuất"}
+      </button>
+    </div>
+  );
+}
+
 export default function Sidebar() {
   const path = usePathname();
+  const router = useRouter();
+  const isAuthPage = path.startsWith("/login") || path.startsWith("/auth");
   const [dueCount, setDueCount] = useState(0);
   const [notifSeen, setNotifSeen] = useState(true);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [me, setMe] = useState<MeInfo | null>(null);
+  const [signingOut, setSigningOut] = useState(false);
 
+  // Chỉ cập nhật trạng thái đã xem thông báo khi đổi route
   useEffect(() => {
-    let active = true;
-    const syncSeen = () => {
+    if (isAuthPage) return;
+    const raf = requestAnimationFrame(() => {
       if (path.startsWith("/notifications")) {
         markNotifSeenToday();
         setNotifSeen(true);
       } else {
         setNotifSeen(isNotifSeenToday());
       }
-    };
-    syncSeen();
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [path, isAuthPage]);
+
+  // Fetch số từ đến hạn và thông tin tài khoản một lần (và khi có DUE_EVENT)
+  useEffect(() => {
+    if (isAuthPage) return;
+    let active = true;
 
     const fetchDue = async () => {
       try {
@@ -77,7 +146,22 @@ export default function Sidebar() {
         // bỏ qua lỗi mạng tạm thời
       }
     };
-    fetchDue();
+
+    const fetchMe = async () => {
+      try {
+        const r = await fetch("/api/me", { cache: "no-store" });
+        if (r.ok && active) {
+          const j = (await r.json()) as MeInfo;
+          setMe(j);
+        }
+      } catch {
+        // bỏ qua lỗi mạng tạm thời
+      }
+    };
+
+    void fetchDue();
+    void fetchMe();
+
     const onDueEvent = (e: Event) => {
       const detail = (e as CustomEvent<{ dueCount?: number }>).detail;
       if (typeof detail?.dueCount === "number") {
@@ -87,6 +171,7 @@ export default function Sidebar() {
       void fetchDue();
     };
     const onNotifSeen = () => setNotifSeen(true);
+
     window.addEventListener(DUE_EVENT, onDueEvent);
     window.addEventListener(NOTIF_SEEN_EVENT, onNotifSeen);
     return () => {
@@ -94,13 +179,33 @@ export default function Sidebar() {
       window.removeEventListener(DUE_EVENT, onDueEvent);
       window.removeEventListener(NOTIF_SEEN_EVENT, onNotifSeen);
     };
-  }, [path]);
+  }, [isAuthPage]);
+
+  const handleSignOut = async () => {
+    if (signingOut) return;
+    setSigningOut(true);
+    try {
+      const supabase = createSupabaseBrowserClient();
+      await supabase.auth.signOut();
+    } catch {
+      // Vẫn điều hướng về /login nếu session local đã hết hạn
+    } finally {
+      setMe(null);
+      setDueCount(0);
+      setSigningOut(false);
+      router.replace("/login");
+      router.refresh();
+    }
+  };
+
+  if (isAuthPage) return null;
 
   const notifBadge = dueCount > 0 && !notifSeen ? 1 : 0;
 
   const MAIN: Item[] = [
     { href: "/", label: "Trang chủ", icon: Home, exact: true },
     { href: "/notifications", label: "Thông báo", icon: Bell, badge: notifBadge },
+    ...(me?.isAdmin ? [{ href: "/admin", label: "Quản trị", icon: Shield }] : []),
   ];
 
   const LIBRARY: Item[] = [
@@ -179,8 +284,9 @@ export default function Sidebar() {
             {SKILLS.map((i) => (
               <NavLink key={i.href} item={i} path={path} onClick={() => setMobileMenuOpen(false)} />
             ))}
-            <div className="mt-auto space-y-2 pt-3">
+            <div className="mt-auto space-y-2.5 pt-3">
               <ThemeToggle variant="switch" />
+              <UserFooter me={me} signingOut={signingOut} onSignOut={handleSignOut} />
             </div>
           </div>
         </div>
@@ -236,6 +342,7 @@ export default function Sidebar() {
             </div>
             IELTS Academic
           </div>
+          <UserFooter me={me} signingOut={signingOut} onSignOut={handleSignOut} />
         </div>
       </aside>
     </>

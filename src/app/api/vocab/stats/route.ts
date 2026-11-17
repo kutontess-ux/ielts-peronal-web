@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { supabaseAdmin } from "@/lib/supabase";
+import { requireAuth } from "@/lib/supabase-server";
+import type { supabaseAdmin } from "@/lib/supabase";
 import type { Word } from "@/lib/mock";
 import {
   clampLevel,
@@ -28,12 +29,13 @@ function getVnDayStartIso(nowMs = Date.now()): string {
 }
 
 async function loadUserSettings(
-  db: ReturnType<typeof supabaseAdmin>
+  db: ReturnType<typeof supabaseAdmin>,
+  userId: string
 ): Promise<UserSettings> {
   const { data, error } = await db
     .from("user_settings")
     .select("daily_review_limit,daily_new_limit,session_size")
-    .eq("id", 1)
+    .eq("user_id", userId)
     .maybeSingle();
 
   if (error || !data) return DEFAULT_USER_SETTINGS;
@@ -62,14 +64,19 @@ export type AtRiskWord = {
 
 export async function GET() {
   try {
-    const db = supabaseAdmin();
+    const auth = await requireAuth();
+    if (auth.errorResponse) return auth.errorResponse;
+    const { ctx } = auth;
+    const db = ctx.db;
+    const userId = ctx.user.id;
+
     const nowMs = Date.now();
     const soonMs = nowMs + SOON_WINDOW_MS;
     const startIso = getVnDayStartIso(nowMs);
 
     const [settings, wordsCountRes, reviewedTodayRes, reviewsRes] =
       await Promise.all([
-        loadUserSettings(db),
+        loadUserSettings(db, userId),
         db
           .from("words")
           .select("id", { count: "exact", head: true })
@@ -77,12 +84,14 @@ export async function GET() {
         db
           .from("reviews")
           .select("word_id", { count: "exact", head: true })
+          .eq("user_id", userId)
           .gte("last_reviewed_at", startIso),
         db
           .from("reviews")
           .select(
             "word_id,level,lapses,next_review_at,last_reviewed_at,words!inner(id,lemma,ipa,pos,meaning_vi,cefr_level,status)"
           )
+          .eq("user_id", userId)
           .eq("words.status", "approved")
           .limit(2000),
       ]);

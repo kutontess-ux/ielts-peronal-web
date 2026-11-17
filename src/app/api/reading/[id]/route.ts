@@ -1,20 +1,25 @@
 import { NextResponse } from "next/server";
 import { normKey } from "@/lib/normalize";
-import { supabaseAdmin } from "@/lib/supabase";
+import { requireAuth } from "@/lib/supabase-server";
 
 export async function GET(_req: Request, context: { params: Promise<{ id: string }> }) {
   try {
+    const auth = await requireAuth();
+    if (auth.errorResponse) return auth.errorResponse;
+    const { ctx } = auth;
+    const db = ctx.db;
+
     const { id } = await context.params;
     const passageId = Number(id);
     if (!Number.isFinite(passageId) || passageId <= 0) {
       return NextResponse.json({ error: "ID không hợp lệ" }, { status: 400 });
     }
 
-    const db = supabaseAdmin();
     const { data: passage, error } = await db
       .from("reading_passages")
       .select("*")
       .eq("id", passageId)
+      .eq("user_id", ctx.user.id)
       .single();
 
     if (error || !passage) {
@@ -25,6 +30,7 @@ export async function GET(_req: Request, context: { params: Promise<{ id: string
       .from("reading_notes")
       .select("*")
       .eq("passage_id", passageId)
+      .eq("user_id", ctx.user.id)
       .order("created_at", { ascending: false });
 
     const notes = rawNotes ?? [];

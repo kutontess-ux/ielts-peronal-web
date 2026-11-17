@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { supabaseAdmin } from "@/lib/supabase";
+import { requireAuth } from "@/lib/supabase-server";
 
 function isMissingTable(msg: string) {
   return msg.includes("reading_passages") && msg.includes("does not exist");
@@ -7,10 +7,14 @@ function isMissingTable(msg: string) {
 
 export async function GET() {
   try {
-    const db = supabaseAdmin();
-    const { data, error } = await db
+    const auth = await requireAuth();
+    if (auth.errorResponse) return auth.errorResponse;
+    const { ctx } = auth;
+
+    const { data, error } = await ctx.db
       .from("reading_passages")
       .select("id,title,source_name,topic,score_correct,score_total,studied_at,created_at,content")
+      .eq("user_id", ctx.user.id)
       .order("studied_at", { ascending: false })
       .order("created_at", { ascending: false })
       .limit(200);
@@ -25,9 +29,10 @@ export async function GET() {
     const ids = (data ?? []).map((p) => p.id);
     const noteCounts = new Map<number, number>();
     if (ids.length > 0) {
-      const { data: notes } = await db
+      const { data: notes } = await ctx.db
         .from("reading_notes")
         .select("passage_id")
+        .eq("user_id", ctx.user.id)
         .in("passage_id", ids);
       for (const n of notes ?? []) {
         noteCounts.set(n.passage_id, (noteCounts.get(n.passage_id) ?? 0) + 1);
@@ -54,6 +59,10 @@ export async function GET() {
 
 export async function POST(req: Request) {
   try {
+    const auth = await requireAuth();
+    if (auth.errorResponse) return auth.errorResponse;
+    const { ctx } = auth;
+
     const body = (await req.json()) as {
       title?: string;
       source_name?: string;
@@ -70,9 +79,10 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Vui lòng nhập tiêu đề và nội dung bài đọc" }, { status: 400 });
     }
 
-    const { data, error } = await supabaseAdmin()
+    const { data, error } = await ctx.db
       .from("reading_passages")
       .insert({
+        user_id: ctx.user.id,
         title,
         source_name: (body.source_name ?? "").trim() || null,
         topic: (body.topic ?? "").trim() || "Other",
@@ -93,6 +103,10 @@ export async function POST(req: Request) {
 
 export async function PATCH(req: Request) {
   try {
+    const auth = await requireAuth();
+    if (auth.errorResponse) return auth.errorResponse;
+    const { ctx } = auth;
+
     const body = (await req.json()) as {
       id?: number;
       title?: string;
@@ -110,10 +124,11 @@ export async function PATCH(req: Request) {
     if (body.score_total !== undefined) patch.score_total = body.score_total;
     if (body.studied_at !== undefined) patch.studied_at = body.studied_at;
 
-    const { error } = await supabaseAdmin()
+    const { error } = await ctx.db
       .from("reading_passages")
       .update(patch)
-      .eq("id", body.id);
+      .eq("id", body.id)
+      .eq("user_id", ctx.user.id);
     if (error) throw new Error(error.message);
     return NextResponse.json({ ok: true });
   } catch (e) {
@@ -123,12 +138,20 @@ export async function PATCH(req: Request) {
 
 export async function DELETE(req: Request) {
   try {
+    const auth = await requireAuth();
+    if (auth.errorResponse) return auth.errorResponse;
+    const { ctx } = auth;
+
     const { searchParams } = new URL(req.url);
     const id = Number(searchParams.get("id"));
     if (!Number.isFinite(id) || id <= 0) {
       return NextResponse.json({ error: "Thiếu id hợp lệ" }, { status: 400 });
     }
-    const { error } = await supabaseAdmin().from("reading_passages").delete().eq("id", id);
+    const { error } = await ctx.db
+      .from("reading_passages")
+      .delete()
+      .eq("id", id)
+      .eq("user_id", ctx.user.id);
     if (error) throw new Error(error.message);
     return NextResponse.json({ ok: true });
   } catch (e) {

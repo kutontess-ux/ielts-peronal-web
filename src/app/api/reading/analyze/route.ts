@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { askJsonWithProfile, TOPICS } from "@/lib/ai";
 import { cleanTerm, normKey } from "@/lib/normalize";
-import { supabaseAdmin } from "@/lib/supabase";
+import { requireAuth } from "@/lib/supabase-server";
+import { consumeAiQuota } from "@/lib/ai-quota";
 
 const VALID_LEVELS = new Set(["A2", "B1", "B2", "C1", "C2"]);
 function safeLevel(lv?: string): "A2" | "B1" | "B2" | "C1" | "C2" {
@@ -43,6 +44,12 @@ type QuestionResult = {
 
 export async function POST(req: Request) {
   try {
+    const auth = await requireAuth();
+    if (auth.errorResponse) return auth.errorResponse;
+    const { ctx } = auth;
+    const db = ctx.db;
+    const userId = ctx.user.id;
+
     const body = (await req.json()) as {
       mode: "vocab" | "sentence" | "question" | "batch_vocab";
       passageId?: number;
@@ -54,8 +61,6 @@ export async function POST(req: Request) {
       passageContent?: string;
       forceAi?: boolean;
     };
-
-    const db = supabaseAdmin();
 
     if (body.mode === "vocab") {
       const rawTerm = cleanTerm(body.term ?? "");
@@ -70,6 +75,7 @@ export async function POST(req: Request) {
           .from("reading_notes")
           .select("*")
           .eq("passage_id", body.passageId)
+          .eq("user_id", userId)
           .eq("kind", "vocab");
 
         const matchedNote = (noteRows ?? []).find((n) => {
@@ -136,7 +142,10 @@ export async function POST(req: Request) {
         }
       }
 
-      // Tầng 3: Gọi AI theo profile "vocab" (ưu tiên model nhẹ/miễn phí)
+      // Tầng 3: Kiểm tra quota AI trước khi gọi model
+      const quotaErr = await consumeAiQuota(ctx, "reading-vocab");
+      if (quotaErr) return quotaErr;
+
       const ai = await askJsonWithProfile<VocabResult>(
         "vocab",
         `Bạn là từ điển IELTS Academic cho người Việt trình độ B1 hướng tới 6.5.
@@ -185,6 +194,7 @@ Phân tích từ/cụm từ tiếng Anh dựa trên câu ngữ cảnh. Trả v�
             .from("reading_notes")
             .update({ target_text: ai.lemma, result_json: vocabPayload })
             .eq("id", existingNoteId)
+            .eq("user_id", userId)
             .select("*")
             .single();
           savedNote = data;
@@ -192,6 +202,7 @@ Phân tích từ/cụm từ tiếng Anh dựa trên câu ngữ cảnh. Trả v�
           const { data } = await db
             .from("reading_notes")
             .insert({
+              user_id: userId,
               passage_id: body.passageId,
               kind: "vocab",
               target_text: ai.lemma,
@@ -211,6 +222,9 @@ Phân tích từ/cụm từ tiếng Anh dựa trên câu ngữ cảnh. Trả v�
       if (!passageContent) {
         return NextResponse.json({ error: "Thiếu nội dung bài đọc" }, { status: 400 });
       }
+
+      const quotaErr = await consumeAiQuota(ctx, "reading-batch-vocab");
+      if (quotaErr) return quotaErr;
 
       const ai = await askJsonWithProfile<{ items: VocabResult[] }>(
         "vocab",
@@ -253,6 +267,7 @@ Trả về JSON:
           .from("reading_notes")
           .select("target_text,result_json")
           .eq("passage_id", body.passageId)
+          .eq("user_id", userId)
           .eq("kind", "vocab");
         for (const n of noteRows ?? []) {
           const rj = (n.result_json ?? {}) as Record<string, unknown>;
@@ -261,6 +276,7 @@ Trả về JSON:
       }
 
       const toInsert: {
+        user_id: string;
         passage_id: number;
         kind: "vocab";
         target_text: string;
@@ -280,6 +296,7 @@ Trả về JSON:
         if (body.passageId && !existingNoteKeys.has(nk)) {
           existingNoteKeys.add(nk);
           toInsert.push({
+            user_id: userId,
             passage_id: body.passageId,
             kind: "vocab",
             target_text: it.lemma,
@@ -309,6 +326,7 @@ Trả về JSON:
           .from("reading_notes")
           .select("*")
           .eq("passage_id", body.passageId)
+          .eq("user_id", userId)
           .eq("kind", "sentence")
           .eq("target_text", sentence)
           .maybeSingle();
@@ -321,6 +339,9 @@ Trả về JSON:
           });
         }
       }
+
+      const quotaErr = await consumeAiQuota(ctx, "reading-sentence");
+      if (quotaErr) return quotaErr;
 
       const result = await askJsonWithProfile<SentenceResult>(
         "reason",
@@ -342,6 +363,7 @@ Trả về JSON:
         const { data } = await db
           .from("reading_notes")
           .insert({
+            user_id: userId,
             passage_id: body.passageId,
             kind: "sentence",
             target_text: sentence,
@@ -367,6 +389,7 @@ Trả về JSON:
           .from("reading_notes")
           .select("*")
           .eq("passage_id", body.passageId)
+          .eq("user_id", userId)
           .eq("kind", "question")
           .eq("target_text", question)
           .maybeSingle();
@@ -379,6 +402,9 @@ Trả về JSON:
           });
         }
       }
+
+      const quotaErr = await consumeAiQuota(ctx, "reading-question");
+      if (quotaErr) return quotaErr;
 
       const result = await askJsonWithProfile<QuestionResult>(
         "reason",
@@ -399,6 +425,7 @@ Trả về JSON:
         const { data } = await db
           .from("reading_notes")
           .insert({
+            user_id: userId,
             passage_id: body.passageId,
             kind: "question",
             target_text: question,
@@ -422,9 +449,13 @@ Trả về JSON:
   }
 }
 
-// Admin tự thêm ghi chú tay (0 token)
+// Tự thêm ghi chú tay (0 token)
 export async function PUT(req: Request) {
   try {
+    const auth = await requireAuth();
+    if (auth.errorResponse) return auth.errorResponse;
+    const { ctx } = auth;
+
     const body = (await req.json()) as {
       passageId: number;
       kind: "vocab" | "sentence" | "question";
@@ -435,9 +466,10 @@ export async function PUT(req: Request) {
       return NextResponse.json({ error: "Thiếu thông tin ghi chú" }, { status: 400 });
     }
 
-    const { data, error } = await supabaseAdmin()
+    const { data, error } = await ctx.db
       .from("reading_notes")
       .insert({
+        user_id: ctx.user.id,
         passage_id: body.passageId,
         kind: body.kind,
         target_text: body.targetText.trim(),
@@ -453,19 +485,24 @@ export async function PUT(req: Request) {
   }
 }
 
-// Admin tự chỉnh sửa nghĩa / ghi chú đã lưu (0 token)
+// Tự chỉnh sửa nghĩa / ghi chú đã lưu (0 token)
 export async function PATCH(req: Request) {
   try {
+    const auth = await requireAuth();
+    if (auth.errorResponse) return auth.errorResponse;
+    const { ctx } = auth;
+
     const body = (await req.json()) as {
       noteId: number;
       resultJson: Record<string, unknown>;
     };
     if (!body.noteId) return NextResponse.json({ error: "Thiếu noteId" }, { status: 400 });
 
-    const { data, error } = await supabaseAdmin()
+    const { data, error } = await ctx.db
       .from("reading_notes")
       .update({ result_json: body.resultJson })
       .eq("id", body.noteId)
+      .eq("user_id", ctx.user.id)
       .select("*")
       .single();
 
@@ -478,12 +515,20 @@ export async function PATCH(req: Request) {
 
 export async function DELETE(req: Request) {
   try {
+    const auth = await requireAuth();
+    if (auth.errorResponse) return auth.errorResponse;
+    const { ctx } = auth;
+
     const { searchParams } = new URL(req.url);
     const id = Number(searchParams.get("noteId"));
     if (!Number.isFinite(id) || id <= 0) {
       return NextResponse.json({ error: "Thiếu noteId" }, { status: 400 });
     }
-    const { error } = await supabaseAdmin().from("reading_notes").delete().eq("id", id);
+    const { error } = await ctx.db
+      .from("reading_notes")
+      .delete()
+      .eq("id", id)
+      .eq("user_id", ctx.user.id);
     if (error) throw new Error(error.message);
     return NextResponse.json({ ok: true });
   } catch (e) {

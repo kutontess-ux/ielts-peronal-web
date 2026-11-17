@@ -198,12 +198,16 @@ Trả về JSON dạng {"items":[...]}.`;
 // GET chỉ đọc dữ liệu từ Supabase (nhanh, không bao giờ gọi RSS/AI)
 export async function GET(req: Request) {
   try {
+    const { requireAuth } = await import("@/lib/supabase-server");
+    const auth = await requireAuth();
+    if (auth.errorResponse) return auth.errorResponse;
+
     const { searchParams } = new URL(req.url);
     const range = searchParams.get("range");
     const today = dateOffsetVN(0);
     const yesterday = dateOffsetVN(1);
 
-    const { data: daysData } = await supabaseAdmin()
+    const { data: daysData } = await auth.ctx.db
       .from("daily_words")
       .select("day")
       .order("day", { ascending: false })
@@ -236,6 +240,10 @@ export async function GET(req: Request) {
 // POST chỉ chạy 1 lần trong ngày khi hôm nay chưa có từ nào
 export async function POST() {
   try {
+    const { requireAuth } = await import("@/lib/supabase-server");
+    const auth = await requireAuth();
+    if (auth.errorResponse) return auth.errorResponse;
+
     const today = dateOffsetVN(0);
     const existing = await readDaily(today);
     if (existing.news.length > 0 || existing.ielts.length > 0) {

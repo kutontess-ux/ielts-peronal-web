@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { supabaseAdmin } from "@/lib/supabase";
+import { requireAuth } from "@/lib/supabase-server";
 import { DEFAULT_USER_SETTINGS, type UserSettings } from "@/lib/srs";
 
 function clampInt(val: unknown, min: number, max: number, fallback: number): number {
@@ -10,15 +10,17 @@ function clampInt(val: unknown, min: number, max: number, fallback: number): num
 
 export async function GET() {
   try {
-    const db = supabaseAdmin();
-    const { data, error } = await db
+    const auth = await requireAuth();
+    if (auth.errorResponse) return auth.errorResponse;
+    const { ctx } = auth;
+
+    const { data, error } = await ctx.db
       .from("user_settings")
       .select("daily_review_limit,daily_new_limit,session_size")
-      .eq("id", 1)
+      .eq("user_id", ctx.user.id)
       .maybeSingle();
 
     if (error) {
-      // Fallback nếu chưa chạy migration bảng user_settings
       return NextResponse.json(DEFAULT_USER_SETTINGS);
     }
 
@@ -36,6 +38,10 @@ export async function GET() {
 
 export async function PUT(req: Request) {
   try {
+    const auth = await requireAuth();
+    if (auth.errorResponse) return auth.errorResponse;
+    const { ctx } = auth;
+
     const body = (await req.json().catch(() => ({}))) as Partial<UserSettings>;
     const nextSettings: UserSettings = {
       daily_review_limit: clampInt(body.daily_review_limit, 5, 500, DEFAULT_USER_SETTINGS.daily_review_limit),
@@ -43,14 +49,13 @@ export async function PUT(req: Request) {
       session_size: clampInt(body.session_size, 5, 50, DEFAULT_USER_SETTINGS.session_size),
     };
 
-    const db = supabaseAdmin();
-    const { error } = await db.from("user_settings").upsert(
+    const { error } = await ctx.db.from("user_settings").upsert(
       {
-        id: 1,
+        user_id: ctx.user.id,
         ...nextSettings,
         updated_at: new Date().toISOString(),
       },
-      { onConflict: "id" }
+      { onConflict: "user_id" }
     );
 
     if (error) throw new Error(error.message);
