@@ -1,13 +1,16 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Bell,
   BellOff,
   Calendar,
+  CheckCircle2,
   ChevronDown,
   ChevronRight,
   ExternalLink,
+  FolderPlus,
   GraduationCap,
   History,
   Loader2,
@@ -15,6 +18,7 @@ import {
   RefreshCw,
   Sparkles,
   Volume2,
+  X,
 } from "lucide-react";
 import { levelColor } from "@/lib/mock";
 import { notifyDueUpdated, notifySettingsUpdated } from "@/lib/due-events";
@@ -29,9 +33,22 @@ import { useMe } from "@/lib/use-me";
 import ExportButton from "@/components/ExportPanel";
 import { speakWord } from "@/lib/tts";
 import { VoiceSettingsButton } from "@/components/VoiceSettingsModal";
+import AddToStudySetModal from "./AddToStudySetModal";
 import type { DailyGroup, DailyWord } from "@/app/api/daily/route";
 
 type Mode = "today" | "yesterday" | "7d" | "custom";
+
+function formatDailySetDefaultName(isoDate: string): string {
+  const [y, m, d] = (isoDate || "").split("-");
+  if (y && m && d) {
+    return `${d.padStart(2, "0")}-${m.padStart(2, "0")}-${y.slice(-2)}`;
+  }
+  const vn = new Date(Date.now() + 7 * 60 * 60 * 1000);
+  const dd = String(vn.getUTCDate()).padStart(2, "0");
+  const mm = String(vn.getUTCMonth() + 1).padStart(2, "0");
+  const yy = String(vn.getUTCFullYear()).slice(-2);
+  return `${dd}-${mm}-${yy}`;
+}
 
 function DailyFlipCard({
   w,
@@ -170,11 +187,13 @@ function WordCards({
   ielts,
   date,
   speak,
+  onAddStudySet,
 }: {
   news: DailyWord[];
   ielts: DailyWord[];
   date: string;
   speak: (w: string) => void;
+  onAddStudySet?: (words: DailyWord[], label: string) => void;
 }) {
   return (
     <div className="space-y-6">
@@ -183,7 +202,16 @@ function WordCards({
           <div className="mb-3 flex flex-wrap items-center gap-2">
             <Newspaper size={18} strokeWidth={1.6} className="text-brand-hover" />
             <h2 className="text-base font-bold sm:text-lg">{news.length} từ từ báo mới</h2>
-            <div className="ml-auto">
+            <div className="ml-auto flex flex-wrap items-center gap-2">
+              {onAddStudySet && (
+                <button
+                  type="button"
+                  onClick={() => onAddStudySet(news, `${news.length} từ báo mới`)}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-brand/40 bg-brand/10 px-3.5 py-1.5 text-xs font-bold text-brand-hover transition hover:bg-brand/20"
+                >
+                  <FolderPlus size={14} /> Thêm vào học phần
+                </button>
+              )}
               <ExportButton words={news} filename={`tu-bao-${date}`} label={`Xuất ${news.length} từ`} />
             </div>
           </div>
@@ -200,7 +228,16 @@ function WordCards({
           <div className="mb-3 flex flex-wrap items-center gap-2">
             <GraduationCap size={18} strokeWidth={1.6} className="text-brand-hover" />
             <h2 className="text-base font-bold sm:text-lg">{ielts.length} từ IELTS</h2>
-            <div className="ml-auto">
+            <div className="ml-auto flex flex-wrap items-center gap-2">
+              {onAddStudySet && (
+                <button
+                  type="button"
+                  onClick={() => onAddStudySet(ielts, `${ielts.length} từ IELTS`)}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-brand/40 bg-brand/10 px-3.5 py-1.5 text-xs font-bold text-brand-hover transition hover:bg-brand/20"
+                >
+                  <FolderPlus size={14} /> Thêm vào học phần
+                </button>
+              )}
               <ExportButton words={ielts} filename={`tu-ielts-${date}`} label={`Xuất ${ielts.length} từ`} />
             </div>
           </div>
@@ -281,6 +318,26 @@ export default function Daily() {
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [err, setErr] = useState("");
+  const [studySetModal, setStudySetModal] = useState<{
+    words: DailyWord[];
+    defaultTitle: string;
+    defaultDesc: string;
+  } | null>(null);
+  const [savedBanner, setSavedBanner] = useState<{
+    setTitle: string;
+    count: number;
+    isNew: boolean;
+  } | null>(null);
+
+  const openStudySetModal = (targetWords: DailyWord[], targetDate: string, label?: string) => {
+    if (targetWords.length === 0) return;
+    const formatted = formatDailySetDefaultName(targetDate || getTodayVNClient());
+    setStudySetModal({
+      words: targetWords,
+      defaultTitle: formatted,
+      defaultDesc: label ? `Từ vựng hằng ngày (${formatted}) · ${label}` : `Từ vựng hằng ngày ${formatted}`,
+    });
+  };
 
   const mountedRef = useRef(true);
   useEffect(() => {
@@ -662,7 +719,16 @@ export default function Daily() {
         </button>
 
         {mode !== "7d" && allSingle.length > 0 && (
-          <ExportButton words={allSingle} filename={`tu-hang-ngay-${date}`} label="Xuất văn bản (Quizlet)" />
+          <>
+            <button
+              type="button"
+              onClick={() => openStudySetModal(allSingle, date)}
+              className="inline-flex items-center gap-1.5 rounded-full bg-brand px-4 py-2 text-xs font-bold text-white transition hover:bg-brand-hover hover:text-bg"
+            >
+              <FolderPlus size={14} /> Thêm vào học phần
+            </button>
+            <ExportButton words={allSingle} filename={`tu-hang-ngay-${date}`} label="Xuất văn bản (Quizlet)" />
+          </>
         )}
         {mode === "7d" && all7d.length > 0 && (
           <div className="flex flex-wrap items-center gap-2">
@@ -681,6 +747,31 @@ export default function Daily() {
           </div>
         )}
       </div>
+
+      {savedBanner && (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-emerald-500/40 bg-emerald-500/10 px-4 py-3 text-xs text-emerald-800 dark:text-emerald-200">
+          <span className="inline-flex items-center gap-2 font-medium">
+            <CheckCircle2 size={16} className="shrink-0 text-emerald-600 dark:text-emerald-400" />
+            <span>
+              {savedBanner.isNew
+                ? `Đã tạo học phần “${savedBanner.setTitle}” với ${savedBanner.count} từ.`
+                : `Đã thêm ${savedBanner.count} từ vào học phần “${savedBanner.setTitle}”.`}
+            </span>
+          </span>
+          <div className="flex items-center gap-3">
+            <Link href="/vocab" className="font-bold text-emerald-700 underline hover:opacity-80 dark:text-emerald-300">
+              Xem trong Học phần →
+            </Link>
+            <button
+              type="button"
+              onClick={() => setSavedBanner(null)}
+              className="rounded p-0.5 text-muted hover:text-ink"
+            >
+              <X size={14} />
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Thanh lịch sử nhanh: Hôm nay | Hôm qua | 7 ngày qua | Chọn ngày */}
       <div className="flex flex-wrap items-center gap-2">
@@ -812,7 +903,13 @@ export default function Daily() {
                 </button>
               </div>
             )}
-            <WordCards news={news} ielts={ielts} date={date} speak={speak} />
+            <WordCards
+              news={news}
+              ielts={ielts}
+              date={date}
+              speak={speak}
+              onAddStudySet={(targetWords, label) => openStudySetModal(targetWords, date, label)}
+            />
           </div>
         )
       )}
@@ -860,14 +957,27 @@ export default function Daily() {
                         {dayTotal} từ · {g.news.length} báo, {g.ielts.length} IELTS
                       </span>
                     </div>
-                    <div onClick={(e) => e.stopPropagation()}>
+                    <div className="flex flex-wrap items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                      <button
+                        type="button"
+                        onClick={() => openStudySetModal([...g.news, ...g.ielts], g.date)}
+                        className="inline-flex items-center gap-1.5 rounded-full border border-brand/40 bg-brand/10 px-3.5 py-1.5 text-xs font-bold text-brand-hover transition hover:bg-brand/20"
+                      >
+                        <FolderPlus size={14} /> Thêm vào học phần
+                      </button>
                       <ExportButton words={[...g.news, ...g.ielts]} filename={`tu-hang-ngay-${g.date}`} label={`Xuất ${dayTotal} từ`} />
                     </div>
                   </div>
 
                   {isOpen && (
                     <div className="border-t border-line p-5">
-                      <WordCards news={g.news} ielts={g.ielts} date={g.date} speak={speak} />
+                      <WordCards
+                        news={g.news}
+                        ielts={g.ielts}
+                        date={g.date}
+                        speak={speak}
+                        onAddStudySet={(targetWords, label) => openStudySetModal(targetWords, g.date, label)}
+                      />
                     </div>
                   )}
                 </div>
@@ -875,6 +985,16 @@ export default function Daily() {
             })}
           </div>
         )
+      )}
+
+      {studySetModal && (
+        <AddToStudySetModal
+          words={studySetModal.words}
+          defaultTitle={studySetModal.defaultTitle}
+          defaultDesc={studySetModal.defaultDesc}
+          onClose={() => setStudySetModal(null)}
+          onSaved={(info) => setSavedBanner(info)}
+        />
       )}
     </div>
   );
