@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { BookOpen, ChevronRight, Layers, Library, Newspaper, PenLine, Repeat, type LucideIcon } from "lucide-react";
+import { BookOpen, ChevronRight, Flame, Layers, Library, Newspaper, PenLine, Repeat, type LucideIcon } from "lucide-react";
 
 type ReadingItem = {
   id: number;
@@ -13,18 +13,30 @@ type ReadingItem = {
   studied_at: string;
 };
 
+type WritingSummary = {
+  currentStreak: number;
+  completedToday: boolean;
+  todayTitle: string;
+  queuedCount: number;
+  latestSubmissionId: number | null;
+  latestSubmissionTitle: string | null;
+  latestBand: number | null;
+};
+
 export default function Home() {
   const [dueCount, setDueCount] = useState<number | null>(null);
   const [totalWords, setTotalWords] = useState<number | null>(null);
   const [recentPassages, setRecentPassages] = useState<ReadingItem[]>([]);
+  const [writingSummary, setWritingSummary] = useState<WritingSummary | null>(null);
   const [authMsg, setAuthMsg] = useState("");
 
   useEffect(() => {
     let active = true;
     (async () => {
-      const [revRes, readingRes] = await Promise.allSettled([
+      const [revRes, readingRes, writingRes] = await Promise.allSettled([
         fetch("/api/reviews", { cache: "no-store" }),
         fetch("/api/reading", { cache: "no-store" }),
+        fetch("/api/writing", { cache: "no-store" }),
       ]);
       if (!active) return;
 
@@ -48,6 +60,30 @@ export default function Home() {
         const body = await r.json().catch(() => ({}));
         if (active && r.ok) {
           setRecentPassages((body.passages ?? []).slice(0, 2));
+        }
+      }
+
+      if (writingRes.status === "fulfilled") {
+        const r = writingRes.value;
+        const body = await r.json().catch(() => ({}));
+        if (active && r.ok) {
+          const latest = (body.submissions ?? [])[0];
+          setWritingSummary({
+            currentStreak: body.streak?.currentStreak ?? 0,
+            completedToday: Boolean(body.streak?.completedToday),
+            todayTitle:
+              body.todaySchedule?.title ?? "Luyện viết đoạn ngắn 15p & Chấm chữa 4 tiêu chí",
+            queuedCount: (body.prompts ?? []).filter(
+              (p: { status?: string }) => p.status === "queued"
+            ).length,
+            latestSubmissionId: latest?.id ?? null,
+            latestSubmissionTitle:
+              latest?.topic || latest?.prompt_snapshot?.slice(0, 60) || null,
+            latestBand:
+              latest?.overall_band !== null && latest?.overall_band !== undefined
+                ? Number(latest.overall_band)
+                : null,
+          });
         }
       }
     })();
@@ -84,6 +120,21 @@ export default function Home() {
       href: recentPassages[0] ? `/reading/${recentPassages[0].id}` : "/reading",
       icon: BookOpen,
       cta: recentPassages[0] ? "Mở bài" : "Bắt đầu",
+    },
+    {
+      title: "Kỷ luật Writing",
+      sub: writingSummary
+        ? writingSummary.completedToday
+          ? `Đã hoàn thành hôm nay · 🔥 ${writingSummary.currentStreak} ngày`
+          : `${writingSummary.todayTitle}${
+              writingSummary.currentStreak > 0
+                ? ` · 🔥 ${writingSummary.currentStreak} ngày`
+                : ""
+            }`
+        : "Luyện viết hằng ngày & chấm chữa 4 tiêu chí",
+      href: "/writing",
+      icon: PenLine,
+      cta: writingSummary?.completedToday ? "Xem sổ tay" : "Viết ngay",
     },
   ];
 
@@ -125,7 +176,7 @@ export default function Home() {
       )}
       <section>
         <h2 className="mb-4 text-lg font-bold">Tiếp tục học</h2>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {JUMP.map((j) => (
             <div
               key={j.title}
@@ -196,11 +247,33 @@ export default function Home() {
             <div className="text-sm text-muted">Phân tích bài đọc & lưu từ vựng</div>
           </Link>
 
-          <div className="min-w-0 rounded-2xl bg-card/80 p-5 opacity-60 dark:bg-card/50">
-            <PenLine size={30} strokeWidth={1.4} />
+          <Link
+            href="/writing"
+            className="min-w-0 rounded-2xl border-2 border-transparent bg-card p-5 transition hover:border-brand-hover"
+          >
+            <div className="flex items-center justify-between">
+              <PenLine size={30} strokeWidth={1.4} className="text-brand-hover" />
+              {writingSummary && (
+                <span
+                  className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-bold ${
+                    writingSummary.completedToday
+                      ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300"
+                      : "bg-orange-500/15 text-orange-700 dark:text-orange-300"
+                  }`}
+                >
+                  <Flame size={13} /> {writingSummary.currentStreak} ngày
+                </span>
+              )}
+            </div>
             <div className="mt-3 font-bold">Writing</div>
-            <div className="text-sm text-muted">Sắp có</div>
-          </div>
+            <div className="text-sm text-muted">
+              {writingSummary
+                ? writingSummary.completedToday
+                  ? "✓ Đã hoàn thành kỷ luật 3 bước hôm nay"
+                  : `Hôm nay: ${writingSummary.todayTitle}`
+                : "Luyện viết kỷ luật hằng ngày & chấm 4 tiêu chí"}
+            </div>
+          </Link>
         </div>
       </section>
     </div>

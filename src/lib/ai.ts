@@ -76,7 +76,59 @@ export async function askJson<T>(system: string, user: string): Promise<T> {
 
 export type AiProfile = "vocab" | "reason" | "default";
 
-async function callGeminiJson<T>(apiKey: string, model: string, system: string, user: string): Promise<T> {
+type InlineImage = {
+  mimeType: string;
+  data: string;
+};
+
+async function resolveInlineImage(imageDataUrl?: string | null): Promise<InlineImage | null> {
+  const raw = (imageDataUrl ?? "").trim();
+  if (!raw) return null;
+
+  const dataMatch = raw.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,([\s\S]+)$/);
+  if (dataMatch) {
+    return {
+      mimeType: dataMatch[1],
+      data: dataMatch[2].replace(/\s+/g, ""),
+    };
+  }
+
+  if (raw.startsWith("http://") || raw.startsWith("https://")) {
+    try {
+      const res = await fetch(raw, { signal: AbortSignal.timeout(6000) });
+      if (!res.ok) return null;
+      const contentType = res.headers.get("content-type")?.split(";")[0]?.trim() || "image/jpeg";
+      if (!contentType.startsWith("image/")) return null;
+      const buf = await res.arrayBuffer();
+      return {
+        mimeType: contentType,
+        data: Buffer.from(buf).toString("base64"),
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  return null;
+}
+
+async function callGeminiJson<T>(
+  apiKey: string,
+  model: string,
+  system: string,
+  user: string,
+  inlineImage?: InlineImage | null
+): Promise<T> {
+  const userParts: Array<Record<string, unknown>> = [{ text: user }];
+  if (inlineImage?.data) {
+    userParts.push({
+      inlineData: {
+        mimeType: inlineImage.mimeType,
+        data: inlineImage.data,
+      },
+    });
+  }
+
   const r = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
     {
@@ -84,7 +136,7 @@ async function callGeminiJson<T>(apiKey: string, model: string, system: string, 
       headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
       body: JSON.stringify({
         systemInstruction: { parts: [{ text: system }] },
-        contents: [{ role: "user", parts: [{ text: user }] }],
+        contents: [{ role: "user", parts: userParts }],
         generationConfig: { responseMimeType: "application/json", temperature: 0.2 },
       }),
     }
@@ -101,9 +153,18 @@ async function callOpenAiCompatibleJson<T>(
   apiKey: string,
   model: string,
   system: string,
-  user: string
+  user: string,
+  imageDataUrl?: string | null
 ): Promise<T> {
   const url = `${baseUrl.replace(/\/+$/, "")}/chat/completions`;
+  const userContent =
+    imageDataUrl && imageDataUrl.trim()
+      ? [
+          { type: "text", text: user },
+          { type: "image_url", image_url: { url: imageDataUrl.trim() } },
+        ]
+      : user;
+
   const r = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
@@ -113,7 +174,7 @@ async function callOpenAiCompatibleJson<T>(
       response_format: { type: "json_object" },
       messages: [
         { role: "system", content: system },
-        { role: "user", content: user },
+        { role: "user", content: userContent },
       ],
     }),
   });
@@ -162,6 +223,83 @@ export async function askJsonWithProfile<T>(
     // Nếu key riêng lỗi/hết quota tạm thời -> fallback về askJson mặc định
     return askJson<T>(system, user);
   }
+}
+
+// Gọi AI có hỗ trợ đọc hình ảnh biểu đồ/bản đồ/quy trình Task 1 (Gemini Vision inlineData + OpenAI image_url fallback).
+// Nếu không có ảnh đính kèm thì tự động uỷ quyền về askJsonWithProfile.
+export async function askJsonWithVision<T>(
+  profile: AiProfile,
+  system: string,
+  user: string,
+  imageDataUrl?: string | null
+): Promise<T> {
+  const trimmedUrl = (imageDataUrl ?? "").trim();
+  if (!trimmedUrl) {
+    return askJsonWithProfile<T>(profile, system, user);
+  }
+
+  const inlineImage = await resolveInlineImage(trimmedUrl);
+  if (!inlineImage && !trimmedUrl.startsWith("http")) {
+    return askJsonWithProfile<T>(profile, system, user);
+  }
+
+  // 1. Thử key theo profile nếu là Gemini
+  if (profile !== "default") {
+    const prefix = profile === "vocab" ? "READING_VOCAB" : "READING_REASON";
+    const profileKey = process.env[`${prefix}_API_KEY`];
+    const baseUrl = process.env[`${prefix}_BASE_URL`];
+    const providerEnv = process.env[`${prefix}_PROVIDER`]?.toLowerCase();
+    const provider =
+      providerEnv ||
+      (baseUrl ? "openai_compatible" : profileKey?.startsWith("AIza") ? "gemini" : "openai_compatible");
+    const profileModel = process.env[`${prefix}_MODEL`] || GEMINI_MODEL;
+
+    if (profileKey && provider === "gemini" && inlineImage) {
+      try {
+        return await callGeminiJson<T>(profileKey, profileModel, system, user, inlineImage);
+      } catch {
+        // Tiếp tục fallback xuống Gemini mặc định
+      }
+    }
+  }
+
+  // 2. Thử Gemini #1 -> Gemini #2 với inlineData
+  if (inlineImage) {
+    const geminiTargets = [
+      { label: "Gemini Vision #1", apiKey: process.env.GEMINI_API_KEY, model: GEMINI_MODEL },
+      { label: "Gemini Vision #2", apiKey: process.env.GEMINI_API_KEY_2, model: GEMINI_MODEL_2 },
+    ];
+    for (const target of geminiTargets) {
+      if (!target.apiKey) continue;
+      try {
+        const res = await callGeminiJson<T>(target.apiKey, target.model, system, user, inlineImage);
+        console.log(`[AI Vision] Gọi ${target.label} thành công với model: ${target.model}`);
+        return res;
+      } catch (e) {
+        console.warn(`[AI Vision] ${target.label} thất bại: ${(e as Error).message}`);
+      }
+    }
+  }
+
+  // 3. Thử OpenAI Vision fallback nếu được phép
+  const allowOpenAi = process.env.OPENAI_API_KEY && process.env.DISABLE_OPENAI_FALLBACK !== "true";
+  if (allowOpenAi && process.env.OPENAI_API_KEY) {
+    try {
+      return await callOpenAiCompatibleJson<T>(
+        "https://api.openai.com/v1",
+        process.env.OPENAI_API_KEY,
+        OPENAI_MODEL,
+        system,
+        user,
+        trimmedUrl
+      );
+    } catch {
+      // Fallback về text-only bên dưới
+    }
+  }
+
+  // 4. Fallback an toàn về text-only nếu tất cả cổng vision lỗi
+  return askJsonWithProfile<T>(profile, system, user);
 }
 
 const ENRICH_SYSTEM = `Bạn là giáo viên IELTS Academic cho người Việt học ở trình độ B1 hướng tới band 6.5.

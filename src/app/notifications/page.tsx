@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { CheckCircle2, Newspaper, Repeat, type LucideIcon } from "lucide-react";
+import { CheckCircle2, Flame, Newspaper, PenLine, Repeat, type LucideIcon } from "lucide-react";
 import { markNotifSeenToday } from "@/lib/due-events";
 
 export default function Notifications() {
@@ -11,6 +11,11 @@ export default function Notifications() {
   );
   const [times, setTimes] = useState({ morning: true, evening: true });
   const [dueCount, setDueCount] = useState<number | null>(null);
+  const [writingInfo, setWritingInfo] = useState<{
+    completedToday: boolean;
+    currentStreak: number;
+    todayTitle: string;
+  } | null>(null);
 
   useEffect(() => {
     markNotifSeenToday();
@@ -18,6 +23,20 @@ export default function Notifications() {
       .then((r) => r.json())
       .then((j) => setDueCount(j.dueCount ?? 0))
       .catch(() => setDueCount(0));
+
+    fetch("/api/writing", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => {
+        if (j) {
+          setWritingInfo({
+            completedToday: Boolean(j.streak?.completedToday),
+            currentStreak: j.streak?.currentStreak ?? 0,
+            todayTitle:
+              j.todaySchedule?.title ?? "Viết đoạn ngắn 15p & Chấm chữa 4 tiêu chí",
+          });
+        }
+      })
+      .catch(() => {});
   }, []);
 
   const enable = async () => {
@@ -39,6 +58,28 @@ export default function Notifications() {
       sub: "Ôn đúng lúc để không quên từ",
       href: "/vocab/review",
       cta: "Ôn ngay",
+    });
+  }
+  if (!writingInfo || !writingInfo.completedToday) {
+    items.push({
+      icon: PenLine,
+      title:
+        writingInfo && writingInfo.currentStreak > 0
+          ? `Kỷ luật Writing hôm nay (Giữ chuỗi 🔥 ${writingInfo.currentStreak} ngày)`
+          : "Nhiệm vụ Kỷ luật Writing hôm nay",
+      sub: `${
+        writingInfo?.todayTitle ?? "Luyện viết đoạn ngắn 15 phút theo lộ trình"
+      } · Đủ 3 bước: Viết → Chấm AI → Gõ lại câu sai`,
+      href: "/writing",
+      cta: "Viết ngay",
+    });
+  } else {
+    items.push({
+      icon: Flame,
+      title: `Đã hoàn thành Kỷ luật Writing hôm nay (🔥 ${writingInfo.currentStreak} ngày)`,
+      sub: "Bạn đã hoàn tất đủ 3 bước kỷ luật hôm nay. Xem lại sổ tay lỗi sai hoặc luyện thêm.",
+      href: "/writing",
+      cta: "Xem",
     });
   }
   items.push({

@@ -16,7 +16,7 @@ type Item = { href: string; label: string; icon: LucideIcon; exact?: boolean; ba
 
 const SKILLS: Item[] = [
   { href: "/reading", label: "Reading", icon: BookOpen },
-  { href: "/writing", label: "Writing", icon: PenLine, soon: true },
+  { href: "/writing", label: "Writing", icon: PenLine },
 ];
 
 function NavLink({
@@ -226,8 +226,8 @@ export default function Sidebar() {
     { href: "/", label: "Trang chủ", icon: Home, exact: true },
     { href: "/vocab", label: "Thẻ nhớ", icon: Layers, exact: true },
     { href: "/vocab/review", label: "Ôn tập", icon: Repeat, badge: dueCount },
-    { href: "/vocab/bank", label: "Kho từ", icon: Package },
     { href: "/reading", label: "Reading", icon: BookOpen },
+    { href: "/writing", label: "Writing", icon: PenLine },
   ];
 
   return (
