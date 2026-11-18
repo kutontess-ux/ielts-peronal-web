@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  ArrowLeft, BarChart3, Bell, Bot, CalendarClock, Check, CheckCircle2, Clock, Folder, FolderInput, FolderOpen, FolderPlus, Layers, ListChecks, Loader2, Pencil, Plus, Repeat, Search, Settings2, Sparkles, Trash2, X,
+  ArrowLeft, BarChart3, Bell, Bot, CalendarClock, Check, CheckCircle2, ChevronDown, ChevronUp, Clock, Folder, FolderInput, FolderOpen, FolderPlus, Layers, ListChecks, Loader2, MoreVertical, Pencil, PenLine, Plus, Repeat, Search, Settings2, Sparkles, Trash2, X,
 } from "lucide-react";
 import { levelColor, type Word } from "@/lib/mock";
 import { enrollWordsInSrs } from "@/lib/srs";
@@ -30,6 +30,7 @@ import {
   type StudySet,
 } from "@/lib/study-sets";
 import Flashcards from "./Flashcards";
+import StudySetDetail from "./StudySetDetail";
 import StudySetLearn from "./StudySetLearn";
 
 const LEVELS = ["A2", "B1", "B2", "C1", "C2"] as const;
@@ -73,6 +74,26 @@ type AiItem = {
   existingId: number | null;
 };
 
+type ManualCardDraft = {
+  id: string;
+  term: string;
+  definition: string;
+  ipa: string;
+  example: string;
+  showExtra: boolean;
+};
+
+function createEmptyManualCard(seq: number): ManualCardDraft {
+  return {
+    id: `manual-${seq}-${Math.random().toString(36).slice(2, 7)}`,
+    term: "",
+    definition: "",
+    ipa: "",
+    example: "",
+    showExtra: false,
+  };
+}
+
 function StudySetModal({
   editing,
   folders,
@@ -96,9 +117,15 @@ function StudySetModal({
   const [selectedIds, setSelectedIds] = useState<Set<number>>(
     () => new Set(editing?.wordIds ?? [])
   );
-  const [mode, setMode] = useState<"current" | "pick" | "quick-add" | "ai-create">(
+  const [mode, setMode] = useState<"current" | "pick" | "manual" | "quick-add" | "ai-create">(
     editing ? "current" : "pick"
   );
+
+  // Tạo tay giống Quizlet (UI trước)
+  const [manualCards, setManualCards] = useState<ManualCardDraft[]>(() => [
+    createEmptyManualCard(1),
+    createEmptyManualCard(2),
+  ]);
 
   // Tìm kiếm & lọc từ trong Kho từ vựng
   const [query, setQuery] = useState("");
@@ -117,6 +144,20 @@ function StudySetModal({
   const [aiErr, setAiErr] = useState("");
   const [aiItems, setAiItems] = useState<AiItem[] | null>(null);
   const [aiOff, setAiOff] = useState<Set<string>>(new Set());
+
+  const updateManualCard = (id: string, patch: Partial<ManualCardDraft>) => {
+    setManualCards((prev) =>
+      prev.map((card) => (card.id === id ? { ...card, ...patch } : card))
+    );
+  };
+
+  const addManualCard = () => {
+    setManualCards((prev) => [...prev, createEmptyManualCard(prev.length + 1)]);
+  };
+
+  const removeManualCard = (id: string) => {
+    setManualCards((prev) => (prev.length <= 1 ? prev : prev.filter((c) => c.id !== id)));
+  };
 
   const selectedWordsList = useMemo(
     () => words.filter((w) => selectedIds.has(w.id)),
@@ -328,7 +369,9 @@ function StudySetModal({
       <form
         onSubmit={handleSubmit}
         onClick={(e) => e.stopPropagation()}
-        className="flex max-h-[92vh] w-full max-w-2xl flex-col overflow-hidden rounded-3xl border border-line bg-card shadow-2xl"
+        className={`flex max-h-[92vh] w-full flex-col overflow-hidden rounded-3xl border border-line bg-card shadow-2xl transition-all ${
+          mode === "manual" ? "max-w-3xl" : "max-w-2xl"
+        }`}
       >
         <div className="flex items-center justify-between border-b border-line px-4 py-3.5 sm:px-6 sm:py-4">
           <h2 className="text-base font-bold sm:text-lg">
@@ -399,6 +442,15 @@ function StudySetModal({
                 }`}
               >
                 Chọn từ Kho ({words.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setMode("manual")}
+                className={`inline-flex items-center gap-1 rounded-full px-3.5 py-1.5 text-xs font-bold transition ${
+                  mode === "manual" ? "bg-ink text-bg" : "bg-bg text-muted hover:text-ink"
+                }`}
+              >
+                <PenLine size={13} /> Tạo tay ({manualCards.length})
               </button>
               <button
                 type="button"
@@ -485,6 +537,123 @@ function StudySetModal({
                   ))}
                 </div>
               )}
+            </div>
+          ) : mode === "manual" ? (
+            <div className="space-y-3">
+              <div className="rounded-2xl border border-brand/25 bg-brand/5 px-3.5 py-2.5 text-xs text-muted">
+                Giao diện nhập thẻ thủ công giống Quizlet (tạm thời xem trước giao diện, phần lưu dữ liệu thẻ tạo tay sẽ được nối ở bước tiếp theo).
+              </div>
+
+              <div className="max-h-80 space-y-3 overflow-y-auto pr-1">
+                {manualCards.map((card, index) => (
+                  <div
+                    key={card.id}
+                    className="rounded-2xl border border-line bg-bg p-3.5 transition focus-within:border-brand/60"
+                  >
+                    <div className="mb-2.5 flex items-center justify-between gap-2 border-b border-line pb-2">
+                      <span className="inline-flex h-6 min-w-[24px] items-center justify-center rounded-lg bg-card px-2 text-xs font-bold text-muted">
+                        {index + 1}
+                      </span>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            updateManualCard(card.id, { showExtra: !card.showExtra })
+                          }
+                          className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-semibold text-muted transition hover:bg-card hover:text-ink"
+                        >
+                          {card.showExtra ? (
+                            <>
+                              <ChevronUp size={13} /> Ẩn IPA / Ví dụ
+                            </>
+                          ) : (
+                            <>
+                              <ChevronDown size={13} /> + IPA / Ví dụ
+                            </>
+                          )}
+                        </button>
+                        <button
+                          type="button"
+                          title="Xoá thẻ này"
+                          disabled={manualCards.length <= 1}
+                          onClick={() => removeManualCard(card.id)}
+                          className="rounded-lg p-1 text-muted transition hover:bg-rose-500/15 hover:text-rose-600 disabled:opacity-30 dark:hover:text-rose-300"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div>
+                        <label className="mb-1 block text-[10px] font-bold tracking-wider text-muted uppercase">
+                          Thuật ngữ
+                        </label>
+                        <input
+                          value={card.term}
+                          onChange={(e) =>
+                            updateManualCard(card.id, { term: e.target.value })
+                          }
+                          placeholder="Vd: ubiquitous"
+                          className="w-full rounded-xl border border-line bg-card px-3 py-2 text-sm outline-none focus:border-brand-hover"
+                        />
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-[10px] font-bold tracking-wider text-muted uppercase">
+                          Định nghĩa
+                        </label>
+                        <input
+                          value={card.definition}
+                          onChange={(e) =>
+                            updateManualCard(card.id, { definition: e.target.value })
+                          }
+                          placeholder="Vd: có mặt ở khắp mọi nơi"
+                          className="w-full rounded-xl border border-line bg-card px-3 py-2 text-sm outline-none focus:border-brand-hover"
+                        />
+                      </div>
+                    </div>
+
+                    {card.showExtra && (
+                      <div className="mt-3 grid gap-3 border-t border-line/60 pt-3 sm:grid-cols-2">
+                        <div>
+                          <label className="mb-1 block text-[10px] font-bold tracking-wider text-muted uppercase">
+                            IPA (tuỳ chọn)
+                          </label>
+                          <input
+                            value={card.ipa}
+                            onChange={(e) =>
+                              updateManualCard(card.id, { ipa: e.target.value })
+                            }
+                            placeholder="Vd: /juːˈbɪk.wɪ.təs/"
+                            className="w-full rounded-xl border border-line bg-card px-3 py-2 text-xs outline-none focus:border-brand-hover"
+                          />
+                        </div>
+                        <div>
+                          <label className="mb-1 block text-[10px] font-bold tracking-wider text-muted uppercase">
+                            Ví dụ (tuỳ chọn)
+                          </label>
+                          <input
+                            value={card.example}
+                            onChange={(e) =>
+                              updateManualCard(card.id, { example: e.target.value })
+                            }
+                            placeholder="Vd: Smartphones have become ubiquitous."
+                            className="w-full rounded-xl border border-line bg-card px-3 py-2 text-xs outline-none focus:border-brand-hover"
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              <button
+                type="button"
+                onClick={addManualCard}
+                className="flex w-full items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-line bg-bg py-3 text-xs font-bold text-ink transition hover:border-brand-hover hover:text-brand-hover"
+              >
+                <Plus size={15} strokeWidth={2.3} /> Thêm thẻ
+              </button>
             </div>
           ) : mode === "quick-add" ? (
             <div className="space-y-3">
@@ -943,10 +1112,104 @@ function FolderSetsModal({
   );
 }
 
+function MoveFolderModal({
+  studySet,
+  folders,
+  onClose,
+}: {
+  studySet: StudySet;
+  folders: StudyFolder[];
+  onClose: () => void;
+}) {
+  const [targetFolderId, setTargetFolderId] = useState<string>(studySet.folderId ?? "");
+
+  const handleSave = (e: React.FormEvent) => {
+    e.preventDefault();
+    moveStudySetToFolder(studySet.id, targetFolderId || null);
+    onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-3 sm:p-4" onClick={onClose}>
+      <form
+        onSubmit={handleSave}
+        onClick={(e) => e.stopPropagation()}
+        className="w-full max-w-md overflow-hidden rounded-3xl border border-line bg-card shadow-2xl"
+      >
+        <div className="flex items-center justify-between border-b border-line px-5 py-4">
+          <div className="min-w-0">
+            <h2 className="text-base font-bold sm:text-lg">Chuyển thư mục</h2>
+            <p className="truncate text-xs text-muted">Học phần: {studySet.title}</p>
+          </div>
+          <button type="button" onClick={onClose} className="rounded-lg p-1.5 text-muted hover:text-ink">
+            <X size={18} />
+          </button>
+        </div>
+
+        <div className="max-h-72 space-y-2 overflow-y-auto p-5">
+          <button
+            type="button"
+            onClick={() => setTargetFolderId("")}
+            className={`flex w-full items-center justify-between rounded-xl border px-3.5 py-2.5 text-left text-sm font-semibold transition ${
+              targetFolderId === ""
+                ? "border-brand bg-brand/10 text-ink"
+                : "border-line bg-bg text-muted hover:text-ink"
+            }`}
+          >
+            <span>Không thuộc thư mục nào</span>
+            {targetFolderId === "" && <Check size={15} className="text-brand-hover" />}
+          </button>
+
+          {folders.map((f) => {
+            const selected = targetFolderId === f.id;
+            return (
+              <button
+                key={f.id}
+                type="button"
+                onClick={() => setTargetFolderId(f.id)}
+                className={`flex w-full items-center justify-between rounded-xl border px-3.5 py-2.5 text-left text-sm font-semibold transition ${
+                  selected
+                    ? "border-brand bg-brand/10 text-ink"
+                    : "border-line bg-bg text-ink hover:bg-card-hover"
+                }`}
+              >
+                <span className="flex min-w-0 items-center gap-2">
+                  <Folder size={15} className="shrink-0 text-brand-hover" />
+                  <span className="truncate">{f.name}</span>
+                </span>
+                {selected && <Check size={15} className="shrink-0 text-brand-hover" />}
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="flex items-center justify-end gap-2 border-t border-line px-5 py-4">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-full bg-bg px-4 py-2 text-sm font-semibold text-muted hover:text-ink"
+          >
+            Huỷ
+          </button>
+          <button
+            type="submit"
+            className="rounded-full bg-brand px-5 py-2 text-sm font-bold text-white hover:bg-brand-hover hover:text-bg"
+          >
+            Lưu thay đổi
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
 export default function VocabLearn() {
   const [words, setWords] = useState<Word[]>([]);
   const [stats, setStats] = useState({ dueCount: 0, totalWords: 0, masteredCount: 0 });
   const [loading, setLoading] = useState(true);
+  const [selectedSetId, setSelectedSetId] = useState<string | null>(null);
+  const [openMenuSetId, setOpenMenuSetId] = useState<string | null>(null);
+  const [moveFolderSet, setMoveFolderSet] = useState<StudySet | null>(null);
   const [activeSession, setActiveSession] = useState<{
     mode: "flashcards" | "learn";
     id: string;
@@ -974,6 +1237,20 @@ export default function VocabLearn() {
   const folders = useStudyFolders();
   const reviewConfig = useStudySetReviewConfig();
   const { isAdmin } = useMe();
+
+  useEffect(() => {
+    if (!openMenuSetId) return;
+    const close = () => setOpenMenuSetId(null);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpenMenuSetId(null);
+    };
+    window.addEventListener("click", close);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("click", close);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [openMenuSetId]);
 
   const reloadWords = useCallback(async (): Promise<Word[]> => {
     const [wJson, rJson] = await Promise.all([
@@ -1014,6 +1291,10 @@ export default function VocabLearn() {
   const wordMap = useMemo(() => new Map(words.map((w) => [w.id, w])), [words]);
   const folderMap = useMemo(() => new Map(folders.map((f) => [f.id, f])), [folders]);
   const activeFolder = activeFolderId ? folderMap.get(activeFolderId) ?? null : null;
+  const selectedSet = useMemo(
+    () => (selectedSetId ? studySets.find((s) => s.id === selectedSetId) ?? null : null),
+    [selectedSetId, studySets]
+  );
 
   const recentQueue = useMemo(() => {
     if (!nowMs) return [];
@@ -1130,8 +1411,79 @@ export default function VocabLearn() {
     );
   }
 
+  const selectedSetWords = selectedSet
+    ? selectedSet.wordIds
+        .map((id) => wordMap.get(id))
+        .filter((w): w is Word => !!w)
+    : [];
+  const selectedSetFolder =
+    selectedSet?.folderId ? folderMap.get(selectedSet.folderId) ?? null : null;
+
   return (
     <div className="space-y-8">
+      {selectedSet ? (
+        <>
+          {srsBanner && (
+            <div
+              className={`flex flex-wrap items-center justify-between gap-2 rounded-2xl px-4 py-3 text-sm font-medium ${
+                srsBanner.isErr
+                  ? "bg-rose-500/15 text-rose-700 dark:bg-rose-400/15 dark:text-rose-300"
+                  : "bg-emerald-500/15 text-emerald-700 dark:bg-emerald-400/15 dark:text-emerald-300"
+              }`}
+            >
+              <span className="flex items-center gap-2">
+                <Repeat size={15} /> {srsBanner.text}
+              </span>
+              {!srsBanner.isErr && (
+                <Link href="/vocab/review" className="text-xs font-bold underline">
+                  Mở Ôn tập ngắt quãng →
+                </Link>
+              )}
+            </div>
+          )}
+          <StudySetDetail
+            studySet={selectedSet}
+            folder={selectedSetFolder}
+            words={selectedSetWords}
+            enrolling={enrollingId === selectedSet.id}
+            onBack={() => setSelectedSetId(null)}
+            onOpenFolder={(fId) => {
+              setSelectedSetId(null);
+              setActiveFolderId(fId);
+            }}
+            onStartFlashcards={() =>
+              setActiveSession({
+                mode: "flashcards",
+                id: selectedSet.id,
+                title: selectedSet.title,
+                words: selectedSetWords,
+              })
+            }
+            onStartLearn={() =>
+              setActiveSession({
+                mode: "learn",
+                id: selectedSet.id,
+                title: selectedSet.title,
+                words: selectedSetWords,
+              })
+            }
+            onEdit={() => setModalState({ open: true, editing: selectedSet })}
+            onMoveFolder={() => setMoveFolderSet(selectedSet)}
+            onEnroll={() => handleEnrollSet(selectedSet, selectedSetWords)}
+            onDelete={() => {
+              if (
+                confirm(
+                  `Xoá học phần "${selectedSet.title}"? (Các từ vẫn giữ nguyên trong Kho từ vựng)`
+                )
+              ) {
+                deleteStudySet(selectedSet.id);
+                setSelectedSetId(null);
+              }
+            }}
+          />
+        </>
+      ) : (
+        <>
       {stats.dueCount > 0 ? (
         <Link href="/vocab/review" className="flex items-center justify-between gap-4 rounded-3xl border border-brand/60 bg-card p-6 transition hover:bg-card-hover">
           <div>
@@ -1673,163 +2025,137 @@ export default function VocabLearn() {
                 .filter((w): w is Word => !!w);
               const busy = enrollingId === s.id;
               const setFolder = s.folderId ? folderMap.get(s.folderId) : null;
-              const reviewStatus = nowMs
-                ? getStudySetReviewStatus(s, recentSetIds, nowMs)
-                : null;
+              const menuOpen = openMenuSetId === s.id;
               return (
                 <div
                   key={s.id}
-                  className={`group flex flex-col justify-between rounded-2xl border-2 bg-card p-5 transition hover:border-brand-hover ${
-                    reviewStatus?.isDue ? "border-brand/50" : "border-transparent"
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => {
+                    setOpenMenuSetId(null);
+                    setSelectedSetId(s.id);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      setOpenMenuSetId(null);
+                      setSelectedSetId(s.id);
+                    }
+                  }}
+                  className={`group relative flex cursor-pointer flex-col justify-between rounded-2xl border-2 border-transparent bg-card p-5 text-left transition hover:border-brand-hover ${
+                    menuOpen ? "z-20" : ""
                   }`}
                 >
-                  <div>
-                    <div className="flex items-start gap-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex min-w-0 flex-1 items-start gap-3">
                       <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-bg text-brand-hover">
                         <Layers size={20} strokeWidth={1.6} />
                       </div>
                       <div className="min-w-0 flex-1">
-                        <div className="break-words font-bold">{s.title}</div>
-                        <div className="break-words text-xs text-muted">
-                          {setWords.length} thẻ{s.desc ? ` · ${s.desc}` : ""}
+                        <div className="break-words text-base font-bold text-ink">
+                          {s.title}
+                        </div>
+                        <div className="mt-0.5 text-xs font-medium text-muted">
+                          {setWords.length} thuật ngữ
                         </div>
                       </div>
-                      <div className="flex items-center gap-1">
-                        <button
-                          type="button"
-                          title="Chỉnh sửa học phần"
-                          onClick={() => setModalState({ open: true, editing: s })}
-                          className="rounded-lg p-1.5 text-muted hover:bg-bg hover:text-ink"
-                        >
-                          <Pencil size={14} />
-                        </button>
-                        <button
-                          type="button"
-                          title="Xoá học phần"
-                          onClick={() => {
-                            if (confirm(`Xoá học phần "${s.title}"? (Các từ vẫn giữ nguyên trong Kho từ vựng)`)) {
-                              deleteStudySet(s.id);
-                            }
-                          }}
-                          className="rounded-lg p-1.5 text-muted hover:bg-rose-500/15 hover:text-rose-600 dark:hover:text-rose-300"
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      </div>
                     </div>
 
-                    {reviewStatus && isAdmin ? (
-                      <div className="mt-3 flex flex-wrap items-center gap-1.5">
-                        <span
-                          className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-bold ${
-                            reviewStatus.kind === "due"
-                              ? "bg-rose-500/15 text-rose-700 dark:text-rose-300"
-                              : reviewStatus.kind === "upcoming"
-                                ? "bg-sky-500/15 text-sky-700 dark:text-sky-300"
-                                : reviewStatus.kind === "archived-studied"
-                                  ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300"
-                                  : "bg-bg text-muted"
-                          }`}
-                        >
-                          <Clock size={11} /> {reviewStatus.badgeText}
-                        </span>
-                        {reviewStatus.inRecentQueue && reviewStatus.lastStudiedLabel && (
-                          <span className="text-[11px] text-muted">
-                            {reviewStatus.lastStudiedLabel}
-                          </span>
-                        )}
-                      </div>
-                    ) : reviewStatus?.isDue ? (
-                      <div className="mt-3 flex flex-wrap items-center gap-1.5">
-                        <span className="inline-flex items-center gap-1 rounded-full bg-rose-500/15 px-2.5 py-0.5 text-[11px] font-bold text-rose-700 dark:text-rose-300">
-                          <Clock size={11} /> Cần ôn
-                        </span>
-                      </div>
-                    ) : null}
+                    <div
+                      className="relative shrink-0"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <button
+                        type="button"
+                        aria-label={`Tuỳ chọn cho ${s.title}`}
+                        title="Tuỳ chọn"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setOpenMenuSetId((prev) => (prev === s.id ? null : s.id));
+                        }}
+                        className="rounded-lg p-1.5 text-muted transition hover:bg-bg hover:text-ink"
+                      >
+                        <MoreVertical size={17} />
+                      </button>
 
-                    {folders.length > 0 && (
-                      <div className="mt-3 flex flex-wrap items-center gap-2">
-                        {!activeFolder && setFolder && (
+                      {menuOpen && (
+                        <div
+                          onClick={(e) => e.stopPropagation()}
+                          className="absolute right-0 top-9 z-30 w-52 overflow-hidden rounded-2xl border border-line bg-card p-1.5 shadow-xl"
+                        >
                           <button
                             type="button"
-                            onClick={() => setActiveFolderId(setFolder.id)}
-                            className="inline-flex items-center gap-1 rounded-full bg-brand/10 px-2.5 py-0.5 text-[11px] font-semibold text-brand-hover hover:bg-brand/20"
+                            onClick={() => {
+                              setOpenMenuSetId(null);
+                              setModalState({ open: true, editing: s });
+                            }}
+                            className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-xs font-semibold text-ink transition hover:bg-bg"
                           >
-                            <Folder size={11} /> {setFolder.name}
+                            <Pencil size={14} className="text-muted" /> Chỉnh sửa
                           </button>
-                        )}
-                        {activeFolder ? (
+
                           <button
                             type="button"
-                            onClick={() => moveStudySetToFolder(s.id, null)}
-                            className="inline-flex items-center gap-1 rounded-full bg-bg px-2.5 py-0.5 text-[11px] font-semibold text-muted hover:text-rose-600 dark:hover:text-rose-300"
+                            onClick={() => {
+                              setOpenMenuSetId(null);
+                              setMoveFolderSet(s);
+                            }}
+                            className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-xs font-semibold text-ink transition hover:bg-bg"
                           >
-                            <X size={11} /> Bỏ khỏi thư mục
+                            <FolderInput size={14} className="text-muted" /> Chuyển thư mục
                           </button>
-                        ) : (
-                          <select
-                            aria-label={`Chọn thư mục cho ${s.title}`}
-                            value={s.folderId ?? ""}
-                            onChange={(e) => moveStudySetToFolder(s.id, e.target.value || null)}
-                            className="max-w-full rounded-full border border-line bg-bg px-2.5 py-0.5 text-[11px] font-medium text-muted outline-none hover:border-brand-hover"
+
+                          {setWords.length > 0 && (
+                            <button
+                              type="button"
+                              disabled={busy}
+                              onClick={() => {
+                                setOpenMenuSetId(null);
+                                void handleEnrollSet(s, setWords);
+                              }}
+                              className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-xs font-semibold text-ink transition hover:bg-bg disabled:opacity-50"
+                            >
+                              {busy ? (
+                                <Loader2 size={14} className="animate-spin text-muted" />
+                              ) : (
+                                <Repeat size={14} className="text-muted" />
+                              )}
+                              {busy ? "Đang chuyển..." : "Chuyển vào ôn tập"}
+                            </button>
+                          )}
+
+                          <div className="my-1 border-t border-line" />
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setOpenMenuSetId(null);
+                              if (
+                                confirm(
+                                  `Xoá học phần "${s.title}"? (Các từ vẫn giữ nguyên trong Kho từ vựng)`
+                                )
+                              ) {
+                                deleteStudySet(s.id);
+                              }
+                            }}
+                            className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-xs font-semibold text-rose-600 transition hover:bg-rose-500/10 dark:text-rose-400"
                           >
-                            <option value="">Chưa có thư mục</option>
-                            {folders.map((f) => (
-                              <option key={f.id} value={f.id}>
-                                Thư mục: {f.name}
-                              </option>
-                            ))}
-                          </select>
-                        )}
-                      </div>
-                    )}
+                            <Trash2 size={14} /> Xoá
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </div>
 
-                  <div className="mt-4 space-y-2">
-                    <div className="grid grid-cols-2 gap-2">
-                      <button
-                        type="button"
-                        disabled={setWords.length === 0}
-                        onClick={() =>
-                          setActiveSession({
-                            mode: "flashcards",
-                            id: s.id,
-                            title: s.title,
-                            words: setWords,
-                          })
-                        }
-                        className="flex items-center justify-center gap-1.5 rounded-xl bg-bg px-3 py-2.5 text-xs font-bold text-ink transition hover:bg-brand hover:text-white disabled:opacity-40 sm:text-sm"
-                      >
-                        <Layers size={14} />
-                        <span>{setWords.length > 0 ? "Lật thẻ" : "Trống"}</span>
-                      </button>
-                      <button
-                        type="button"
-                        disabled={setWords.length === 0}
-                        onClick={() =>
-                          setActiveSession({
-                            mode: "learn",
-                            id: s.id,
-                            title: s.title,
-                            words: setWords,
-                          })
-                        }
-                        className="flex items-center justify-center gap-1.5 rounded-xl bg-brand/15 px-3 py-2.5 text-xs font-bold text-brand-hover transition hover:bg-brand hover:text-white disabled:opacity-40 sm:text-sm"
-                      >
-                        <Sparkles size={14} />
-                        <span>Luyện tập</span>
-                      </button>
-                    </div>
-                    {setWords.length > 0 && (
-                      <button
-                        type="button"
-                        disabled={busy}
-                        onClick={() => handleEnrollSet(s, setWords)}
-                        className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-line bg-bg/50 px-3 py-2 text-xs font-semibold text-muted transition hover:border-brand hover:text-brand-hover disabled:opacity-50"
-                      >
-                        {busy ? <Loader2 size={13} className="animate-spin" /> : <Repeat size={13} />}
-                        {busy ? "Đang chuyển..." : "Chuyển vào ôn tập"}
-                      </button>
+                  <div className="mt-4 flex items-center gap-1.5">
+                    {setFolder ? (
+                      <span className="inline-flex items-center gap-1.5 rounded-full bg-brand/10 px-2.5 py-1 text-[11px] font-semibold text-brand-hover">
+                        <Folder size={12} /> {setFolder.name}
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1.5 rounded-full bg-bg px-2.5 py-1 text-[11px] font-medium text-muted">
+                        <Folder size={12} /> Chưa có thư mục
+                      </span>
                     )}
                   </div>
                 </div>
@@ -1838,6 +2164,8 @@ export default function VocabLearn() {
           </div>
         )}
       </section>
+        </>
+      )}
 
       {modalState.open && (
         <StudySetModal
@@ -1863,6 +2191,14 @@ export default function VocabLearn() {
           studySets={studySets}
           folderMap={folderMap}
           onClose={() => setFolderSetsModalOpen(false)}
+        />
+      )}
+
+      {moveFolderSet && (
+        <MoveFolderModal
+          studySet={moveFolderSet}
+          folders={folders}
+          onClose={() => setMoveFolderSet(null)}
         />
       )}
     </div>
