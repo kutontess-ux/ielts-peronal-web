@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
   CalendarClock,
@@ -27,6 +27,7 @@ import {
   recordStudySetSession,
   type StudySetReviewResult,
 } from "@/lib/study-sets";
+import { clearStudyDraft, loadStudyDraft, saveStudyDraft } from "@/lib/study-drafts";
 
 export type TestCompletionPayload = {
   knownCount: number;
@@ -373,6 +374,32 @@ function loadSavedTestConfig(maxQuestions: number): TestConfig {
   }
 }
 
+type TestDraft = {
+  config: TestConfig;
+  testWordIds: number[];
+  sections: TestSection[];
+  totalQuestions: number;
+  tfAnswers: Record<string, boolean | null>;
+  mcAnswers: Record<string, string>;
+  writtenAnswers: Record<string, string>;
+  matchAnswers: Record<string, Record<string, string>>;
+};
+
+function restoreTestDraft(setId: string, words: Word[]): (TestDraft & { testWords: Word[] }) | null {
+  if (!setId || words.length === 0) return null;
+  const draft = loadStudyDraft<TestDraft>(`ielts_draft_test_v1_${setId}`);
+  if (!draft || !Array.isArray(draft.sections) || draft.sections.length === 0) return null;
+  const wordMap = new Map(words.map((w) => [w.id, w]));
+  const testWords = (draft.testWordIds ?? [])
+    .map((id) => wordMap.get(id))
+    .filter((w): w is Word => !!w);
+  if (testWords.length === 0) return null;
+  return {
+    ...draft,
+    testWords,
+  };
+}
+
 export default function StudySetTest({
   setId,
   title,
@@ -390,24 +417,39 @@ export default function StudySetTest({
   onBack: () => void;
   onCompleted?: (result: TestCompletionPayload) => StudySetReviewResult | null | void;
 }) {
-  const [config, setConfig] = useState<TestConfig>(() =>
-    loadSavedTestConfig(words.length)
-  );
-  const [setupOpen, setSetupOpen] = useState(true);
-  const [hasStarted, setHasStarted] = useState(false);
+  const draftKey = setId ? `ielts_draft_test_v1_${setId}` : null;
+  const [initialDraft] = useState(() => restoreTestDraft(setId, words));
 
-  const [testWords, setTestWords] = useState<Word[]>(words);
-  const [sections, setSections] = useState<TestSection[]>([]);
-  const [totalQuestions, setTotalQuestions] = useState(0);
+  const [config, setConfig] = useState<TestConfig>(
+    () => initialDraft?.config ?? loadSavedTestConfig(words.length)
+  );
+  const [setupOpen, setSetupOpen] = useState(() => !initialDraft);
+  const [hasStarted, setHasStarted] = useState(() => Boolean(initialDraft));
+
+  const [testWords, setTestWords] = useState<Word[]>(
+    () => initialDraft?.testWords ?? words
+  );
+  const [sections, setSections] = useState<TestSection[]>(
+    () => initialDraft?.sections ?? []
+  );
+  const [totalQuestions, setTotalQuestions] = useState(
+    () => initialDraft?.totalQuestions ?? 0
+  );
 
   // State câu trả lời
-  const [tfAnswers, setTfAnswers] = useState<Record<string, boolean | null>>({});
-  const [mcAnswers, setMcAnswers] = useState<Record<string, string>>({});
-  const [writtenAnswers, setWrittenAnswers] = useState<Record<string, string>>({});
+  const [tfAnswers, setTfAnswers] = useState<Record<string, boolean | null>>(
+    () => initialDraft?.tfAnswers ?? {}
+  );
+  const [mcAnswers, setMcAnswers] = useState<Record<string, string>>(
+    () => initialDraft?.mcAnswers ?? {}
+  );
+  const [writtenAnswers, setWrittenAnswers] = useState<Record<string, string>>(
+    () => initialDraft?.writtenAnswers ?? {}
+  );
   // matchAnswers: blockId -> { [leftPairId]: rightPairId }
   const [matchAnswers, setMatchAnswers] = useState<
     Record<string, Record<string, string>>
-  >({});
+  >(() => initialDraft?.matchAnswers ?? {});
   const [activeMatchLeft, setActiveMatchLeft] = useState<{
     blockId: string;
     pairId: string;
@@ -423,6 +465,7 @@ export default function StudySetTest({
 
   const startTest = useCallback(
     (sourceWords: Word[], cfg: TestConfig) => {
+      clearStudyDraft(draftKey);
       const clampedCfg: TestConfig = {
         ...cfg,
         questionCount: Math.max(
@@ -464,7 +507,7 @@ export default function StudySetTest({
       setSetupOpen(false);
       window.scrollTo({ top: 0, behavior: "smooth" });
     },
-    [wordPool]
+    [draftKey, wordPool]
   );
 
   const answeredCount = useMemo(() => {
@@ -485,6 +528,37 @@ export default function StudySetTest({
     }
     return count;
   }, [sections, tfAnswers, mcAnswers, writtenAnswers, matchAnswers]);
+
+  useEffect(() => {
+    if (!draftKey) return;
+    if (!hasStarted || gradedItems || sections.length === 0 || answeredCount === 0) {
+      if (gradedItems) clearStudyDraft(draftKey);
+      return;
+    }
+    saveStudyDraft<TestDraft>(draftKey, {
+      config,
+      testWordIds: testWords.map((w) => w.id),
+      sections,
+      totalQuestions,
+      tfAnswers,
+      mcAnswers,
+      writtenAnswers,
+      matchAnswers,
+    });
+  }, [
+    draftKey,
+    hasStarted,
+    gradedItems,
+    sections,
+    answeredCount,
+    config,
+    testWords,
+    totalQuestions,
+    tfAnswers,
+    mcAnswers,
+    writtenAnswers,
+    matchAnswers,
+  ]);
 
   const handleMatchPairClick = (
     blockId: string,

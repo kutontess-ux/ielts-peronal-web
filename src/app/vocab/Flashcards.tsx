@@ -10,6 +10,7 @@ import { levelColor, type Word } from "@/lib/mock";
 import { enrollWordsInSrs } from "@/lib/srs";
 import { notifyDueUpdated } from "@/lib/due-events";
 import { recordStudySetSession, type StudySetReviewResult } from "@/lib/study-sets";
+import { clearStudyDraft, loadStudyDraft, saveStudyDraft } from "@/lib/study-drafts";
 import { speakWord } from "@/lib/tts";
 import { VoiceSettingsButton } from "@/components/VoiceSettingsModal";
 
@@ -19,6 +20,40 @@ type HistoryEntry = {
   word: Word;
   status: HistoryStatus;
 };
+
+type FlashcardsDraft = {
+  deckIds: number[];
+  idx: number;
+  meaningFirst: boolean;
+  star: Record<number, boolean>;
+  history: { wordId: number; status: HistoryStatus }[];
+};
+
+function restoreFlashcardsDraft(setId: string | undefined, words: Word[]) {
+  if (!setId || words.length === 0) return null;
+  const draft = loadStudyDraft<FlashcardsDraft>(`ielts_draft_flashcards_v1_${setId}`);
+  if (!draft || !Array.isArray(draft.deckIds)) return null;
+  const wordMap = new Map(words.map((w) => [w.id, w]));
+  const deck = draft.deckIds
+    .map((id) => wordMap.get(id))
+    .filter((w): w is Word => !!w);
+  if (deck.length === 0) return null;
+  const idx = Math.max(0, Math.min(draft.idx || 0, deck.length));
+  if (idx <= 0 || idx >= deck.length) return null;
+  const history: HistoryEntry[] = (draft.history ?? [])
+    .map((h) => {
+      const w = wordMap.get(h.wordId);
+      return w ? { word: w, status: h.status } : null;
+    })
+    .filter((h): h is HistoryEntry => !!h);
+  return {
+    deck,
+    idx,
+    meaningFirst: Boolean(draft.meaningFirst),
+    star: draft.star ?? {},
+    history,
+  };
+}
 
 export type FlashcardCompletionPayload = {
   knownCount: number;
@@ -44,18 +79,36 @@ export default function Flashcards({
   onSwitchToLearn?: () => void;
   onCompleted?: (result: FlashcardCompletionPayload) => StudySetReviewResult | null | void;
 }) {
-  const [deck, setDeck] = useState<Word[]>(words);
-  const [idx, setIdx] = useState(0);
+  const draftKey = setId ? `ielts_draft_flashcards_v1_${setId}` : null;
+  const [initialDraft] = useState(() => restoreFlashcardsDraft(setId, words));
+
+  const [deck, setDeck] = useState<Word[]>(() => initialDraft?.deck ?? words);
+  const [idx, setIdx] = useState(() => initialDraft?.idx ?? 0);
   const [flipped, setFlipped] = useState(false);
-  const [meaningFirst, setMeaningFirst] = useState(false);
+  const [meaningFirst, setMeaningFirst] = useState(() => initialDraft?.meaningFirst ?? false);
   const [autoplay, setAutoplay] = useState(false);
-  const [star, setStar] = useState<Record<number, boolean>>({});
-  const [history, setHistory] = useState<HistoryEntry[]>([]);
+  const [star, setStar] = useState<Record<number, boolean>>(() => initialDraft?.star ?? {});
+  const [history, setHistory] = useState<HistoryEntry[]>(() => initialDraft?.history ?? []);
   const [srsMsg, setSrsMsg] = useState("");
   const [reviewSchedule, setReviewSchedule] = useState<StudySetReviewResult | null>(null);
 
   const done = idx >= deck.length;
   const card = deck[idx];
+
+  useEffect(() => {
+    if (!draftKey) return;
+    if (done || (idx === 0 && history.length === 0)) {
+      clearStudyDraft(draftKey);
+      return;
+    }
+    saveStudyDraft<FlashcardsDraft>(draftKey, {
+      deckIds: deck.map((w) => w.id),
+      idx,
+      meaningFirst,
+      star,
+      history: history.map((h) => ({ wordId: h.word.id, status: h.status })),
+    });
+  }, [draftKey, done, deck, idx, meaningFirst, star, history]);
 
   const knownList = history.filter((h) => h.status === "known").map((h) => h.word);
   const unknownList = history.filter((h) => h.status === "unknown").map((h) => h.word);
@@ -339,6 +392,16 @@ export default function Flashcards({
         </div>
         <div className="flex flex-wrap items-center gap-2 text-xs font-bold sm:gap-2.5">
           <VoiceSettingsButton variant="compact" />
+          {idx > 0 && (
+            <button
+              type="button"
+              onClick={() => restart(words)}
+              className="inline-flex items-center gap-1 rounded-full border border-line bg-card px-3 py-1 font-semibold text-muted hover:border-brand-hover hover:text-ink"
+              title="Bắt đầu lại từ đầu"
+            >
+              <RotateCcw size={12} /> Làm lại
+            </button>
+          )}
           {onSwitchToLearn && (
             <button
               type="button"

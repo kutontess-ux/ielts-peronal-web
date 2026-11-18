@@ -38,6 +38,7 @@ import {
   recordStudySetSession,
   type StudySetReviewResult,
 } from "@/lib/study-sets";
+import { clearStudyDraft, loadStudyDraft, saveStudyDraft } from "@/lib/study-drafts";
 
 export type LearnCompletionPayload = {
   knownCount: number;
@@ -55,6 +56,50 @@ type QueueItem = {
   phase: QuestionPhase;
   isRetry: boolean;
 };
+
+type LearnDraft = {
+  learnMode: LearnMode;
+  promptSide: PromptSide;
+  sessionWordIds: number[];
+  queue: { wordId: number; phase: QuestionPhase; isRetry: boolean }[];
+  phase1PassedIds: number[];
+  masteredIds: number[];
+  missedIds: number[];
+};
+
+function restoreLearnDraft(setId: string, words: Word[]) {
+  if (!setId || words.length === 0) return null;
+  const draft = loadStudyDraft<LearnDraft>(`ielts_draft_learn_v1_${setId}`);
+  if (!draft || !Array.isArray(draft.queue) || draft.queue.length === 0) return null;
+  const hasProgress =
+    (draft.masteredIds?.length ?? 0) > 0 ||
+    (draft.phase1PassedIds?.length ?? 0) > 0 ||
+    (draft.missedIds?.length ?? 0) > 0;
+  if (!hasProgress) return null;
+
+  const wordMap = new Map(words.map((w) => [w.id, w]));
+  const sessionWords = (draft.sessionWordIds ?? [])
+    .map((id) => wordMap.get(id))
+    .filter((w): w is Word => !!w);
+  const queue: QueueItem[] = draft.queue
+    .map((item) => {
+      const w = wordMap.get(item.wordId);
+      return w ? { word: w, phase: item.phase, isRetry: Boolean(item.isRetry) } : null;
+    })
+    .filter((q): q is QueueItem => !!q);
+  if (sessionWords.length === 0 || queue.length === 0) return null;
+
+  const validIds = new Set(sessionWords.map((w) => w.id));
+  return {
+    learnMode: draft.learnMode,
+    promptSide: draft.promptSide,
+    sessionWords,
+    queue,
+    phase1PassedIds: new Set((draft.phase1PassedIds ?? []).filter((id) => validIds.has(id))),
+    masteredIds: new Set((draft.masteredIds ?? []).filter((id) => validIds.has(id))),
+    missedIds: new Set((draft.missedIds ?? []).filter((id) => validIds.has(id))),
+  };
+}
 
 type ChoiceOption = {
   id: number;
@@ -150,7 +195,11 @@ export default function StudySetLearn({
   onSwitchToFlashcards?: () => void;
   onCompleted?: (result: LearnCompletionPayload) => StudySetReviewResult | null | void;
 }) {
+  const draftKey = setId ? `ielts_draft_learn_v1_${setId}` : null;
+  const [initialDraft] = useState(() => restoreLearnDraft(setId, words));
+
   const [learnMode, setLearnMode] = useState<LearnMode>(() => {
+    if (initialDraft) return initialDraft.learnMode;
     if (typeof window === "undefined") return "mixed";
     try {
       const saved = localStorage.getItem(LEARN_MODE_KEY);
@@ -162,6 +211,7 @@ export default function StudySetLearn({
   });
 
   const [promptSide, setPromptSide] = useState<PromptSide>(() => {
+    if (initialDraft) return initialDraft.promptSide;
     if (typeof window === "undefined") return "meaning";
     try {
       const saved = localStorage.getItem(LEARN_SIDE_KEY);
@@ -172,11 +222,21 @@ export default function StudySetLearn({
     return "meaning";
   });
 
-  const [sessionWords, setSessionWords] = useState<Word[]>(words);
-  const [queue, setQueue] = useState<QueueItem[]>(() => buildQueue(words, learnMode));
-  const [phase1PassedIds, setPhase1PassedIds] = useState<Set<number>>(() => new Set());
-  const [masteredIds, setMasteredIds] = useState<Set<number>>(() => new Set());
-  const [missedIds, setMissedIds] = useState<Set<number>>(() => new Set());
+  const [sessionWords, setSessionWords] = useState<Word[]>(
+    () => initialDraft?.sessionWords ?? words
+  );
+  const [queue, setQueue] = useState<QueueItem[]>(
+    () => initialDraft?.queue ?? buildQueue(words, learnMode)
+  );
+  const [phase1PassedIds, setPhase1PassedIds] = useState<Set<number>>(
+    () => initialDraft?.phase1PassedIds ?? new Set()
+  );
+  const [masteredIds, setMasteredIds] = useState<Set<number>>(
+    () => initialDraft?.masteredIds ?? new Set()
+  );
+  const [missedIds, setMissedIds] = useState<Set<number>>(
+    () => initialDraft?.missedIds ?? new Set()
+  );
 
   const [typed, setTyped] = useState("");
   const [hintLevel, setHintLevel] = useState<0 | 1 | 2 | 3>(0);
@@ -194,27 +254,64 @@ export default function StudySetLearn({
   const currentItem = queue[0] ?? null;
   const done = queue.length === 0;
 
+  useEffect(() => {
+    if (!draftKey) return;
+    const hasProgress =
+      masteredIds.size > 0 || phase1PassedIds.size > 0 || missedIds.size > 0;
+    if (done || !hasProgress) {
+      clearStudyDraft(draftKey);
+      return;
+    }
+    saveStudyDraft<LearnDraft>(draftKey, {
+      learnMode,
+      promptSide,
+      sessionWordIds: sessionWords.map((w) => w.id),
+      queue: queue.map((q) => ({
+        wordId: q.word.id,
+        phase: q.phase,
+        isRetry: q.isRetry,
+      })),
+      phase1PassedIds: Array.from(phase1PassedIds),
+      masteredIds: Array.from(masteredIds),
+      missedIds: Array.from(missedIds),
+    });
+  }, [
+    draftKey,
+    done,
+    learnMode,
+    promptSide,
+    sessionWords,
+    queue,
+    phase1PassedIds,
+    masteredIds,
+    missedIds,
+  ]);
+
   const speakWord = useCallback((text: string) => {
     speakTts(text);
   }, []);
 
-  const resetSession = useCallback((nextWords: Word[], mode: LearnMode) => {
-    completionRecordedRef.current = false;
-    advancingRef.current = false;
-    setSessionWords(nextWords);
-    setQueue(buildQueue(nextWords, mode));
-    setPhase1PassedIds(new Set());
-    setMasteredIds(new Set());
-    setMissedIds(new Set());
-    setTyped("");
-    setHintLevel(0);
+  const resetSession = useCallback(
+    (nextWords: Word[], mode: LearnMode) => {
+      clearStudyDraft(draftKey);
+      completionRecordedRef.current = false;
+      advancingRef.current = false;
+      setSessionWords(nextWords);
+      setQueue(buildQueue(nextWords, mode));
+      setPhase1PassedIds(new Set());
+      setMasteredIds(new Set());
+      setMissedIds(new Set());
+      setTyped("");
+      setHintLevel(0);
     setSoftHintMsg("");
     setSelfGradeMode(false);
     setRevealedMeaning(false);
     setFeedback(null);
-    setReviewSchedule(null);
-    setSrsMsg("");
-  }, []);
+      setReviewSchedule(null);
+      setSrsMsg("");
+    },
+    [draftKey]
+  );
 
   const changeLearnMode = (nextMode: LearnMode) => {
     setLearnMode(nextMode);
@@ -594,6 +691,16 @@ export default function StudySetLearn({
 
         <div className="flex flex-wrap items-center gap-2">
           <VoiceSettingsButton variant="compact" />
+          {(masteredIds.size > 0 || phase1PassedIds.size > 0 || missedIds.size > 0) && (
+            <button
+              type="button"
+              onClick={() => resetSession(words, learnMode)}
+              className="inline-flex items-center gap-1 rounded-full border border-line bg-card px-3 py-1 text-xs font-semibold text-muted hover:border-brand-hover hover:text-ink"
+              title="Bắt đầu lại từ đầu"
+            >
+              <RotateCcw size={12} /> Làm lại
+            </button>
+          )}
           {onSwitchToFlashcards && (
             <button
               type="button"
