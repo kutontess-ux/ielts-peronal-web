@@ -18,6 +18,7 @@ import {
   RotateCcw,
   Sparkles,
   Volume2,
+  X,
   XCircle,
 } from "lucide-react";
 import { levelColor, type Word } from "@/lib/mock";
@@ -66,7 +67,6 @@ type FeedbackState = {
   phase: QuestionPhase;
   wasRetry: boolean;
   meaningMatch?: VietnameseMeaningMatchResult;
-  missedBeforeTurn?: boolean;
 };
 
 const LEARN_MODE_KEY = "ielts_studyset_learn_mode_v1";
@@ -186,6 +186,7 @@ export default function StudySetLearn({
   const [srsMsg, setSrsMsg] = useState("");
 
   const completionRecordedRef = useRef(false);
+  const advancingRef = useRef(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const currentItem = queue[0] ?? null;
@@ -201,6 +202,7 @@ export default function StudySetLearn({
 
   const resetSession = useCallback((nextWords: Word[], mode: LearnMode) => {
     completionRecordedRef.current = false;
+    advancingRef.current = false;
     setSessionWords(nextWords);
     setQueue(buildQueue(nextWords, mode));
     setPhase1PassedIds(new Set());
@@ -251,34 +253,37 @@ export default function StudySetLearn({
     }
   }, [currentItem, feedback, promptSide, selfGradeMode]);
 
-  const handleFinishSession = useCallback(() => {
-    if (completionRecordedRef.current || sessionWords.length === 0) return;
-    completionRecordedRef.current = true;
+  const handleFinishSession = useCallback(
+    (finalMissedIds: Set<number>) => {
+      if (completionRecordedRef.current || sessionWords.length === 0) return;
+      completionRecordedRef.current = true;
 
-    const totalCount = sessionWords.length;
-    const unknownCount = missedIds.size;
-    const knownCount = Math.max(0, totalCount - unknownCount);
-    const scorePct = Math.round((knownCount / Math.max(1, totalCount)) * 100);
+      const totalCount = sessionWords.length;
+      const unknownCount = finalMissedIds.size;
+      const knownCount = Math.max(0, totalCount - unknownCount);
+      const scorePct = Math.round((knownCount / Math.max(1, totalCount)) * 100);
 
-    recordStudySetSession({ setId, title, wordCount: totalCount });
-    const result = onCompleted?.({ knownCount, unknownCount, totalCount, scorePct });
-    if (result) {
-      setReviewSchedule(result);
-    }
+      recordStudySetSession({ setId, title, wordCount: totalCount });
+      const result = onCompleted?.({ knownCount, unknownCount, totalCount, scorePct });
+      if (result) {
+        setReviewSchedule(result);
+      }
 
-    void enrollWordsInSrs(sessionWords.map((w) => w.id))
-      .then((res) => {
-        notifyDueUpdated();
-        setSrsMsg(
-          res.enrolled > 0
-            ? `Đã đồng bộ thêm ${res.enrolled} từ mới vào Ôn tập ngắt quãng`
-            : "Các từ đã được đồng bộ với Ôn tập ngắt quãng"
-        );
-      })
-      .catch(() => {
-        // bỏ qua nếu chưa kết nối DB
-      });
-  }, [sessionWords, missedIds, setId, title, onCompleted]);
+      void enrollWordsInSrs(sessionWords.map((w) => w.id))
+        .then((res) => {
+          notifyDueUpdated();
+          setSrsMsg(
+            res.enrolled > 0
+              ? `Đã đồng bộ thêm ${res.enrolled} từ mới vào Ôn tập ngắt quãng`
+              : "Các từ đã được đồng bộ với Ôn tập ngắt quãng"
+          );
+        })
+        .catch(() => {
+          // bỏ qua nếu chưa kết nối DB
+        });
+    },
+    [sessionWords, setId, title, onCompleted]
+  );
 
   const submitDirect = useCallback(
     (
@@ -287,7 +292,7 @@ export default function StudySetLearn({
       meaningMatch?: VietnameseMeaningMatchResult
     ) => {
       if (!currentItem || feedback) return;
-      const missedBeforeTurn = missedIds.has(currentItem.word.id);
+      advancingRef.current = false;
       setSoftHintMsg("");
       speakWord(currentItem.word.word);
       setFeedback({
@@ -296,18 +301,9 @@ export default function StudySetLearn({
         phase: currentItem.phase,
         wasRetry: currentItem.isRetry,
         meaningMatch,
-        missedBeforeTurn,
       });
-
-      if (!isCorrect) {
-        setMissedIds((prev) => {
-          const next = new Set(prev);
-          next.add(currentItem.word.id);
-          return next;
-        });
-      }
     },
-    [currentItem, feedback, missedIds, speakWord]
+    [currentItem, feedback, speakWord]
   );
 
   const submitTypedAnswer = useCallback(
@@ -370,13 +366,20 @@ export default function StudySetLearn({
   );
 
   const advanceWithResult = useCallback(
-    (isCorrect: boolean) => {
-      if (!currentItem) return;
+    (finalCorrect: boolean) => {
+      if (!currentItem || !feedback || advancingRef.current) return;
+      advancingRef.current = true;
 
       const rest = queue.slice(1);
       const id = currentItem.word.id;
+      let nextMissedIds = missedIds;
 
-      if (!isCorrect) {
+      if (!finalCorrect) {
+        if (!missedIds.has(id)) {
+          nextMissedIds = new Set(missedIds);
+          nextMissedIds.add(id);
+          setMissedIds(nextMissedIds);
+        }
         // Đưa thẻ sai về cuối hàng để ôn lại trong vòng
         setQueue([...rest, { word: currentItem.word, phase: currentItem.phase, isRetry: true }]);
       } else if (learnMode === "mixed" && currentItem.phase === "choice") {
@@ -395,7 +398,7 @@ export default function StudySetLearn({
         });
         setQueue(rest);
         if (rest.length === 0) {
-          handleFinishSession();
+          handleFinishSession(nextMissedIds);
         }
       }
 
@@ -406,7 +409,7 @@ export default function StudySetLearn({
       setRevealedMeaning(false);
       setFeedback(null);
     },
-    [currentItem, queue, learnMode, handleFinishSession]
+    [currentItem, feedback, queue, missedIds, learnMode, handleFinishSession]
   );
 
   const goNext = useCallback(() => {
@@ -416,59 +419,13 @@ export default function StudySetLearn({
 
   const overrideAsCorrectAndNext = useCallback(() => {
     if (!currentItem || !feedback) return;
-    if (!feedback.missedBeforeTurn) {
-      setMissedIds((prev) => {
-        if (!prev.has(currentItem.word.id)) return prev;
-        const next = new Set(prev);
-        next.delete(currentItem.word.id);
-        return next;
-      });
-    }
-    // Tính handleFinishSession ngay với missedIds đã cập nhật nếu đây là thẻ cuối
-    const rest = queue.slice(1);
-    const willFinish =
-      rest.length === 0 && !(learnMode === "mixed" && currentItem.phase === "choice");
-    if (willFinish && !completionRecordedRef.current && sessionWords.length > 0) {
-      const nextMissedSize =
-        !feedback.missedBeforeTurn && missedIds.has(currentItem.word.id)
-          ? Math.max(0, missedIds.size - 1)
-          : missedIds.size;
-      completionRecordedRef.current = true;
-      const totalCount = sessionWords.length;
-      const knownCount = Math.max(0, totalCount - nextMissedSize);
-      const scorePct = Math.round((knownCount / Math.max(1, totalCount)) * 100);
-      recordStudySetSession({ setId, title, wordCount: totalCount });
-      const result = onCompleted?.({
-        knownCount,
-        unknownCount: nextMissedSize,
-        totalCount,
-        scorePct,
-      });
-      if (result) setReviewSchedule(result);
-      void enrollWordsInSrs(sessionWords.map((w) => w.id))
-        .then((res) => {
-          notifyDueUpdated();
-          setSrsMsg(
-            res.enrolled > 0
-              ? `Đã đồng bộ thêm ${res.enrolled} từ mới vào Ôn tập ngắt quãng`
-              : "Các từ đã được đồng bộ với Ôn tập ngắt quãng"
-          );
-        })
-        .catch(() => {});
-    }
     advanceWithResult(true);
-  }, [
-    currentItem,
-    feedback,
-    queue,
-    learnMode,
-    sessionWords,
-    missedIds,
-    setId,
-    title,
-    onCompleted,
-    advanceWithResult,
-  ]);
+  }, [currentItem, feedback, advanceWithResult]);
+
+  const overrideAsWrongAndNext = useCallback(() => {
+    if (!currentItem || !feedback) return;
+    advanceWithResult(false);
+  }, [currentItem, feedback, advanceWithResult]);
 
   const choiceOptions = useMemo(
     () =>
@@ -1091,7 +1048,7 @@ export default function StudySetLearn({
               )}
               {!feedback.isCorrect && feedback.meaningMatch && (
                 <div className="mt-1 text-xs opacity-90">
-                  Bấm “Tiếp tục” sẽ đưa thẻ về cuối vòng ôn lại, hoặc xác nhận bên dưới nếu nghĩa tương đương.
+                  Bấm “Tiếp tục” sẽ đưa thẻ về cuối vòng ôn lại, hoặc bấm “Tôi làm đúng” bên dưới nếu nghĩa tương đương.
                 </div>
               )}
               {card.example && (
@@ -1109,13 +1066,23 @@ export default function StudySetLearn({
               >
                 Tiếp tục (Enter) <ArrowRight size={16} />
               </button>
-              {!feedback.isCorrect && feedback.meaningMatch && (
+              {!feedback.isCorrect ? (
                 <button
                   type="button"
                   onClick={overrideAsCorrectAndNext}
+                  title="Hệ thống chấm chưa đúng? Xác nhận tôi làm đúng & cho qua"
                   className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/40 bg-emerald-500/15 px-5 py-3 text-xs font-bold text-emerald-700 transition hover:bg-emerald-500/25 dark:text-emerald-300 sm:text-sm"
                 >
-                  <Check size={16} /> Nghĩa tương đương, vẫn tính đúng & cho qua
+                  <Check size={16} /> Tôi làm đúng
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={overrideAsWrongAndNext}
+                  title="Hệ thống chấm nhầm? Đánh dấu tôi làm sai & ôn lại cuối vòng"
+                  className="inline-flex items-center gap-1.5 rounded-full border border-rose-500/40 bg-rose-500/15 px-5 py-3 text-xs font-bold text-rose-700 transition hover:bg-rose-500/25 dark:text-rose-300 sm:text-sm"
+                >
+                  <X size={16} /> Tôi làm sai
                 </button>
               )}
             </div>

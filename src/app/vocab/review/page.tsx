@@ -59,7 +59,6 @@ type FeedbackState = {
   nextLabel: string;
   wasRetry: boolean;
   meaningMatch?: VietnameseMeaningMatchResult;
-  pendingCommit?: boolean;
 } | null;
 
 const PROMPT_SIDE_KEY = "ielts_review_prompt_side_v1";
@@ -163,6 +162,7 @@ export default function Review() {
   const [savingSettings, setSavingSettings] = useState(false);
 
   const inputRef = useRef<HTMLInputElement>(null);
+  const advancingRef = useRef(false);
 
   const updatePromptSide = useCallback((next: PromptSide) => {
     setPromptSide(next);
@@ -349,9 +349,7 @@ export default function Review() {
         isRetry
       );
 
-      // Khi gõ nghĩa tiếng Việt chưa đạt ngưỡng -> chờ user xác nhận xem có cho qua (nghĩa tương đương) trước khi gửi API
-      const pendingCommit = Boolean(!isCorrect && meaningMatch);
-
+      advancingRef.current = false;
       setErrMsg("");
       setSoftHintMsg("");
       speakWord(card.word);
@@ -362,14 +360,9 @@ export default function Review() {
         nextLabel: computed.label,
         wasRetry: isRetry,
         meaningMatch,
-        pendingCommit,
       });
-
-      if (!pendingCommit) {
-        commitReviewToServer(card, isCorrect);
-      }
     },
-    [card, feedback, speakWord, commitReviewToServer]
+    [card, feedback, speakWord]
   );
 
   const submitAnswer = useCallback(
@@ -419,10 +412,9 @@ export default function Review() {
 
   const advanceWithResult = useCallback(
     (finalCorrect: boolean) => {
-      if (!card || !feedback) return;
-      if (feedback.pendingCommit) {
-        commitReviewToServer(card, finalCorrect);
-      }
+      if (!card || !feedback || advancingRef.current) return;
+      advancingRef.current = true;
+      commitReviewToServer(card, finalCorrect);
       setQueue((prev) => {
         const rest = prev.slice(1);
         if (!finalCorrect) {
@@ -454,6 +446,11 @@ export default function Review() {
   const overrideAsCorrectAndNext = useCallback(() => {
     if (!card || !feedback) return;
     advanceWithResult(true);
+  }, [card, feedback, advanceWithResult]);
+
+  const overrideAsWrongAndNext = useCallback(() => {
+    if (!card || !feedback) return;
+    advanceWithResult(false);
   }, [card, feedback, advanceWithResult]);
 
   const choiceOptions = useMemo(
@@ -1278,13 +1275,23 @@ export default function Review() {
               >
                 Tiếp tục (Enter) <ArrowRight size={16} />
               </button>
-              {!feedback.isCorrect && feedback.pendingCommit && (
+              {!feedback.isCorrect ? (
                 <button
                   type="button"
                   onClick={overrideAsCorrectAndNext}
+                  title="Hệ thống chấm chưa đúng? Xác nhận tôi làm đúng & cho qua"
                   className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/40 bg-emerald-500/15 px-5 py-3 text-xs font-bold text-emerald-700 transition hover:bg-emerald-500/25 dark:text-emerald-300 sm:text-sm"
                 >
-                  <Check size={16} /> Nghĩa tương đương, vẫn tính đúng & cho qua
+                  <Check size={16} /> Tôi làm đúng
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={overrideAsWrongAndNext}
+                  title="Hệ thống chấm nhầm? Đánh dấu tôi làm sai & ôn lại cuối phiên"
+                  className="inline-flex items-center gap-1.5 rounded-full border border-rose-500/40 bg-rose-500/15 px-5 py-3 text-xs font-bold text-rose-700 transition hover:bg-rose-500/25 dark:text-rose-300 sm:text-sm"
+                >
+                  <X size={16} /> Tôi làm sai
                 </button>
               )}
             </div>
