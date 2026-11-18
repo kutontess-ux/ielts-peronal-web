@@ -1155,14 +1155,14 @@ export default function VocabLearn() {
       {!activeFolder && studySets.length > 0 && (
         <section className="rounded-3xl border border-line bg-card p-5 sm:p-6">
           <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
+            <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
                 <h2 className="flex items-center gap-2 text-lg font-bold">
-                  <CalendarClock size={20} className="text-brand-hover" />
+                  <CalendarClock size={20} className="shrink-0 text-brand-hover" />
                   Học phần cần ôn hôm nay
                 </h2>
                 {dueSetCount > 0 && (
-                  <span className="rounded-full bg-rose-500/15 px-2.5 py-0.5 text-xs font-bold text-rose-700 dark:text-rose-300">
+                  <span className="whitespace-nowrap rounded-full bg-rose-500/15 px-2.5 py-0.5 text-xs font-bold text-rose-700 dark:text-rose-300">
                     {dueSetCount} đến hạn
                   </span>
                 )}
@@ -1254,7 +1254,7 @@ export default function VocabLearn() {
                 return (
                   <div
                     key={s.id}
-                    className={`flex flex-wrap items-center justify-between gap-3 rounded-2xl border px-4 py-3 transition ${
+                    className={`flex flex-col gap-3 rounded-2xl border px-4 py-3.5 transition sm:flex-row sm:items-center sm:justify-between ${
                       status.isDue
                         ? "border-brand/50 bg-brand/5"
                         : "border-line/70 bg-bg/60"
@@ -1272,9 +1272,9 @@ export default function VocabLearn() {
                       </span>
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-2">
-                          <span className="truncate font-bold text-ink">{s.title}</span>
+                          <span className="break-words font-bold text-ink">{s.title}</span>
                           <span
-                            className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-bold ${
+                            className={`inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-2.5 py-0.5 text-[11px] font-bold ${
                               status.isDue
                                 ? "bg-rose-500/15 text-rose-700 dark:text-rose-300"
                                 : "bg-sky-500/15 text-sky-700 dark:text-sky-300"
@@ -1283,7 +1283,7 @@ export default function VocabLearn() {
                             <Clock size={11} /> {status.badgeText}
                           </span>
                           {setFolder && (
-                            <span className="inline-flex items-center gap-1 rounded-full bg-card px-2 py-0.5 text-[10px] font-semibold text-muted">
+                            <span className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full bg-card px-2 py-0.5 text-[10px] font-semibold text-muted">
                               <Folder size={10} /> {setFolder.name}
                             </span>
                           )}
@@ -1301,7 +1301,7 @@ export default function VocabLearn() {
                       </div>
                     </div>
 
-                    <div className="flex shrink-0 items-center gap-2">
+                    <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:shrink-0 sm:items-center">
                       <button
                         type="button"
                         disabled={setWords.length === 0}
@@ -1313,7 +1313,7 @@ export default function VocabLearn() {
                             words: setWords,
                           })
                         }
-                        className={`inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-xs font-bold transition disabled:opacity-40 ${
+                        className={`inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-full px-4 py-2 text-xs font-bold transition disabled:opacity-40 ${
                           status.isDue
                             ? "bg-brand text-white hover:bg-brand-hover hover:text-bg"
                             : "bg-card text-ink hover:bg-brand hover:text-white"
@@ -1332,7 +1332,7 @@ export default function VocabLearn() {
                             words: setWords,
                           })
                         }
-                        className="inline-flex items-center gap-1.5 rounded-full border border-line bg-card px-3.5 py-2 text-xs font-bold text-muted transition hover:border-brand-hover hover:text-ink disabled:opacity-40"
+                        className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-full border border-line bg-card px-3.5 py-2 text-xs font-bold text-muted transition hover:border-brand-hover hover:text-ink disabled:opacity-40"
                       >
                         <Layers size={13} /> Lật thẻ
                       </button>

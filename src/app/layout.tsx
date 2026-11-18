@@ -34,16 +34,16 @@ const THEME_INIT_SCRIPT = `(function(){try{var t=localStorage.getItem("ielts_the
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="vi" data-theme="dark" className={`${outfit.variable} dark h-full antialiased`} suppressHydrationWarning>
+    <html lang="vi" data-theme="dark" className={`${outfit.variable} dark h-full overflow-x-clip antialiased`} suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
       </head>
-      <body className="flex min-h-full flex-col overflow-x-hidden md:flex-row">
+      <body className="flex min-h-full flex-col overflow-x-clip md:flex-row">
         <Suspense fallback={<aside className="hidden w-64 shrink-0 border-r border-line bg-bg md:flex" />}>
           <Sidebar />
         </Suspense>
         <main className="w-full min-w-0 flex-1 px-4 pb-24 pt-5 sm:px-6 md:px-10 md:py-8">
-          <div className="mx-auto max-w-5xl">{children}</div>
+          <div className="mx-auto w-full min-w-0 max-w-5xl">{children}</div>
         </main>
         <ActivityMonitor />
       </body>

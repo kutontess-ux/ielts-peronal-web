@@ -317,7 +317,7 @@ export default function Sidebar() {
       )}
 
       {/* Thanh điều hướng dưới cùng trên điện thoại */}
-      <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 border-t border-line bg-bg/95 px-1 pt-1.5 pb-[max(0.375rem,env(safe-area-inset-bottom))] backdrop-blur md:hidden">
+      <nav className="fixed inset-x-0 bottom-0 z-30 grid w-full max-w-[100vw] grid-cols-5 border-t border-line bg-bg/95 px-1 pt-1.5 pb-[max(0.375rem,env(safe-area-inset-bottom))] backdrop-blur md:hidden">
         {MOBILE_TABS.map((tab) => {
           const active = tab.exact ? path === tab.href : path.startsWith(tab.href);
           const Icon = tab.icon;

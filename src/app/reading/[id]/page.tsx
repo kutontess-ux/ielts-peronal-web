@@ -809,9 +809,9 @@ function ReadingDetailInner() {
       p.split(/\s+/).length <= 22;
 
     const textStyleClass = isTitleLine
-      ? "text-2xl sm:text-3xl font-extrabold tracking-tight text-ink leading-snug"
+      ? "text-2xl sm:text-3xl font-normal tracking-tight text-ink leading-snug"
       : isSubtitleLine
-      ? "text-base sm:text-lg font-semibold text-muted leading-relaxed"
+      ? "text-base sm:text-lg font-normal text-muted leading-relaxed"
       : "text-[15.5px] leading-8 text-ink";
 
     let englishNode: React.ReactNode;
@@ -822,18 +822,18 @@ function ReadingDetailInner() {
         <p onMouseUp={() => handleParagraphMouseUp(p, idx)} className={textStyleClass}>
           {tokens.map((tok, i) => {
             if (/^\s+$/.test(tok)) return tok;
-            const aiHighlighted = highlightAiVocab && isAiPickedWord(tok);
+            const aiHighlighted = !isTitleLine && highlightAiVocab && isAiPickedWord(tok);
             return (
               <span
                 key={i}
                 onClick={() => handleWordClick(tok, p, idx, aiHighlighted)}
-                className={`rounded px-0.5 transition ${
+                className={`rounded-sm transition ${
                   activeTool === "vocab" || aiHighlighted
-                    ? "cursor-pointer hover:bg-brand/25 hover:text-ink"
+                    ? "cursor-pointer hover:bg-brand/15 hover:text-ink"
                     : ""
                 } ${
                   aiHighlighted
-                    ? "bg-amber-400/25 font-medium text-amber-950 ring-1 ring-amber-500/40 dark:bg-amber-400/20 dark:text-amber-200 dark:ring-amber-400/35"
+                    ? "underline decoration-amber-500/65 decoration-[1.5px] underline-offset-4 dark:decoration-amber-400/65"
                     : ""
                 }`}
               >
@@ -908,7 +908,7 @@ function ReadingDetailInner() {
           <Link href="/reading" className="inline-flex items-center gap-1.5 text-xs font-semibold text-muted hover:text-ink">
             <ArrowLeft size={14} /> Lịch sử bài đọc
           </Link>
-          <h1 className="text-2xl font-extrabold tracking-tight text-ink sm:text-3xl lg:text-4xl">{passage.title}</h1>
+          <h1 className="text-2xl font-normal tracking-tight text-ink sm:text-3xl lg:text-4xl">{passage.title}</h1>
           <div className="flex flex-wrap items-center gap-2 text-xs text-muted">
             {passage.source_name && (
               <span className="rounded-lg bg-card px-2.5 py-1 font-medium text-ink">{passage.source_name}</span>
@@ -989,10 +989,10 @@ function ReadingDetailInner() {
                   ? "bg-amber-500 text-amber-950"
                   : "border border-amber-500/40 bg-amber-500/10 text-amber-800 hover:bg-amber-500/20 dark:text-amber-300"
               }`}
-              title="Bật/tắt tô màu những từ vựng IELTS phổ biến, hay dùng được AI chọn trong bài"
+              title="Bật/tắt gạch chân những từ vựng IELTS phổ biến, hay dùng được AI chọn trong bài"
             >
               <Highlighter size={15} />{" "}
-              {highlightAiVocab ? `Đang tô màu từ AI (${aiPickedCount})` : `Tô màu từ hay dùng (${aiPickedCount})`}
+              {highlightAiVocab ? `Đang gạch chân từ AI (${aiPickedCount})` : `Gạch chân từ hay dùng (${aiPickedCount})`}
             </button>
           )}
 
@@ -1101,7 +1101,7 @@ function ReadingDetailInner() {
                     : "bg-amber-500/20 text-amber-800 hover:bg-amber-500/30 dark:text-amber-200"
                 }`}
               >
-                <Highlighter size={12} /> {highlightAiVocab ? "Tắt tô màu từ AI" : "Bật tô màu từ hay dùng"}
+                <Highlighter size={12} /> {highlightAiVocab ? "Tắt gạch chân từ AI" : "Bật gạch chân từ hay dùng"}
               </button>
             )}
             <button

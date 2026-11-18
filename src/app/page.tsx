@@ -129,11 +129,11 @@ export default function Home() {
           {JUMP.map((j) => (
             <div
               key={j.title}
-              className="flex min-h-40 flex-col justify-between rounded-3xl border border-line bg-card p-5 sm:p-6"
+              className="flex min-h-40 min-w-0 flex-col justify-between rounded-3xl border border-line bg-card p-5 sm:p-6"
             >
               <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="text-lg font-bold sm:text-xl">{j.title}</div>
+                <div className="min-w-0 flex-1">
+                  <div className="break-words text-lg font-bold sm:text-xl">{j.title}</div>
                   <div className="mt-1 line-clamp-2 text-sm text-muted">{j.sub}</div>
                 </div>
                 <j.icon size={36} strokeWidth={1.2} className="shrink-0 text-brand-hover" />
@@ -156,13 +156,13 @@ export default function Home() {
             <Link
               key={item.href + item.title}
               href={item.href}
-              className="flex items-center justify-between gap-3 rounded-xl border border-line/60 bg-card/80 p-3 transition hover:border-line hover:bg-card dark:border-transparent dark:bg-card/40"
+              className="flex min-w-0 items-center justify-between gap-3 overflow-hidden rounded-xl border border-line/60 bg-card/80 p-3 transition hover:border-line hover:bg-card dark:border-transparent dark:bg-card/40"
             >
-              <div className="flex min-w-0 items-center gap-3.5">
+              <div className="flex min-w-0 flex-1 items-center gap-3.5">
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-card text-brand-hover">
                   <item.icon size={19} strokeWidth={1.6} />
                 </div>
-                <div className="min-w-0">
+                <div className="min-w-0 flex-1">
                   <div className="truncate text-sm font-bold">{item.title}</div>
                   <div className="truncate text-xs text-muted">{item.sub}</div>
                 </div>
@@ -178,7 +178,7 @@ export default function Home() {
         <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3">
           <Link
             href="/vocab"
-            className="rounded-2xl border-2 border-transparent bg-card p-5 transition hover:border-brand-hover"
+            className="min-w-0 rounded-2xl border-2 border-transparent bg-card p-5 transition hover:border-brand-hover"
           >
             <Library size={30} strokeWidth={1.4} className="text-brand-hover" />
             <div className="mt-3 font-bold">Từ vựng</div>
@@ -189,14 +189,14 @@ export default function Home() {
 
           <Link
             href="/reading"
-            className="rounded-2xl border-2 border-transparent bg-card p-5 transition hover:border-brand-hover"
+            className="min-w-0 rounded-2xl border-2 border-transparent bg-card p-5 transition hover:border-brand-hover"
           >
             <BookOpen size={30} strokeWidth={1.4} className="text-brand-hover" />
             <div className="mt-3 font-bold">Reading</div>
             <div className="text-sm text-muted">Phân tích bài đọc & lưu từ vựng</div>
           </Link>
 
-          <div className="rounded-2xl bg-card/80 p-5 opacity-60 dark:bg-card/50">
+          <div className="min-w-0 rounded-2xl bg-card/80 p-5 opacity-60 dark:bg-card/50">
             <PenLine size={30} strokeWidth={1.4} />
             <div className="mt-3 font-bold">Writing</div>
             <div className="text-sm text-muted">Sắp có</div>
