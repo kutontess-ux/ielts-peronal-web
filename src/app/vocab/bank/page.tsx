@@ -382,7 +382,7 @@ function ImportPanel({ onSaved }: { onSaved: () => void }) {
       });
       const j = await r.json();
       if (!r.ok) throw new Error(j.error);
-      setDone(`Đã lưu ${j.added} từ mới vào kho${j.skipped ? ` (bỏ qua ${j.skipped} từ trùng)` : ""}.`);
+      setDone(`Đã lưu ${j.added} từ mới vào kho cá nhân${j.skipped ? ` (bỏ qua ${j.skipped} từ trùng)` : ""}.`);
       setPrev(null); setText(""); onSaved(); notifyDueUpdated();
     } catch (e) { setErr((e as Error).message); }
     setBusy("");
@@ -409,14 +409,14 @@ function ImportPanel({ onSaved }: { onSaved: () => void }) {
 
   return (
     <div className="space-y-4 rounded-2xl border-2 border-dashed border-brand-hover bg-card p-5">
-      <div className="font-bold">Dán danh sách từ (mỗi dòng 1 từ, hoặc cách nhau dấu phẩy) hoặc dán cả đoạn văn</div>
+      <div className="font-bold">Nạp từ cá nhân (dán danh sách từ hoặc cả đoạn văn)</div>
       <textarea value={text} onChange={(e) => setText(e.target.value)} className="h-32 w-full rounded-xl border border-line p-3 outline-none focus:border-brand-hover" placeholder={"sustainable\nmitigate\ncarbon footprint\n..."} />
       <div className="flex flex-wrap items-center gap-3">
         <button onClick={check} disabled={!text.trim() || busy !== ""} className="inline-flex items-center gap-2 rounded-full bg-brand px-5 py-2.5 text-sm font-bold text-white hover:bg-brand-hover hover:text-bg disabled:opacity-40">
           {busy === "check" ? <Loader2 size={16} className="animate-spin" /> : <Bot size={16} strokeWidth={1.75} />}
           {busy === "check" ? "Agent đang kiểm tra..." : "Cho agent kiểm tra"}
         </button>
-        <span className="text-sm text-muted">Từ đã có trong kho chung được lấy miễn phí (0 lượt AI); chỉ từ mới hoàn toàn mới dùng AI. Tối đa 300 từ/lần.</span>
+        <span className="text-sm text-muted">Từ đã có trong từ điển hệ thống được lấy miễn phí (0 lượt AI); chỉ từ mới hoàn toàn mới dùng AI. Tối đa 300 từ/lần.</span>
       </div>
       {err && <div className="rounded-xl bg-rose-500/15 p-3 text-sm text-rose-700 dark:bg-rose-400/15 dark:text-rose-300">{err}</div>}
       {done && <div className="flex items-center gap-2 rounded-xl bg-emerald-500/15 p-3 text-sm text-emerald-700 dark:bg-emerald-400/15 dark:text-emerald-300"><Check size={16} /> {done}</div>}
@@ -425,14 +425,14 @@ function ImportPanel({ onSaved }: { onSaved: () => void }) {
         <div className="space-y-4">
           <div className="grid grid-cols-3 gap-3 text-center text-sm">
             <div className="rounded-xl bg-emerald-500/15 p-3 dark:bg-emerald-400/15"><b className="text-lg text-emerald-700 dark:text-emerald-300">{prev.summary.new}</b><br />từ mới</div>
-            <div className="rounded-xl bg-amber-500/15 p-3 dark:bg-amber-400/15"><b className="text-lg text-amber-700 dark:text-amber-300">{prev.summary.duplicate}</b><br />đã có / trùng lặp</div>
+            <div className="rounded-xl bg-amber-500/15 p-3 dark:bg-amber-400/15"><b className="text-lg text-amber-700 dark:text-amber-300">{prev.summary.duplicate}</b><br />đã có trong kho cá nhân</div>
             <div className="rounded-xl bg-rose-500/15 p-3 dark:bg-rose-400/15"><b className="text-lg text-rose-700 dark:text-rose-300">{prev.summary.invalid}</b><br />không hợp lệ (bỏ qua)</div>
           </div>
 
           {existingIds.length > 0 && (
             <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line bg-bg/70 px-4 py-3 text-sm">
               <div className="text-muted">
-                Có <b className="text-ink">{existingIds.length}</b> từ đã tồn tại sẵn trong kho chung — bạn có thể học ngay với <b className="text-emerald-600 dark:text-emerald-400">0 lượt AI</b>.
+                Có <b className="text-ink">{existingIds.length}</b> từ đã có trong kho cá nhân của bạn — đưa vào ôn tập với <b className="text-emerald-600 dark:text-emerald-400">0 lượt AI</b>.
               </div>
               <button
                 type="button"
@@ -459,7 +459,7 @@ function ImportPanel({ onSaved }: { onSaved: () => void }) {
                   const on = !off.has(i.norm_key!);
                   return (
                     <label key={i.norm_key} className={`flex cursor-pointer items-start gap-3 rounded-xl bg-bg/60 p-3 ${on ? "" : "opacity-40"}`}>
-                      <input type="checkbox" checked={on} onChange={() => { const s = new Set(off); on ? s.add(i.norm_key!) : s.delete(i.norm_key!); setOff(s); }} className="mt-1 h-4 w-4 accent-[#4255ff]" />
+                      <input type="checkbox" checked={on} onChange={() => { const s = new Set(off); if (on) s.add(i.norm_key!); else s.delete(i.norm_key!); setOff(s); }} className="mt-1 h-4 w-4 accent-[#4255ff]" />
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-2">
                           <b>{i.lemma}</b>
@@ -488,6 +488,7 @@ function ImportPanel({ onSaved }: { onSaved: () => void }) {
 
 export default function Bank() {
   const [words, setWords] = useState<Word[]>([]);
+  const [bookWords, setBookWords] = useState<Word[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadErr, setLoadErr] = useState("");
   const [tab, setTab] = useState<Tab>("all");
@@ -518,8 +519,7 @@ export default function Bank() {
   const [editingTopicBadge, setEditingTopicBadge] = useState<string | null>(null);
 
   const deleteWord = async (w: Word) => {
-    if (!isAdmin) return;
-    if (!window.confirm(`Xoá từ "${w.word}" khỏi kho?`)) return;
+    if (!window.confirm(`Xoá từ "${w.word}" khỏi kho cá nhân của bạn?`)) return;
     setActivityLabel("/api/words", `Đang xoá từ "${w.word}"...`);
     const r = await fetch(`/api/words?id=${w.id}`, { method: "DELETE" });
     if (r.ok) {
@@ -528,11 +528,23 @@ export default function Bank() {
     }
   };
 
+  const deleteBookWord = async (w: Word) => {
+    if (!isAdmin) return;
+    if (!window.confirm(`Xoá từ "${w.word}" khỏi Bộ sách cộng đồng?`)) return;
+    setActivityLabel("/api/words", `Đang xoá từ "${w.word}" khỏi bộ sách...`);
+    const r = await fetch(`/api/words?scope=book&id=${w.id}`, { method: "DELETE" });
+    if (r.ok) {
+      setBookWords((prev) => prev.filter((x) => x.id !== w.id));
+      setWords((prev) => prev.filter((x) => x.id !== w.id));
+      notifyDueUpdated();
+    }
+  };
+
   const deleteSelected = async () => {
-    if (!isAdmin || selectedIds.size === 0) return;
-    if (!window.confirm(`Xoá ${selectedIds.size} từ đã chọn khỏi kho?`)) return;
+    if (selectedIds.size === 0) return;
+    if (!window.confirm(`Xoá ${selectedIds.size} từ đã chọn khỏi kho cá nhân của bạn?`)) return;
     const ids = Array.from(selectedIds);
-    setActivityLabel("/api/words", `Đang xoá ${ids.length} từ khỏi kho...`);
+    setActivityLabel("/api/words", `Đang xoá ${ids.length} từ khỏi kho cá nhân...`);
     const r = await fetch("/api/words", {
       method: "DELETE",
       headers: { "Content-Type": "application/json" },
@@ -573,7 +585,8 @@ export default function Bank() {
   const toggleSelectId = (id: number) =>
     setSelectedIds((prev) => {
       const n = new Set(prev);
-      n.has(id) ? n.delete(id) : n.add(id);
+      if (n.has(id)) n.delete(id);
+      else n.add(id);
       return n;
     });
 
@@ -591,7 +604,7 @@ export default function Bank() {
   const renderGrid = (list: Word[]) => (
     <WordGrid
       list={list}
-      onDelete={isAdmin ? deleteWord : undefined}
+      onDelete={deleteWord}
       selectedIds={selectMode ? selectedIds : undefined}
       onToggleSelect={toggleSelectId}
       onTogglePage={togglePageIds}
@@ -600,10 +613,19 @@ export default function Bank() {
 
   const load = useCallback(async () => {
     try {
-      const r = await fetch("/api/words", { cache: "no-store" });
-      const j = await r.json();
-      if (!r.ok) throw new Error(j.error);
-      setWords(j.words); setLoadErr("");
+      const [personalRes, booksRes] = await Promise.all([
+        fetch("/api/words", { cache: "no-store" }),
+        fetch("/api/words?scope=books", { cache: "no-store" }),
+      ]);
+      const [personalJson, booksJson] = await Promise.all([
+        personalRes.json(),
+        booksRes.json(),
+      ]);
+      if (!personalRes.ok) throw new Error(personalJson.error || "Không tải được kho cá nhân");
+      if (!booksRes.ok) throw new Error(booksJson.error || "Không tải được bộ sách cộng đồng");
+      setWords(personalJson.words ?? []);
+      setBookWords(booksJson.words ?? []);
+      setLoadErr("");
     } catch (e) { setLoadErr((e as Error).message); }
     setLoading(false);
   }, []);
@@ -682,18 +704,21 @@ export default function Bank() {
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center gap-3">
-        <h1 className="mr-auto flex items-center gap-2 text-2xl font-bold">
-          <Package size={26} strokeWidth={1.5} className="text-brand-hover" />
-          Kho từ vựng <span className="text-base font-medium text-muted">({words.length} từ)</span>
-        </h1>
-        {isAdmin && (
-          <button onClick={() => setImporting(!importing)} className="inline-flex items-center gap-2 rounded-full bg-brand px-5 py-2.5 text-sm font-bold text-white hover:bg-brand-hover hover:text-bg">
-            <Upload size={17} strokeWidth={1.75} /> Nạp từ vựng hàng loạt
-          </button>
-        )}
+        <div className="mr-auto">
+          <h1 className="flex items-center gap-2 text-2xl font-bold">
+            <Package size={26} strokeWidth={1.5} className="text-brand-hover" />
+            Kho từ vựng cá nhân <span className="text-base font-medium text-muted">({words.length} từ)</span>
+          </h1>
+          <p className="mt-0.5 text-xs text-muted">
+            Lưu riêng những từ bạn đã nạp, tra ở Reading, học ở Từ hôm nay, Writing Coach &amp; Thẻ ghi nhớ — không trùng với tài khoản khác.
+          </p>
+        </div>
+        <button onClick={() => setImporting(!importing)} className="inline-flex items-center gap-2 rounded-full bg-brand px-5 py-2.5 text-sm font-bold text-white hover:bg-brand-hover hover:text-bg">
+          <Upload size={17} strokeWidth={1.75} /> Nạp từ vựng hàng loạt
+        </button>
       </div>
 
-      {isAdmin && importing && <ImportPanel onSaved={load} />}
+      {importing && <ImportPanel onSaved={load} />}
 
       {loading && <div className="flex items-center gap-2 py-10 text-muted"><Loader2 className="animate-spin" size={18} /> Đang tải kho từ vựng...</div>}
       {loadErr && <div className="rounded-xl bg-rose-500/15 p-4 text-sm text-rose-700 dark:bg-rose-400/15 dark:text-rose-300">Không tải được kho: {loadErr}</div>}
@@ -701,11 +726,9 @@ export default function Bank() {
       {!loading && !loadErr && words.length === 0 && tab !== "book" && (
         <div className="rounded-2xl bg-card p-10 text-center">
           <Package size={40} strokeWidth={1.2} className="mx-auto text-brand-hover" />
-          <div className="mt-3 text-lg font-bold">Kho đang trống</div>
-          <p className="mt-1 text-sm text-muted">
-            {isAdmin
-              ? "Bấm “Nạp từ vựng hàng loạt” ở trên hoặc chuyển sang tab “Bộ sách” để nạp sách từ vựng chuẩn."
-              : "Kho từ vựng cộng đồng hiện chưa có từ nào."}
+          <div className="mt-3 text-lg font-bold">Kho cá nhân đang trống</div>
+          <p className="mx-auto mt-1 max-w-xl text-sm text-muted">
+            Bấm “Nạp từ vựng hàng loạt” ở trên để tự tải từ lên, tra từ khi đọc Reading, học ở “Từ hôm nay”, hoặc chọn từ từ tab “Bộ sách” chuyển vào ôn tập — tất cả sẽ tự lưu vào kho riêng của bạn.
           </p>
         </div>
       )}
@@ -751,14 +774,12 @@ export default function Bank() {
                         {enrollingSelected ? <Loader2 size={14} className="animate-spin" /> : <Repeat size={14} />}
                         Chuyển {selectedIds.size} từ vào ôn tập
                       </button>
-                      {isAdmin && (
-                        <button
-                          onClick={deleteSelected}
-                          className="inline-flex items-center gap-1.5 rounded-full bg-rose-500 px-4 py-2.5 text-sm font-bold text-white hover:bg-rose-400"
-                        >
-                          Xoá {selectedIds.size} từ
-                        </button>
-                      )}
+                      <button
+                        onClick={deleteSelected}
+                        className="inline-flex items-center gap-1.5 rounded-full bg-rose-500 px-4 py-2.5 text-sm font-bold text-white hover:bg-rose-400"
+                      >
+                        Xoá {selectedIds.size} từ
+                      </button>
                     </>
                   )}
                   <select value={sort} onChange={(e) => setSort(e.target.value as Sort)} className="rounded-full border border-line px-4 py-2.5 text-sm">
@@ -886,14 +907,12 @@ export default function Bank() {
                     >
                       <div className="flex items-start justify-between">
                         <CardBadge custom={badges[badgeKey]} FallbackIcon={Ic} size={30} />
-                        {isAdmin && (
-                          <EditBadgeButton
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setEditingTopicBadge(t);
-                            }}
-                          />
-                        )}
+                        <EditBadgeButton
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setEditingTopicBadge(t);
+                          }}
+                        />
                       </div>
                       <div className="mt-3 font-bold">{t}</div>
                       <div className="mb-3 text-xs text-muted">{list.length} từ</div>
@@ -902,7 +921,7 @@ export default function Bank() {
                   );
                 })}
               </div>
-              {isAdmin && editingTopicBadge && (
+              {editingTopicBadge && (
                 <BadgePickerModal
                   title={editingTopicBadge}
                   current={badges[`topic:${editingTopicBadge}`]}
@@ -931,11 +950,11 @@ export default function Bank() {
 
           {tab === "book" && (
             <BookSection
-              words={words}
+              words={bookWords}
               onReload={load}
               isAdmin={isAdmin}
               WordGrid={({ list }) => (
-                <WordGrid list={list} onDelete={isAdmin ? deleteWord : undefined} />
+                <WordGrid list={list} onDelete={isAdmin ? deleteBookWord : undefined} />
               )}
             />
           )}

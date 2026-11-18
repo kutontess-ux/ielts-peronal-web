@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/lib/supabase-server";
+import { linkWordsToUser } from "@/lib/user-words";
 
 type FolderRow = {
   id: string;
@@ -158,6 +159,10 @@ export async function POST(req: Request) {
             .upsert(setRowsLegacy, { onConflict: "id", ignoreDuplicates: true });
           if (legacyErr) throw new Error(legacyErr.message);
         }
+        const syncedWordIds = sets.flatMap((s: Record<string, unknown>) =>
+          Array.isArray(s.wordIds) ? s.wordIds.map(Number) : []
+        );
+        await linkWordsToUser(ctx.db, userId, syncedWordIds, "study-set");
       }
 
       return NextResponse.json({ ok: true });
@@ -190,6 +195,7 @@ export async function POST(req: Request) {
         const { error: legacyErr } = await ctx.db.from("study_sets").upsert(baseRow, { onConflict: "id" });
         if (legacyErr) throw new Error(legacyErr.message);
       }
+      await linkWordsToUser(ctx.db, userId, baseRow.word_ids, "study-set");
       return NextResponse.json({ ok: true });
     }
 
@@ -232,10 +238,11 @@ export async function POST(req: Request) {
     if (action === "update_set") {
       const id = String(body.id ?? "");
       const patch = body.patch as Record<string, unknown>;
+      const wordIds = Array.isArray(patch.wordIds) ? patch.wordIds.map(Number) : [];
       const updateObj: Record<string, unknown> = {
         title: String(patch.title ?? "").trim(),
         desc_text: String(patch.desc ?? "").trim(),
-        word_ids: Array.isArray(patch.wordIds) ? patch.wordIds.map(Number) : [],
+        word_ids: wordIds,
       };
       if (patch.folderId !== undefined) {
         updateObj.folder_id = patch.folderId ? String(patch.folderId) : null;
@@ -246,6 +253,7 @@ export async function POST(req: Request) {
         .eq("id", id)
         .eq("user_id", userId);
       if (error) throw new Error(error.message);
+      await linkWordsToUser(ctx.db, userId, wordIds, "study-set");
       return NextResponse.json({ ok: true });
     }
 

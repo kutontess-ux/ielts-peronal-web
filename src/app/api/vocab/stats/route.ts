@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/lib/supabase-server";
 import type { supabaseAdmin } from "@/lib/supabase";
+import { countUserWords } from "@/lib/user-words";
 import type { Word } from "@/lib/mock";
 import {
   clampLevel,
@@ -74,13 +75,10 @@ export async function GET() {
     const soonMs = nowMs + SOON_WINDOW_MS;
     const startIso = getVnDayStartIso(nowMs);
 
-    const [settings, wordsCountRes, reviewedTodayRes, reviewsRes] =
+    const [settings, totalPersonalWords, reviewedTodayRes, reviewsRes] =
       await Promise.all([
         loadUserSettings(db, userId),
-        db
-          .from("words")
-          .select("id", { count: "exact", head: true })
-          .eq("status", "approved"),
+        countUserWords(db, userId),
         db
           .from("reviews")
           .select("word_id", { count: "exact", head: true })
@@ -96,7 +94,6 @@ export async function GET() {
           .limit(2000),
       ]);
 
-    if (wordsCountRes.error) throw new Error(wordsCountRes.error.message);
     if (reviewedTodayRes.error) throw new Error(reviewedTodayRes.error.message);
     if (reviewsRes.error) throw new Error(reviewsRes.error.message);
 
@@ -173,7 +170,7 @@ export async function GET() {
       dailyReviewLimit: settings.daily_review_limit,
       enrolledCount: rows.length,
       reviewedEverCount,
-      totalWords: wordsCountRes.count ?? 0,
+      totalWords: totalPersonalWords,
       masteredCount: levelCounts[5],
       levelCounts,
       dueNowCount,

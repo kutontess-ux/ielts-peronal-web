@@ -3,10 +3,33 @@ import { requireAuth } from "@/lib/supabase-server";
 import { consumeAiQuota } from "@/lib/ai-quota";
 import { enrich, extractFromPassage } from "@/lib/ai";
 import { cleanTerm, normKey, splitInput } from "@/lib/normalize";
+import { loadUserWordIdSet } from "@/lib/user-words";
 
 export const maxDuration = 120;
 
-// Bước 1: agent xử lý – KHÔNG ghi database. Chỉ tính quota AI khi thực sự phải gọi AI.
+type DictWordRow = {
+  id: number;
+  norm_key: string;
+  lemma: string;
+  ipa: string | null;
+  pos: string | null;
+  meaning_vi: string | null;
+  definition_en: string | null;
+  example: string | null;
+  cefr_level: string | null;
+  topic: string | null;
+  is_awl: boolean;
+  collocations: string[] | null;
+  synonyms: string[] | null;
+  created_by?: string | null;
+};
+
+const DICT_COLS =
+  "id,norm_key,lemma,ipa,pos,meaning_vi,definition_en,example,cefr_level,topic,is_awl,collocations,synonyms,created_by";
+
+// Bước 1: agent xử lý – KHÔNG ghi database.
+// - Tận dụng từ điển public.words (0 lượt AI) nếu từ đã được dịch sẵn từ trước (kể cả từ Oxford 3000 hay user khác).
+// - Chỉ đánh dấu "duplicate" nếu từ đã nằm trong Kho cá nhân (user_words) của chính người dùng này.
 export async function POST(req: Request) {
   try {
     const auth = await requireAuth();
@@ -40,15 +63,15 @@ export async function POST(req: Request) {
     if (candidates.length === 0) return NextResponse.json({ error: "Không tìm thấy từ nào" }, { status: 400 });
     if (candidates.length > 300) return NextResponse.json({ error: "Tối đa 300 từ mỗi lần nạp, hãy chia nhỏ." }, { status: 400 });
 
-    // 2) bỏ qua AI cho từ đã có trong kho (so khớp nhanh theo khoá chuẩn hoá của chính từ nhập)
+    // 2) kiểm tra cache từ điển public.words (0 lượt AI)
     const keys = candidates.map(normKey);
-    const { data: existing } = await db.from("words").select("id,norm_key,lemma").in("norm_key", keys);
-    const haveMap = new Map<string, { id: number; lemma: string }>();
-    for (const r of existing ?? []) {
-      haveMap.set(r.norm_key as string, { id: Number(r.id), lemma: String(r.lemma) });
+    const { data: existing } = await db.from("words").select(DICT_COLS).in("norm_key", keys);
+    const dictMap = new Map<string, DictWordRow>();
+    for (const r of (existing ?? []) as DictWordRow[]) {
+      dictMap.set(r.norm_key, r);
     }
 
-    const toEnrich = candidates.filter((_, i) => !haveMap.has(keys[i]));
+    const toEnrich = candidates.filter((_, i) => !dictMap.has(keys[i]));
     if (toEnrich.length > 0 && !passage) {
       const quotaErr = await consumeAiQuota(ctx, "import-enrich");
       if (quotaErr) return quotaErr;
@@ -56,44 +79,98 @@ export async function POST(req: Request) {
 
     const enriched = toEnrich.length ? await enrich(toEnrich) : [];
 
-    // 3) kiểm tra lại trùng theo lemma do AI trả về (vd "analysed" -> "analyse")
+    // 3) kiểm tra lại cache theo lemma do AI trả về (vd "analysed" -> "analyse")
     const lemKeys = enriched.filter((e) => e.valid).map((e) => normKey(e.lemma));
     const { data: existing2 } = lemKeys.length
-      ? await db.from("words").select("id,norm_key,lemma").in("norm_key", lemKeys)
-      : { data: [] as { id: number; norm_key: string; lemma: string }[] };
-    for (const r of existing2 ?? []) {
-      haveMap.set(r.norm_key as string, { id: Number(r.id), lemma: String(r.lemma) });
+      ? await db.from("words").select(DICT_COLS).in("norm_key", lemKeys)
+      : { data: [] as DictWordRow[] };
+    for (const r of (existing2 ?? []) as DictWordRow[]) {
+      dictMap.set(r.norm_key, r);
     }
+
+    // 4) đối chiếu với Kho cá nhân (user_words) của riêng user hiện tại
+    const allDictIds = Array.from(dictMap.values()).map((d) => Number(d.id));
+    const { ids: userWordIds, tableMissing } = await loadUserWordIdSet(
+      db,
+      ctx.user.id,
+      allDictIds
+    );
+    const effectiveUserHas = (row: DictWordRow): boolean =>
+      tableMissing ? row.created_by === ctx.user.id : userWordIds.has(Number(row.id));
 
     const seenLemma = new Set<string>();
     const existingWordIds = new Set<number>();
-    const items = enriched.map((e) => {
-      if (!e.valid || !e.lemma) return { ...e, status: "invalid" as const };
-      const k = normKey(e.lemma);
-      const match = haveMap.get(k);
-      if (match) {
-        existingWordIds.add(match.id);
-        return { ...e, norm_key: k, existingId: match.id, status: "duplicate" as const };
-      }
-      if (seenLemma.has(k)) return { ...e, norm_key: k, status: "duplicate" as const };
-      seenLemma.add(k);
-      return { ...e, norm_key: k, status: "new" as const };
+    const items: Record<string, unknown>[] = [];
+
+    const dictToItem = (row: DictWordRow, inputLabel: string, status: "new" | "duplicate") => ({
+      input: inputLabel,
+      lemma: row.lemma,
+      norm_key: row.norm_key,
+      existingId: row.id,
+      ipa: row.ipa ?? "",
+      pos: row.pos ?? "",
+      meaning_vi: row.meaning_vi ?? "",
+      definition_en: row.definition_en ?? "",
+      example: row.example ?? "",
+      cefr_level: row.cefr_level ?? "B2",
+      topic: row.topic ?? "Other",
+      is_awl: !!row.is_awl,
+      collocations: row.collocations ?? [],
+      synonyms: row.synonyms ?? [],
+      cachedFromBank: true,
+      status,
     });
 
+    // Từ đã có sẵn trong cache từ điển (0 lượt AI)
     candidates.forEach((c, i) => {
-      const match = haveMap.get(keys[i]);
-      if (match) {
+      const match = dictMap.get(keys[i]);
+      if (!match) return;
+      if (seenLemma.has(match.norm_key)) {
+        items.push(dictToItem(match, c, "duplicate"));
+        if (effectiveUserHas(match)) existingWordIds.add(match.id);
+        return;
+      }
+      seenLemma.add(match.norm_key);
+      if (effectiveUserHas(match)) {
         existingWordIds.add(match.id);
-        items.push({
-          input: c,
-          lemma: match.lemma,
-          norm_key: keys[i],
-          existingId: match.id,
-          status: "duplicate",
-        } as never);
+        items.push(dictToItem(match, c, "duplicate"));
+      } else {
+        items.push(dictToItem(match, c, "new"));
       }
     });
-    inputDup.forEach((c) => items.push({ input: c, lemma: c, status: "duplicate" } as never));
+
+    // Từ mới được AI phân tích
+    for (const e of enriched) {
+      if (!e.valid || !e.lemma) {
+        items.push({ ...e, status: "invalid" as const });
+        continue;
+      }
+      const k = normKey(e.lemma);
+      const match = dictMap.get(k);
+      if (match) {
+        if (seenLemma.has(k)) {
+          if (effectiveUserHas(match)) existingWordIds.add(match.id);
+          items.push(dictToItem(match, e.input, "duplicate"));
+          continue;
+        }
+        seenLemma.add(k);
+        if (effectiveUserHas(match)) {
+          existingWordIds.add(match.id);
+          items.push(dictToItem(match, e.input, "duplicate"));
+        } else {
+          items.push(dictToItem(match, e.input, "new"));
+        }
+        continue;
+      }
+      if (seenLemma.has(k)) {
+        items.push({ ...e, norm_key: k, status: "duplicate" as const });
+        continue;
+      }
+      seenLemma.add(k);
+      items.push({ ...e, norm_key: k, status: "new" as const });
+    }
+
+    inputDup.forEach((c) => items.push({ input: c, lemma: c, status: "duplicate" }));
 
     return NextResponse.json({
       items,

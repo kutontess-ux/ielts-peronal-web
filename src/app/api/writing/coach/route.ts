@@ -3,6 +3,7 @@ import { requireAuth } from "@/lib/supabase-server";
 import { consumeAiQuota } from "@/lib/ai-quota";
 import { askJsonWithVision, TOPICS } from "@/lib/ai";
 import { normKey } from "@/lib/normalize";
+import { linkWordsToUser } from "@/lib/user-words";
 import {
   countWords,
   detectUsedTargetWords,
@@ -556,6 +557,8 @@ export async function PUT(req: Request) {
     if (selErr) throw new Error(selErr.message);
 
     const wordIds = (resolvedWords ?? []).map((w) => w.id);
+    await linkWordsToUser(ctx.db, ctx.user.id, wordIds, "writing-coach");
+
     return NextResponse.json({
       wordIds,
       count: wordIds.length,

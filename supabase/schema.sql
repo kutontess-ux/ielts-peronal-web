@@ -23,6 +23,25 @@ create index if not exists words_level_idx on public.words (cefr_level);
 create index if not exists words_topic_idx on public.words (topic);
 create index if not exists words_status_idx on public.words (status);
 
+-- Kho từ vựng cá nhân của từng người dùng (từ đã tải lên, đã tra, từ hằng ngày, đã học)
+create table if not exists public.user_words (
+  id         bigint generated always as identity primary key,
+  user_id    uuid not null references auth.users(id) on delete cascade,
+  word_id    bigint not null references public.words(id) on delete cascade,
+  source     text not null default 'import',
+  created_at timestamptz not null default now(),
+  unique (user_id, word_id)
+);
+create index if not exists user_words_user_created_idx on public.user_words (user_id, created_at desc);
+create index if not exists user_words_word_idx on public.user_words (word_id);
+alter table public.user_words enable row level security;
+drop policy if exists "user_words_own_all" on public.user_words;
+create policy "user_words_own_all"
+  on public.user_words for all
+  to authenticated
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
+
 -- Lịch sử mỗi lần nạp hàng loạt
 create table if not exists public.imports (
   id          bigint generated always as identity primary key,

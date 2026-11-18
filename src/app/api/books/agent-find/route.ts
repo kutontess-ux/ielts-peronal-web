@@ -74,7 +74,11 @@ export async function POST(req: Request) {
         new Set(rawBatch.map((i) => normKey(String(i.lemma ?? ""))).filter(Boolean))
       );
       const { data: existingRows } = lemKeys.length
-        ? await ctx.db.from("words").select("norm_key").in("norm_key", lemKeys)
+        ? await ctx.db
+            .from("words")
+            .select("norm_key")
+            .in("norm_key", lemKeys)
+            .like("source", "book-%")
         : { data: [] as { norm_key: string }[] };
       const existingDbKeys = new Set<string>((existingRows ?? []).map((r) => r.norm_key as string));
 

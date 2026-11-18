@@ -265,14 +265,17 @@ function StudySetModal({
     setAiBusy("save");
     setAiErr("");
     try {
-      const newItems = chosenAiItems.filter((item) => !item.existingId);
-      if (newItems.length > 0) {
-        setActivityLabel("/api/import/commit", `Đang lưu ${newItems.length} flashcard mới vào kho...`);
+      const userWordIds = new Set(words.map((w) => w.id));
+      const itemsToLink = chosenAiItems.filter(
+        (item) => !item.existingId || !userWordIds.has(item.existingId)
+      );
+      if (itemsToLink.length > 0) {
+        setActivityLabel("/api/import/commit", `Đang lưu ${itemsToLink.length} flashcard vào kho cá nhân...`);
         const cRes = await fetch("/api/import/commit", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            items: newItems,
+            items: itemsToLink,
             source: "study-set-ai",
           }),
         });

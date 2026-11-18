@@ -305,19 +305,20 @@ export default function BookSection({
   };
 
   const enrollBookToSrs = async () => {
-    if (!isAdmin || bookFiltered.length === 0 || srsBusy) return;
+    if (bookFiltered.length === 0 || srsBusy) return;
     setSrsBusy(true);
     setErr("");
     setMsg("");
     try {
       const res = await enrollWordsInSrs(bookFiltered.map((w) => w.id));
+      await onReload();
       notifyDueUpdated();
       setMsg(
         res.enrolled > 0
           ? res.deferred > 0
-            ? `Đã chuyển ${res.enrolled} từ vào Ôn tập (${res.deferred} từ được dời lịch sang từ ${res.scheduledFromDay ?? "ngày sau"} do hôm nay đã đủ chỉ tiêu).`
-            : `Đã chuyển ${res.enrolled} từ mới vào Ôn tập ngắt quãng.`
-          : "Các từ này đã nằm sẵn trong Ôn tập ngắt quãng."
+            ? `Đã chuyển ${res.enrolled} từ vào Ôn tập & Kho cá nhân (${res.deferred} từ được dời lịch sang từ ${res.scheduledFromDay ?? "ngày sau"} do hôm nay đã đủ chỉ tiêu).`
+            : `Đã chuyển ${res.enrolled} từ mới vào Ôn tập ngắt quãng & Kho cá nhân.`
+          : "Các từ này đã nằm sẵn trong Ôn tập ngắt quãng của bạn."
       );
     } catch (e) {
       setErr((e as Error).message);
@@ -533,7 +534,7 @@ export default function BookSection({
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            {isAdmin && bookFiltered.length > 0 && (
+            {bookFiltered.length > 0 && (
               <button
                 type="button"
                 onClick={enrollBookToSrs}

@@ -1523,10 +1523,10 @@ function ReadingDetailInner() {
                         <>
                           {/* Trạng thái Kho từ vựng rõ ràng */}
                           <div className="flex items-center justify-between rounded-lg bg-card px-2.5 py-1.5 text-[11px]">
-                            <span className="text-muted">Trạng thái Kho:</span>
+                            <span className="text-muted">Kho cá nhân:</span>
                             {vocabResult.existsInBank ? (
                               <span className="font-semibold text-emerald-700 dark:text-emerald-300">
-                                ✓ Đã có trong Kho{vocabResult.bankSource ? ` (${vocabResult.bankSource})` : ""}
+                                ✓ Đã lưu trong Kho cá nhân
                               </span>
                             ) : (
                               <span className="font-semibold text-amber-700 dark:text-amber-300">○ Chưa có trong Kho</span>
@@ -1535,46 +1535,58 @@ function ReadingDetailInner() {
 
                           <button
                             onClick={() => openBookPicker(vocabResult)}
-                            disabled={vocabResult.existsInBank}
+                            disabled={Boolean(vocabResult.bankSource?.startsWith("book-"))}
                             className={`flex w-full items-center justify-center gap-2 rounded-xl py-2.5 text-xs font-bold transition ${
-                              vocabResult.existsInBank
+                              vocabResult.bankSource?.startsWith("book-")
                                 ? "bg-emerald-500/20 text-emerald-700 dark:text-emerald-300"
                                 : "bg-brand text-white hover:bg-brand-hover hover:text-bg"
                             }`}
                           >
-                            {vocabResult.existsInBank ? (
+                            {vocabResult.bankSource?.startsWith("book-") ? (
                               <>
                                 <Check size={15} />{" "}
-                                {addedBookTitle ? `Đã thêm vào "${addedBookTitle}"` : "Đã có trong Kho từ vựng"}
+                                {addedBookTitle ? `Đã thêm vào "${addedBookTitle}"` : `Đã có trong Bộ sách (${vocabResult.bankSource})`}
                               </>
                             ) : (
                               <>
-                                <Plus size={15} /> Thêm vào Bộ sách / Kho
+                                <Plus size={15} /> Thêm vào Bộ sách cộng đồng
                               </>
                             )}
                           </button>
                         </>
                       ) : (
-                        <button
-                          type="button"
-                          onClick={() => openPersonalSetPicker(vocabResult)}
-                          className={`flex w-full items-center justify-center gap-2 rounded-xl py-2.5 text-xs font-bold transition ${
-                            savedToSetMap[vocabResult.norm_key || vocabResult.lemma.toLowerCase().trim()]
-                              ? "bg-emerald-500/20 text-emerald-700 dark:text-emerald-300"
-                              : "bg-brand text-white hover:bg-brand-hover hover:text-bg"
-                          }`}
-                        >
-                          {savedToSetMap[vocabResult.norm_key || vocabResult.lemma.toLowerCase().trim()] ? (
-                            <>
-                              <Check size={15} /> Đã lưu vào Thẻ ghi nhớ “
-                              {savedToSetMap[vocabResult.norm_key || vocabResult.lemma.toLowerCase().trim()]}”
-                            </>
-                          ) : (
-                            <>
-                              <Plus size={15} /> Lưu vào Thẻ ghi nhớ cá nhân
-                            </>
-                          )}
-                        </button>
+                        <>
+                          <div className="flex items-center justify-between rounded-lg bg-card px-2.5 py-1.5 text-[11px]">
+                            <span className="text-muted">Kho cá nhân:</span>
+                            {vocabResult.existsInBank ? (
+                              <span className="font-semibold text-emerald-700 dark:text-emerald-300">
+                                ✓ Đã tự động lưu vào Kho
+                              </span>
+                            ) : (
+                              <span className="font-semibold text-muted">Tự động lưu khi tra</span>
+                            )}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => openPersonalSetPicker(vocabResult)}
+                            className={`flex w-full items-center justify-center gap-2 rounded-xl py-2.5 text-xs font-bold transition ${
+                              savedToSetMap[vocabResult.norm_key || vocabResult.lemma.toLowerCase().trim()]
+                                ? "bg-emerald-500/20 text-emerald-700 dark:text-emerald-300"
+                                : "bg-brand text-white hover:bg-brand-hover hover:text-bg"
+                            }`}
+                          >
+                            {savedToSetMap[vocabResult.norm_key || vocabResult.lemma.toLowerCase().trim()] ? (
+                              <>
+                                <Check size={15} /> Đã lưu vào Thẻ ghi nhớ “
+                                {savedToSetMap[vocabResult.norm_key || vocabResult.lemma.toLowerCase().trim()]}”
+                              </>
+                            ) : (
+                              <>
+                                <Plus size={15} /> Lưu vào Thẻ ghi nhớ cá nhân
+                              </>
+                            )}
+                          </button>
+                        </>
                       )}
                     </div>
                   )}
@@ -1951,8 +1963,10 @@ function ReadingDetailInner() {
                                 )}
                                 <div className="flex items-center justify-between pt-1">
                                   {isAdmin ? (
-                                    vocabObj.existsInBank ? (
-                                      <span className="font-semibold text-emerald-700 dark:text-emerald-300">✓ Đã có trong Kho</span>
+                                    vocabObj.bankSource?.startsWith("book-") ? (
+                                      <span className="font-semibold text-emerald-700 dark:text-emerald-300">
+                                        ✓ Đã có trong Bộ sách ({vocabObj.bankSource})
+                                      </span>
                                     ) : (
                                       <button
                                         onClick={() => openBookPicker(vocabObj)}
@@ -1962,22 +1976,29 @@ function ReadingDetailInner() {
                                       </button>
                                     )
                                   ) : (
-                                    <button
-                                      type="button"
-                                      onClick={() => openPersonalSetPicker(vocabObj)}
-                                      className="inline-flex items-center gap-1 rounded-lg bg-brand px-2.5 py-1 font-semibold text-white hover:bg-brand-hover hover:text-bg"
-                                    >
-                                      {savedToSetMap[vocabObj.norm_key || vocabObj.lemma.toLowerCase().trim()] ? (
-                                        <>
-                                          <Check size={12} /> Đã lưu “
-                                          {savedToSetMap[vocabObj.norm_key || vocabObj.lemma.toLowerCase().trim()]}”
-                                        </>
-                                      ) : (
-                                        <>
-                                          <Plus size={12} /> Lưu vào Thẻ ghi nhớ
-                                        </>
+                                    <div className="flex w-full flex-wrap items-center justify-between gap-2">
+                                      {vocabObj.existsInBank && (
+                                        <span className="font-semibold text-emerald-700 dark:text-emerald-300">
+                                          ✓ Đã lưu vào Kho cá nhân
+                                        </span>
                                       )}
-                                    </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => openPersonalSetPicker(vocabObj)}
+                                        className="inline-flex items-center gap-1 rounded-lg bg-brand px-2.5 py-1 font-semibold text-white hover:bg-brand-hover hover:text-bg"
+                                      >
+                                        {savedToSetMap[vocabObj.norm_key || vocabObj.lemma.toLowerCase().trim()] ? (
+                                          <>
+                                            <Check size={12} /> Đã lưu “
+                                            {savedToSetMap[vocabObj.norm_key || vocabObj.lemma.toLowerCase().trim()]}”
+                                          </>
+                                        ) : (
+                                          <>
+                                            <Plus size={12} /> Lưu vào Thẻ ghi nhớ
+                                          </>
+                                        )}
+                                      </button>
+                                    </div>
                                   )}
                                 </div>
                               </div>

@@ -199,7 +199,7 @@ export default function Review() {
     try {
       const [r, wRes] = await Promise.all([
         fetch("/api/reviews", { cache: "no-store" }),
-        fetch("/api/words", { cache: "no-store" }),
+        fetch("/api/words?scope=pool", { cache: "no-store" }),
       ]);
       if (r.ok) {
         const j = await r.json();

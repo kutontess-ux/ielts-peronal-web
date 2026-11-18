@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/lib/supabase-server";
 import type { supabaseAdmin } from "@/lib/supabase";
+import { countUserWords, linkWordsToUser } from "@/lib/user-words";
 import type { Word } from "@/lib/mock";
 import {
   clampLevel,
@@ -74,7 +75,7 @@ export async function GET() {
     const nowIso = new Date(nowMs).toISOString();
     const { startIso } = getVnDayBounds(nowMs);
 
-    const [settings, dueRes, statsRes, wordsCountRes, reviewedTodayRes] = await Promise.all([
+    const [settings, dueRes, statsRes, totalPersonalWords, reviewedTodayRes] = await Promise.all([
       loadUserSettings(db, userId),
       db
         .from("reviews")
@@ -88,7 +89,7 @@ export async function GET() {
         .order("next_review_at", { ascending: true })
         .limit(200),
       db.from("reviews").select("level").eq("user_id", userId),
-      db.from("words").select("id", { count: "exact", head: true }).eq("status", "approved"),
+      countUserWords(db, userId),
       db
         .from("reviews")
         .select("word_id", { count: "exact", head: true })
@@ -98,7 +99,6 @@ export async function GET() {
 
     if (dueRes.error) throw new Error(dueRes.error.message);
     if (statsRes.error) throw new Error(statsRes.error.message);
-    if (wordsCountRes.error) throw new Error(wordsCountRes.error.message);
 
     const { count: overdueExactCount, error: overdueErr } = await db
       .from("reviews")
@@ -149,7 +149,7 @@ export async function GET() {
       dailyReviewLimit: settings.daily_review_limit,
       dailyLimitRemaining,
       enrolledCount: statsRes.data?.length ?? 0,
-      totalWords: wordsCountRes.count ?? 0,
+      totalWords: totalPersonalWords,
       masteredCount: levelCounts[5],
       levelCounts,
       settings,
@@ -191,6 +191,8 @@ export async function PUT(req: Request) {
 
     const existingSet = new Set((existingRows ?? []).map((r) => Number(r.word_id)));
     const newIds = ids.filter((id) => !existingSet.has(id));
+
+    await linkWordsToUser(db, userId, ids, "review");
 
     if (newIds.length === 0) {
       return NextResponse.json({ ok: true, enrolled: 0, deferred: 0, totalRequested: ids.length });

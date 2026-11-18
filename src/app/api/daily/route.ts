@@ -4,6 +4,7 @@ import { consumeAiQuota } from "@/lib/ai-quota";
 import { askJson, TOPICS, type Enriched } from "@/lib/ai";
 import { cleanTerm, normKey, possibleLemmas } from "@/lib/normalize";
 import { fetchRecentNews, type NewsItem } from "@/lib/rss";
+import { linkWordsToUser } from "@/lib/user-words";
 import type { Word } from "@/lib/mock";
 
 export const maxDuration = 120;
@@ -496,6 +497,8 @@ async function generateDaily(db: ReturnType<typeof supabaseAdmin>, userId: strin
       );
 
       if (dErr) continue;
+
+      await linkWordsToUser(db, userId, [wordId], kind === "news" ? "daily-news" : "daily-ielts");
 
       if (kind === "news") savedNews++;
       else savedIelts++;

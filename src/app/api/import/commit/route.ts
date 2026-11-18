@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/lib/supabase-server";
+import { linkWordsToUser } from "@/lib/user-words";
 
 type Item = {
   lemma: string; norm_key: string; ipa?: string; pos?: string; meaning_vi?: string;
@@ -7,11 +8,10 @@ type Item = {
   is_awl?: boolean; collocations?: string[]; synonyms?: string[];
 };
 
-const PERSONAL_SOURCES = new Set(["study-set", "study-set-ai", "reading-personal"]);
-
-// Bước 2: người dùng đã duyệt -> ghi vào kho.
-// Chỉ Admin mới được nạp vào Bộ sách (book-*) hoặc nạp hàng loạt vào Kho chung (import).
-// Thành viên thường chỉ được lưu từ phục vụ Thẻ ghi nhớ cá nhân (study-set / study-set-ai / reading-personal).
+// Bước 2: Lưu từ đã duyệt.
+// - Nếu source bắt đầu bằng "book-" -> CHỈ Admin mới được thêm vào Bộ sách cộng đồng.
+// - Tất cả các nguồn cá nhân khác ("import", "study-set", "study-set-ai", "reading-personal", ...)
+//   mọi người dùng đều được nạp và tự động gắn riêng vào Kho cá nhân (public.user_words) của người đó.
 export async function POST(req: Request) {
   try {
     const auth = await requireAuth();
@@ -26,11 +26,13 @@ export async function POST(req: Request) {
     if (!items?.length) return NextResponse.json({ error: "Không có từ nào để lưu" }, { status: 400 });
 
     const cleanSource = (source ?? "").trim() || "import";
-    if (!ctx.isAdmin && !PERSONAL_SOURCES.has(cleanSource)) {
+    const isBookTarget = cleanSource.startsWith("book-");
+
+    if (isBookTarget && !ctx.isAdmin) {
       return NextResponse.json(
         {
           error:
-            "Chỉ quản trị viên (Admin) mới được tạo bộ sách hoặc nạp từ vào Bộ sách cộng đồng. Bạn hãy lưu từ vào Thẻ ghi nhớ cá nhân.",
+            "Chỉ quản trị viên (Admin) mới được tạo bộ sách hoặc nạp từ vào Bộ sách cộng đồng.",
         },
         { status: 403 }
       );
@@ -68,14 +70,35 @@ export async function POST(req: Request) {
       .map((r) => Number(r.id))
       .filter((n) => Number.isFinite(n) && n > 0);
 
-    const added = data?.length ?? 0;
+    // Nếu Admin nạp từ vào một Bộ sách cụ thể, gắn các từ chưa thuộc bộ sách nào vào bộ sách đó
+    if (isBookTarget && wordIds.length > 0) {
+      await ctx.db
+        .from("words")
+        .update({ source: cleanSource })
+        .in("id", wordIds)
+        .not("source", "like", "book-%");
+    }
+
+    // Nếu là nguồn cá nhân -> gắn vào Kho cá nhân (user_words) của riêng người dùng hiện tại
+    const personalAdded = isBookTarget
+      ? 0
+      : await linkWordsToUser(ctx.db, ctx.user.id, wordIds, cleanSource);
+
+    const dictAdded = data?.length ?? 0;
+    const added = isBookTarget ? dictAdded : Math.max(dictAdded, personalAdded);
+
     await ctx.db.from("imports").insert({
       total: stats?.total ?? items.length,
       added,
-      duplicates: (stats?.duplicates ?? 0) + (items.length - added),
+      duplicates: (stats?.duplicates ?? 0) + Math.max(0, items.length - added),
       invalid: stats?.invalid ?? 0,
     });
-    return NextResponse.json({ added, skipped: items.length - added, wordIds });
+    return NextResponse.json({
+      added,
+      personalAdded,
+      skipped: Math.max(0, items.length - added),
+      wordIds,
+    });
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message }, { status: 500 });
   }

@@ -2,12 +2,89 @@ import { NextResponse } from "next/server";
 import { askJsonWithProfile, TOPICS } from "@/lib/ai";
 import { cleanTerm, normKey, possibleLemmas } from "@/lib/normalize";
 import { requireAuth } from "@/lib/supabase-server";
+import type { supabaseAdmin } from "@/lib/supabase";
 import { consumeAiQuota } from "@/lib/ai-quota";
+import { linkWordsToUser, loadUserBankSourceMap } from "@/lib/user-words";
 
 const VALID_LEVELS = new Set(["A2", "B1", "B2", "C1", "C2"]);
 function safeLevel(lv?: string): "A2" | "B1" | "B2" | "C1" | "C2" {
   const up = String(lv ?? "").toUpperCase().trim();
   return (VALID_LEVELS.has(up) ? up : "B2") as "A2" | "B1" | "B2" | "C1" | "C2";
+}
+
+async function ensureReadingWordInUserBank(
+  db: ReturnType<typeof supabaseAdmin>,
+  userId: string,
+  payload: Record<string, unknown>,
+  fallbackTerm: string
+): Promise<{ existsInBank: boolean; bankSource: string | null }> {
+  const rawLemma = String(payload.lemma ?? fallbackTerm ?? "").toLowerCase().trim();
+  const key =
+    typeof payload.norm_key === "string" && payload.norm_key
+      ? payload.norm_key
+      : normKey(rawLemma);
+  if (!rawLemma || !key) return { existsInBank: false, bankSource: null };
+
+  const { data: existing } = await db
+    .from("words")
+    .select("id,source")
+    .eq("norm_key", key)
+    .maybeSingle();
+
+  let wordId = existing?.id ? Number(existing.id) : 0;
+  let bankSource: string | null = existing?.source ? String(existing.source) : null;
+
+  if (!wordId) {
+    const { data: inserted } = await db
+      .from("words")
+      .upsert(
+        {
+          lemma: rawLemma,
+          norm_key: key,
+          ipa: payload.ipa ? String(payload.ipa) : null,
+          pos: payload.pos ? String(payload.pos) : null,
+          meaning_vi: payload.meaning_vi
+            ? String(payload.meaning_vi)
+            : payload.meaning_in_context
+            ? String(payload.meaning_in_context)
+            : null,
+          definition_en: payload.definition_en ? String(payload.definition_en) : null,
+          example: payload.example ? String(payload.example) : null,
+          cefr_level: safeLevel(typeof payload.cefr_level === "string" ? payload.cefr_level : undefined),
+          topic: typeof payload.topic === "string" && payload.topic ? payload.topic : "Other",
+          is_awl: Boolean(payload.is_awl),
+          collocations: Array.isArray(payload.collocations) ? payload.collocations : [],
+          synonyms: Array.isArray(payload.synonyms) ? payload.synonyms : [],
+          status: "approved",
+          source: "reading-lookup",
+          created_by: userId,
+        },
+        { onConflict: "norm_key", ignoreDuplicates: true }
+      )
+      .select("id,source")
+      .maybeSingle();
+
+    if (inserted?.id) {
+      wordId = Number(inserted.id);
+      bankSource = inserted.source ? String(inserted.source) : "reading-lookup";
+    } else {
+      const { data: raced } = await db
+        .from("words")
+        .select("id,source")
+        .eq("norm_key", key)
+        .maybeSingle();
+      if (raced?.id) {
+        wordId = Number(raced.id);
+        bankSource = raced.source ? String(raced.source) : "reading-lookup";
+      }
+    }
+  }
+
+  if (wordId > 0) {
+    await linkWordsToUser(db, userId, [wordId], "reading");
+    return { existsInBank: true, bankSource: bankSource ?? "reading" };
+  }
+  return { existsInBank: false, bankSource: null };
 }
 
 type VocabResult = {
@@ -106,17 +183,18 @@ export async function POST(req: Request) {
           if (!body.forceAi) {
             const rj = matchedNote.result_json as Record<string, unknown>;
             const key = typeof rj.norm_key === "string" ? rj.norm_key : searchKey;
-            const { data: existing } = await db
-              .from("words")
-              .select("id,source")
-              .eq("norm_key", key)
-              .maybeSingle();
+            const bankStatus = await ensureReadingWordInUserBank(
+              db,
+              userId,
+              { ...rj, norm_key: key },
+              matchedNote.target_text
+            );
             return NextResponse.json({
               vocab: {
                 ...rj,
                 norm_key: key,
-                existsInBank: !!existing,
-                bankSource: existing?.source ?? null,
+                existsInBank: bankStatus.existsInBank,
+                bankSource: bankStatus.bankSource,
               },
               note: matchedNote,
               cached: true,
@@ -139,6 +217,8 @@ export async function POST(req: Request) {
           const bankWord =
             bankWords.find((w) => w.norm_key === searchKey) ?? bankWords[0];
 
+          await linkWordsToUser(db, userId, [Number(bankWord.id)], "reading");
+
           return NextResponse.json({
             vocab: {
               lemma: bankWord.lemma,
@@ -155,7 +235,7 @@ export async function POST(req: Request) {
               collocations: bankWord.collocations ?? [],
               synonyms: bankWord.synonyms ?? [],
               existsInBank: true,
-              bankSource: bankWord.source ?? "import",
+              bankSource: bankWord.source ?? "reading",
             },
             cached: true,
             cacheSource: "bank",
@@ -194,11 +274,17 @@ Phân tích từ/cụm từ tiếng Anh dựa trên câu ngữ cảnh. Trả v�
       }
 
       const key = normKey(ai.lemma);
-      const { data: existing } = await db
-        .from("words")
-        .select("id,source")
-        .eq("norm_key", key)
-        .maybeSingle();
+      const bankStatus = await ensureReadingWordInUserBank(
+        db,
+        userId,
+        {
+          ...ai,
+          cefr_level: safeLevel(ai.cefr_level),
+          norm_key: key,
+          example: sentence,
+        },
+        ai.lemma
+      );
 
       const vocabPayload = {
         ...ai,
@@ -207,8 +293,8 @@ Phân tích từ/cụm từ tiếng Anh dựa trên câu ngữ cảnh. Trả v�
         norm_key: key,
         example: sentence,
         example_vi: ai.example_vi ?? "",
-        existsInBank: !!existing,
-        bankSource: existing?.source ?? null,
+        existsInBank: bankStatus.existsInBank,
+        bankSource: bankStatus.bankSource,
         ai_picked: false,
         manual_lookup: true,
       };
@@ -352,14 +438,7 @@ Trả về đúng định dạng JSON: {"paragraphs": ["..."], "sentences": [{"e
       const rawItems = (ai.items ?? []).filter((x) => x && x.lemma);
       const keys = rawItems.map((x) => normKey(x.lemma)).filter(Boolean);
 
-      const bankMap = new Map<string, string>();
-      if (keys.length > 0) {
-        const { data: bankRows } = await db
-          .from("words")
-          .select("norm_key,source")
-          .in("norm_key", keys);
-        for (const r of bankRows ?? []) bankMap.set(r.norm_key, r.source ?? "import");
-      }
+      const bankMap = await loadUserBankSourceMap(db, userId, keys);
 
       const existingNoteKeys = new Set<string>();
       if (body.passageId) {
@@ -459,14 +538,7 @@ Trả về JSON:
       const rawItems = (ai.items ?? []).filter((x) => x.lemma);
       const keys = rawItems.map((x) => normKey(x.lemma));
 
-      const bankMap = new Map<string, string>();
-      if (keys.length > 0) {
-        const { data: bankRows } = await db
-          .from("words")
-          .select("norm_key,source")
-          .in("norm_key", keys);
-        for (const r of bankRows ?? []) bankMap.set(r.norm_key, r.source ?? "import");
-      }
+      const bankMap = await loadUserBankSourceMap(db, userId, keys);
 
       const existingNoteKeys = new Set<string>();
       if (body.passageId) {
@@ -671,6 +743,15 @@ export async function PUT(req: Request) {
     };
     if (!body.passageId || !body.targetText?.trim()) {
       return NextResponse.json({ error: "Thiếu thông tin ghi chú" }, { status: 400 });
+    }
+
+    if (body.kind === "vocab") {
+      await ensureReadingWordInUserBank(
+        ctx.db,
+        ctx.user.id,
+        body.resultJson ?? {},
+        body.targetText.trim()
+      );
     }
 
     const { data, error } = await ctx.db

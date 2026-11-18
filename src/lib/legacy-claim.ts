@@ -10,6 +10,7 @@ export async function getLegacyCounts(db: ReturnType<typeof supabaseAdmin>) {
     legacyNotesRes,
     legacySettingsRes,
     legacyDailyRes,
+    legacyWordsRes,
   ] = await Promise.all([
     db.from("reviews").select("word_id", { count: "exact", head: true }).is("user_id", null),
     db.from("study_sets").select("id", { count: "exact", head: true }).is("user_id", null),
@@ -18,6 +19,11 @@ export async function getLegacyCounts(db: ReturnType<typeof supabaseAdmin>) {
     db.from("reading_notes").select("id", { count: "exact", head: true }).is("user_id", null),
     db.from("user_settings").select("id", { count: "exact", head: true }).is("user_id", null),
     db.from("daily_words").select("id", { count: "exact", head: true }).is("user_id", null),
+    db
+      .from("words")
+      .select("id", { count: "exact", head: true })
+      .is("created_by", null)
+      .not("source", "like", "book-%"),
   ]);
 
   const legacyCounts = {
@@ -28,6 +34,7 @@ export async function getLegacyCounts(db: ReturnType<typeof supabaseAdmin>) {
     reading_notes: legacyNotesRes.count ?? 0,
     user_settings: legacySettingsRes.count ?? 0,
     daily_words: legacyDailyRes.error ? 0 : (legacyDailyRes.count ?? 0),
+    words: legacyWordsRes.error ? 0 : (legacyWordsRes.count ?? 0),
   };
   const totalLegacy = Object.values(legacyCounts).reduce((a, b) => a + b, 0);
   return { legacyCounts, totalLegacy };
@@ -128,6 +135,40 @@ export async function claimLegacyDataForUser(
     }
   } catch {
     // Bỏ qua nếu chưa chạy migration daily_words.user_id
+  }
+
+  // Gộp các từ cũ chưa gắn created_by (ngoại trừ Bộ sách book-*) vào Kho cá nhân của Admin
+  try {
+    const { data: legacyWords, error: lwErr } = await db
+      .from("words")
+      .select("id,source")
+      .is("created_by", null)
+      .not("source", "like", "book-%");
+
+    if (!lwErr && legacyWords && legacyWords.length > 0) {
+      for (let i = 0; i < legacyWords.length; i += 500) {
+        const slice = legacyWords.slice(i, i + 500);
+        const uwRows = slice.map((w) => ({
+          user_id: adminId,
+          word_id: Number(w.id),
+          source: String(w.source || "import"),
+        }));
+        const { error: uwErr } = await db
+          .from("user_words")
+          .upsert(uwRows, { onConflict: "user_id,word_id", ignoreDuplicates: true });
+        if (uwErr) break;
+        await db
+          .from("words")
+          .update({ created_by: adminId })
+          .is("created_by", null)
+          .in(
+            "id",
+            slice.map((w) => Number(w.id))
+          );
+      }
+    }
+  } catch {
+    // Bỏ qua nếu chưa chạy migration user_words
   }
 }
 

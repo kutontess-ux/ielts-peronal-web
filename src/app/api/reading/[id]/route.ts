@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { normKey } from "@/lib/normalize";
 import { requireAuth } from "@/lib/supabase-server";
+import { loadUserBankSourceMap } from "@/lib/user-words";
 
 export async function GET(_req: Request, context: { params: Promise<{ id: string }> }) {
   try {
@@ -37,7 +38,7 @@ export async function GET(_req: Request, context: { params: Promise<{ id: string
     const translationNote = allNotes.find((n) => n.target_text === "__PASSAGE_TRANSLATION__");
     const notes = allNotes.filter((n) => n.target_text !== "__PASSAGE_TRANSLATION__");
 
-    // Đối chiếu trực tiếp các ghi chú từ vựng với bảng words để biết từ nào đã có trong Kho
+    // Đối chiếu các ghi chú từ vựng với Kho cá nhân (user_words) của riêng người dùng hiện tại
     const vocabKeys = notes
       .filter((n) => n.kind === "vocab")
       .map((n) => {
@@ -46,16 +47,7 @@ export async function GET(_req: Request, context: { params: Promise<{ id: string
       })
       .filter(Boolean);
 
-    const bankMap = new Map<string, string>();
-    if (vocabKeys.length > 0) {
-      const { data: bankRows } = await db
-        .from("words")
-        .select("norm_key,source")
-        .in("norm_key", vocabKeys);
-      for (const w of bankRows ?? []) {
-        bankMap.set(w.norm_key, w.source ?? "import");
-      }
-    }
+    const bankMap = await loadUserBankSourceMap(db, ctx.user.id, vocabKeys);
 
     const enrichedNotes = notes.map((n) => {
       if (n.kind !== "vocab") return n;
