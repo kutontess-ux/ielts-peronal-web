@@ -2123,8 +2123,17 @@ export default function VocabLearn() {
                         <div className="break-words text-base font-bold text-ink">
                           {s.title}
                         </div>
-                        <div className="mt-0.5 text-xs font-medium text-muted">
-                          {setWords.length} thuật ngữ
+                        <div className="mt-1 flex flex-wrap items-center gap-2 text-xs font-medium text-muted">
+                          <span>{setWords.length} thuật ngữ</span>
+                          {setFolder ? (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-brand/10 px-2 py-0.5 text-[11px] font-semibold text-brand-hover">
+                              <Folder size={11} /> {setFolder.name}
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-card px-2 py-0.5 text-[11px] font-medium text-muted transition group-hover:bg-bg">
+                              <Folder size={11} /> Chưa có thư mục
+                            </span>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -2213,18 +2222,6 @@ export default function VocabLearn() {
                         </div>
                       )}
                     </div>
-                  </div>
-
-                  <div className="mt-4 flex items-center gap-1.5">
-                    {setFolder ? (
-                      <span className="inline-flex items-center gap-1.5 rounded-full bg-brand/10 px-2.5 py-1 text-[11px] font-semibold text-brand-hover">
-                        <Folder size={12} /> {setFolder.name}
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1.5 rounded-full bg-card px-2.5 py-1 text-[11px] font-medium text-muted transition group-hover:bg-bg">
-                        <Folder size={12} /> Chưa có thư mục
-                      </span>
-                    )}
                   </div>
                 </div>
               );
