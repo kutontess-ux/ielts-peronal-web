@@ -115,11 +115,43 @@ function formatDate(d: string) {
   return y && m && day ? `${day}/${m}/${y}` : d;
 }
 
-function extractSentenceFromParagraph(paragraph: string, target: string): string {
-  const sentences = paragraph.match(/[^.!?]+[.!?]+(?:\s|$)|[^.!?]+$/g) ?? [paragraph];
+type SentenceRange = { text: string; start: number; end: number };
+
+function findSentenceRanges(paragraph: string): SentenceRange[] {
+  const regex = /[^.!?]+[.!?]+|[^.!?]+$/g;
+  const ranges: SentenceRange[] = [];
+  for (const m of paragraph.matchAll(regex)) {
+    const raw = m[0];
+    const rawStart = m.index ?? 0;
+    const leadingWs = raw.match(/^\s*/)?.[0].length ?? 0;
+    const trailingWs = raw.match(/\s*$/)?.[0].length ?? 0;
+    const start = rawStart + leadingWs;
+    const end = rawStart + raw.length - trailingWs;
+    if (end > start) {
+      ranges.push({ text: paragraph.slice(start, end), start, end });
+    }
+  }
+  return ranges.length > 0 ? ranges : [{ text: paragraph, start: 0, end: paragraph.length }];
+}
+
+function findSentenceRangeForTarget(
+  paragraph: string,
+  target: string,
+  charOffset?: number
+): SentenceRange {
+  const ranges = findSentenceRanges(paragraph);
+  if (charOffset !== undefined) {
+    const byOffset = ranges.find((r) => charOffset >= r.start && charOffset < r.end);
+    if (byOffset) return byOffset;
+  }
   const lower = target.toLowerCase();
-  const found = sentences.find((s) => s.toLowerCase().includes(lower));
-  return (found ?? paragraph).trim();
+  return (
+    ranges.find((r) => r.text.toLowerCase().includes(lower)) ?? {
+      text: paragraph.trim(),
+      start: 0,
+      end: paragraph.length,
+    }
+  );
 }
 
 function ReadingDetailInner() {
@@ -155,7 +187,16 @@ function ReadingDetailInner() {
   const [vocabCached, setVocabCached] = useState(false);
   const [contextSentenceVi, setContextSentenceVi] = useState("");
   const [contextBoxExpanded, setContextBoxExpanded] = useState(false);
-  const [lastLookupTerm, setLastLookupTerm] = useState<{ term: string; sentence: string; paragraphIdx?: number }>({
+  const [lastLookupTerm, setLastLookupTerm] = useState<{
+    term: string;
+    sentence: string;
+    paragraphIdx?: number;
+    sentStart?: number;
+    sentEnd?: number;
+    tokenIdx?: number;
+    matchStart?: number;
+    matchEnd?: number;
+  }>({
     term: "",
     sentence: "",
   });
@@ -435,7 +476,19 @@ function ReadingDetailInner() {
     return val;
   }
 
-  async function lookupTerm(term: string, sentence: string, forceAi = false, paragraphIdx?: number) {
+  async function lookupTerm(
+    term: string,
+    sentence: string,
+    forceAi = false,
+    paragraphIdx?: number,
+    highlightMeta?: {
+      sentStart?: number;
+      sentEnd?: number;
+      tokenIdx?: number;
+      matchStart?: number;
+      matchEnd?: number;
+    }
+  ) {
     const clean = term.trim();
     if (!clean || !passage) return;
     setActiveTool("vocab");
@@ -443,7 +496,18 @@ function ReadingDetailInner() {
     setVocabError("");
     setAddedBookTitle("");
     setEditingVocabMeaning(false);
-    setLastLookupTerm({ term: clean, sentence, paragraphIdx });
+    setLastLookupTerm((prev) => ({
+      term: clean,
+      sentence,
+      paragraphIdx,
+      ...(highlightMeta ?? (forceAi && prev.paragraphIdx === paragraphIdx ? {
+        sentStart: prev.sentStart,
+        sentEnd: prev.sentEnd,
+        tokenIdx: prev.tokenIdx,
+        matchStart: prev.matchStart,
+        matchEnd: prev.matchEnd,
+      } : {})),
+    }));
 
     const preTranslatedVi = findSentenceTranslationVi(sentence, paragraphIdx);
     setContextSentenceVi(preTranslatedVi);
@@ -760,16 +824,50 @@ function ReadingDetailInner() {
     }
   }
 
-  function handleParagraphMouseUp(paragraph: string, paragraphIdx?: number) {
-    const sel = window.getSelection()?.toString().trim() ?? "";
+  function handleParagraphMouseUp(
+    paragraph: string,
+    paragraphIdx?: number,
+    e?: React.MouseEvent<HTMLParagraphElement>
+  ) {
+    const selection = window.getSelection();
+    const sel = selection?.toString().trim() ?? "";
     if (sel) {
       if (activeTool === "sentence" && sel.split(/\s+/).length > 4) {
         setSentenceInput(sel);
         return;
       }
       if (activeTool === "vocab" && sel.split(/\s+/).length <= 5) {
-        const sentence = extractSentenceFromParagraph(paragraph, sel);
-        lookupTerm(sel, sentence, false, paragraphIdx);
+        let charOffset: number | undefined;
+        if (selection && selection.rangeCount > 0 && e?.currentTarget) {
+          const range = selection.getRangeAt(0);
+          if (e.currentTarget.contains(range.startContainer)) {
+            const preRange = document.createRange();
+            preRange.selectNodeContents(e.currentTarget);
+            preRange.setEnd(range.startContainer, range.startOffset);
+            const rawOffset = preRange.toString().length;
+            const nearMatch = paragraph.toLowerCase().indexOf(sel.toLowerCase(), Math.max(0, rawOffset - 4));
+            charOffset = nearMatch >= 0 ? nearMatch : rawOffset;
+          }
+        }
+        const sentRange = findSentenceRangeForTarget(paragraph, sel, charOffset);
+        let matchStart = charOffset;
+        let matchEnd = charOffset !== undefined ? charOffset + sel.length : undefined;
+        if (matchStart === undefined || matchStart < sentRange.start || matchStart >= sentRange.end) {
+          const relIdx = sentRange.text.toLowerCase().indexOf(sel.toLowerCase());
+          if (relIdx >= 0) {
+            matchStart = sentRange.start + relIdx;
+            matchEnd = matchStart + sel.length;
+          } else {
+            matchStart = undefined;
+            matchEnd = undefined;
+          }
+        }
+        void lookupTerm(sel, sentRange.text, false, paragraphIdx, {
+          sentStart: sentRange.start,
+          sentEnd: sentRange.end,
+          matchStart,
+          matchEnd,
+        });
       }
     }
   }
@@ -778,7 +876,9 @@ function ReadingDetailInner() {
     word: string,
     paragraph: string,
     paragraphIdx?: number,
-    forceVocabTool = false
+    forceVocabTool = false,
+    tokenIdx?: number,
+    charOffset?: number
   ) {
     if (activeTool !== "vocab" && !forceVocabTool) return;
     const sel = window.getSelection()?.toString().trim() ?? "";
@@ -789,8 +889,12 @@ function ReadingDetailInner() {
     if (activeTool !== "vocab" && forceVocabTool) {
       setActiveTool("vocab");
     }
-    const sentence = extractSentenceFromParagraph(paragraph, clean);
-    void lookupTerm(clean, sentence, false, paragraphIdx);
+    const sentRange = findSentenceRangeForTarget(paragraph, clean, charOffset);
+    void lookupTerm(clean, sentRange.text, false, paragraphIdx, {
+      sentStart: sentRange.start,
+      sentEnd: sentRange.end,
+      tokenIdx,
+    });
   }
 
   async function analyzeSentence(e?: React.FormEvent, forceAi = false) {
@@ -916,38 +1020,111 @@ function ReadingDetailInner() {
 
     if (activeTool === "vocab" || highlightAiVocab) {
       const tokens = p.split(/(\s+)/);
-      englishNode = (
-        <p onMouseUp={() => handleParagraphMouseUp(p, idx)} className={textStyleClass}>
-          {tokens.map((tok, i) => {
-            if (/^\s+$/.test(tok)) return tok;
-            const aiHighlighted = !isTitleLine && highlightAiVocab && isAiPickedWord(tok);
-            return (
-              <span
-                key={i}
-                onClick={() => handleWordClick(tok, p, idx, aiHighlighted)}
-                className={`rounded-sm transition ${
-                  activeTool === "vocab" || aiHighlighted
-                    ? "cursor-pointer hover:bg-brand/15 hover:text-ink"
-                    : ""
-                } ${
-                  aiHighlighted
-                    ? "underline decoration-amber-500/65 decoration-[1.5px] underline-offset-4 dark:decoration-amber-400/65"
-                    : ""
-                }`}
-              >
-                {tok}
-              </span>
-            );
-          })}
-        </p>
-      );
+      let cursor = 0;
+      const tokenEntries = tokens.map((tok, i) => {
+        const start = cursor;
+        const end = cursor + tok.length;
+        cursor = end;
+        return { tok, i, start, end };
+      });
+
+      const isLookupHighlightActive =
+        activeTool === "vocab" &&
+        Boolean(vocabLoading || vocabResult || vocabError) &&
+        Boolean(lastLookupTerm.term);
+      const activeInThisPara = isLookupHighlightActive && lastLookupTerm.paragraphIdx === idx;
+
+      let activeSentStart = -1;
+      let activeSentEnd = -1;
+      if (activeInThisPara) {
+        if (lastLookupTerm.sentStart !== undefined && lastLookupTerm.sentEnd !== undefined) {
+          activeSentStart = lastLookupTerm.sentStart;
+          activeSentEnd = lastLookupTerm.sentEnd;
+        } else if (lastLookupTerm.sentence) {
+          const pos = p.toLowerCase().indexOf(lastLookupTerm.sentence.toLowerCase());
+          if (pos >= 0) {
+            activeSentStart = pos;
+            activeSentEnd = pos + lastLookupTerm.sentence.length;
+          }
+        }
+      }
+
+      const renderToken = ({ tok, i, start, end }: { tok: string; i: number; start: number; end: number }) => {
+        if (/^\s+$/.test(tok)) return tok;
+        const aiHighlighted = !isTitleLine && highlightAiVocab && isAiPickedWord(tok);
+        const isTokenMatched =
+          activeInThisPara &&
+          (lastLookupTerm.tokenIdx !== undefined
+            ? i === lastLookupTerm.tokenIdx
+            : lastLookupTerm.matchStart !== undefined && lastLookupTerm.matchEnd !== undefined
+            ? start < lastLookupTerm.matchEnd && end > lastLookupTerm.matchStart
+            : false);
+
+        const wordHighlightClass =
+          "rounded bg-sky-300/85 px-0.5 font-semibold text-sky-950 ring-1 ring-sky-400/70 dark:bg-sky-500/45 dark:text-sky-50 dark:ring-sky-400/60";
+        const wordMatch = isTokenMatched ? tok.match(/^([^a-zA-Z0-9'’-]*)(.+?)([^a-zA-Z0-9'’-]*)$/) : null;
+
+        return (
+          <span
+            key={i}
+            onClick={() => handleWordClick(tok, p, idx, aiHighlighted, i, start)}
+            className={`rounded-sm transition ${
+              activeTool === "vocab" || aiHighlighted
+                ? isTokenMatched
+                  ? "cursor-pointer"
+                  : "cursor-pointer hover:bg-brand/15 hover:text-ink"
+                : ""
+            } ${
+              aiHighlighted
+                ? "underline decoration-amber-500/65 decoration-[1.5px] underline-offset-4 dark:decoration-amber-400/65"
+                : ""
+            }`}
+          >
+            {isTokenMatched ? (
+              wordMatch && wordMatch[2] ? (
+                <>
+                  {wordMatch[1]}
+                  <span className={wordHighlightClass}>{wordMatch[2]}</span>
+                  {wordMatch[3]}
+                </>
+              ) : (
+                <span className={wordHighlightClass}>{tok}</span>
+              )
+            ) : (
+              tok
+            )}
+          </span>
+        );
+      };
+
+      const hasSentenceHighlight = activeSentStart >= 0 && activeSentEnd > activeSentStart;
+      if (hasSentenceHighlight) {
+        const beforeTokens = tokenEntries.filter((t) => t.end <= activeSentStart);
+        const sentenceTokens = tokenEntries.filter((t) => t.end > activeSentStart && t.start < activeSentEnd);
+        const afterTokens = tokenEntries.filter((t) => t.start >= activeSentEnd);
+        englishNode = (
+          <p onMouseUp={(e) => handleParagraphMouseUp(p, idx, e)} className={textStyleClass}>
+            {beforeTokens.map(renderToken)}
+            <mark className="box-decoration-clone rounded bg-sky-100/90 px-0.5 py-0.5 text-inherit dark:bg-sky-500/15">
+              {sentenceTokens.map(renderToken)}
+            </mark>
+            {afterTokens.map(renderToken)}
+          </p>
+        );
+      } else {
+        englishNode = (
+          <p onMouseUp={(e) => handleParagraphMouseUp(p, idx, e)} className={textStyleClass}>
+            {tokenEntries.map(renderToken)}
+          </p>
+        );
+      }
     } else if (hasQuote) {
       const pos = p.toLowerCase().indexOf(quote.toLowerCase());
       const before = p.slice(0, pos);
       const match = p.slice(pos, pos + quote.length);
       const after = p.slice(pos + quote.length);
       englishNode = (
-        <p onMouseUp={() => handleParagraphMouseUp(p, idx)} className={textStyleClass}>
+        <p onMouseUp={(e) => handleParagraphMouseUp(p, idx, e)} className={textStyleClass}>
           {before}
           <mark className="rounded bg-amber-300/45 px-1 py-0.5 text-amber-950 ring-1 ring-amber-500/50 dark:bg-amber-400/25 dark:text-amber-100 dark:ring-amber-400/50">
             {match}
@@ -957,7 +1134,7 @@ function ReadingDetailInner() {
       );
     } else {
       englishNode = (
-        <p onMouseUp={() => handleParagraphMouseUp(p, idx)} className={textStyleClass}>
+        <p onMouseUp={(e) => handleParagraphMouseUp(p, idx, e)} className={textStyleClass}>
           {p}
         </p>
       );
@@ -1654,6 +1831,47 @@ function ReadingDetailInner() {
                               <button
                                 key={n.id}
                                 onClick={() => {
+                                  const termToFind = (rj.surface || rj.lemma || n.target_text || "").trim();
+                                  let matchedParaIdx: number | undefined;
+                                  let matchedSent: SentenceRange | undefined;
+                                  let matchedStart: number | undefined;
+                                  let matchedEnd: number | undefined;
+                                  if (rj.example) {
+                                    const exLower = rj.example.trim().toLowerCase();
+                                    const pIdx = paragraphs.findIndex((para) => para.toLowerCase().includes(exLower));
+                                    if (pIdx >= 0) {
+                                      matchedParaIdx = pIdx;
+                                      matchedSent = findSentenceRangeForTarget(paragraphs[pIdx], rj.example.trim());
+                                    }
+                                  }
+                                  if (matchedParaIdx === undefined && termToFind) {
+                                    const tLower = termToFind.toLowerCase();
+                                    const pIdx = paragraphs.findIndex((para) => para.toLowerCase().includes(tLower));
+                                    if (pIdx >= 0) {
+                                      matchedParaIdx = pIdx;
+                                      matchedSent = findSentenceRangeForTarget(paragraphs[pIdx], termToFind);
+                                    }
+                                  }
+                                  if (matchedSent && termToFind) {
+                                    const rel = matchedSent.text.toLowerCase().indexOf(termToFind.toLowerCase());
+                                    if (rel >= 0) {
+                                      matchedStart = matchedSent.start + rel;
+                                      matchedEnd = matchedStart + termToFind.length;
+                                    }
+                                  }
+                                  setLastLookupTerm(
+                                    matchedParaIdx !== undefined && matchedSent
+                                      ? {
+                                          term: termToFind,
+                                          sentence: matchedSent.text,
+                                          paragraphIdx: matchedParaIdx,
+                                          sentStart: matchedSent.start,
+                                          sentEnd: matchedSent.end,
+                                          matchStart: matchedStart,
+                                          matchEnd: matchedEnd,
+                                        }
+                                      : { term: "", sentence: "" }
+                                  );
                                   setVocabResult({
                                     lemma: rj.lemma ?? n.target_text,
                                     surface: rj.surface ?? n.target_text,
