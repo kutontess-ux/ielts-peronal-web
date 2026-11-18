@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { levelColor, type Word } from "@/lib/mock";
 import { notifyDueUpdated } from "@/lib/due-events";
+import { useMe } from "@/lib/use-me";
 import {
   checkRecallSoftMatch,
   checkVietnameseMeaningMatch,
@@ -126,6 +127,7 @@ function buildChoiceOptions(
 }
 
 export default function Review() {
+  const { isAdmin } = useMe();
   const [queue, setQueue] = useState<SessionItem[]>([]);
   const [wordPool, setWordPool] = useState<Word[]>([]);
   const [dueCount, setDueCount] = useState(0);
@@ -535,7 +537,8 @@ export default function Review() {
   if (loading) {
     return (
       <div className="flex items-center gap-2 py-12 text-muted">
-        <Loader2 className="animate-spin" size={18} /> Đang tải phiên ôn tập Leitner...
+        <Loader2 className="animate-spin" size={18} />{" "}
+        {isAdmin ? "Đang tải phiên ôn tập Leitner..." : "Đang tải phiên ôn tập..."}
       </div>
     );
   }
@@ -694,7 +697,11 @@ export default function Review() {
 
         {enrolledCount > 0 && (
           <div className="mt-5 flex items-center justify-between border-t border-line pt-4 text-xs">
-            <span className="text-muted">Xoá toàn bộ tiến độ Level ({enrolledCount} từ)</span>
+            <span className="text-muted">
+              {isAdmin
+                ? `Xoá toàn bộ tiến độ Level (${enrolledCount} từ)`
+                : `Xoá danh sách ôn hiện tại (${enrolledCount} từ)`}
+            </span>
             <button
               type="button"
               onClick={handleClearAll}
@@ -734,7 +741,7 @@ export default function Review() {
                 : "Hiện tại không có từ nào đến hạn ôn. Hãy học thêm học phần hoặc quay lại sau."}
         </p>
 
-        {enrolledCount > 0 && (
+        {isAdmin && enrolledCount > 0 && (
           <div className="mt-5 flex flex-wrap justify-center gap-1.5 text-xs">
             {([1, 2, 3, 4, 5] as LeitnerLevel[]).map((lv) => (
               <span key={lv} className={`rounded-full px-2.5 py-1 font-semibold ${LEITNER_BADGE[lv].cls}`}>
@@ -786,7 +793,8 @@ export default function Review() {
       <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="flex items-center gap-2 text-2xl font-bold">
-            <Repeat size={24} strokeWidth={1.6} className="text-brand-hover" /> Ôn tập Leitner (Active Recall)
+            <Repeat size={24} strokeWidth={1.6} className="text-brand-hover" />{" "}
+            {isAdmin ? "Ôn tập Leitner (Active Recall)" : "Ôn tập từ vựng"}
           </h1>
           <p className="mt-0.5 text-sm text-muted">
             Chỉ tiêu hôm nay: <b className="text-ink">{reviewedToday}/{dailyReviewLimit}</b> · Còn{" "}
@@ -816,14 +824,16 @@ export default function Review() {
         </div>
       </div>
 
-      {/* Phân bố 5 Level */}
-      <div className="mb-4 flex flex-wrap gap-1.5 text-[11px]">
-        {([1, 2, 3, 4, 5] as LeitnerLevel[]).map((lv) => (
-          <span key={lv} className={`rounded-full px-2.5 py-0.5 font-semibold ${LEITNER_BADGE[lv].cls}`}>
-            Lv.{lv}: {levelCounts[lv] ?? 0}
-          </span>
-        ))}
-      </div>
+      {/* Phân bố 5 Level (chỉ Admin xem) */}
+      {isAdmin && (
+        <div className="mb-4 flex flex-wrap gap-1.5 text-[11px]">
+          {([1, 2, 3, 4, 5] as LeitnerLevel[]).map((lv) => (
+            <span key={lv} className={`rounded-full px-2.5 py-0.5 font-semibold ${LEITNER_BADGE[lv].cls}`}>
+              Lv.{lv}: {levelCounts[lv] ?? 0}
+            </span>
+          ))}
+        </div>
+      )}
 
       {errMsg && (
         <div className="mb-4 rounded-xl bg-rose-500/15 px-4 py-2.5 text-sm text-rose-700 dark:bg-rose-400/15 dark:text-rose-300">
@@ -843,9 +853,11 @@ export default function Review() {
       <div className="rounded-3xl border border-line bg-card p-6 shadow-xl sm:p-8">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex flex-wrap items-center gap-2">
-            <span className={`rounded-full px-3 py-1 text-xs font-bold ${lvMeta.cls}`}>
-              {lvMeta.label}
-            </span>
+            {isAdmin && (
+              <span className={`rounded-full px-3 py-1 text-xs font-bold ${lvMeta.cls}`}>
+                {lvMeta.label}
+              </span>
+            )}
             <span className={`rounded-full px-3 py-1 text-xs font-bold ${levelColor[card.level]}`}>
               {card.level} · {card.topic}
             </span>
@@ -1246,11 +1258,15 @@ export default function Review() {
                 </div>
               )}
               <div className="mt-3 text-xs font-semibold">
-                {feedback.isCorrect
-                  ? feedback.wasRetry
-                    ? `Giữ Level 1 · Hẹn xác nhận lại sau ${feedback.nextLabel}`
-                    : `Đạt Level ${feedback.nextLevel} · Ôn lại sau ${feedback.nextLabel}`
-                  : "Tụt về Level 1 (10 phút) · Đã đưa vào cuối phiên để ôn lại"}
+                {isAdmin
+                  ? feedback.isCorrect
+                    ? feedback.wasRetry
+                      ? `Giữ Level 1 · Hẹn xác nhận lại sau ${feedback.nextLabel}`
+                      : `Đạt Level ${feedback.nextLevel} · Ôn lại sau ${feedback.nextLabel}`
+                    : "Tụt về Level 1 (10 phút) · Đã đưa vào cuối phiên để ôn lại"
+                  : feedback.isCorrect
+                    ? "Đã ghi nhớ từ này!"
+                    : "Đã đưa vào cuối phiên để ôn lại"}
               </div>
             </div>
 
@@ -1277,7 +1293,9 @@ export default function Review() {
       </div>
 
       <p className="mt-4 text-center text-xs text-muted">
-        Quy tắc Leitner: Đúng tăng cấp (1→2→3→4→5: 1d→3d→7d→14d→30d→60d→90d) · Sai tụt về Level 1 và ôn lại cuối phiên.
+        {isAdmin
+          ? "Quy tắc Leitner: Đúng tăng cấp (1→2→3→4→5: 1d→3d→7d→14d→30d→60d→90d) · Sai tụt về Level 1 và ôn lại cuối phiên."
+          : "Phím tắt: Enter kiểm tra / tiếp tục · 1–4 chọn đáp án (chế độ trắc nghiệm)."}
       </p>
     </div>
   );

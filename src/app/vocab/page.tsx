@@ -9,6 +9,7 @@ import { levelColor, type Word } from "@/lib/mock";
 import { enrollWordsInSrs } from "@/lib/srs";
 import { notifyDueUpdated } from "@/lib/due-events";
 import { setActivityLabel } from "@/lib/activity";
+import { useMe } from "@/lib/use-me";
 import {
   completeStudySetReview,
   createStudyFolder,
@@ -969,6 +970,7 @@ export default function VocabLearn() {
   const studySets = useStudySets();
   const folders = useStudyFolders();
   const reviewConfig = useStudySetReviewConfig();
+  const { isAdmin } = useMe();
 
   const reloadWords = useCallback(async (): Promise<Word[]> => {
     const [wJson, rJson] = await Promise.all([
@@ -1027,6 +1029,14 @@ export default function VocabLearn() {
     ).length;
   }, [recentQueue, nowMs]);
 
+  const visibleQueue = useMemo(() => {
+    if (isAdmin) return recentQueue;
+    if (!nowMs) return [];
+    return recentQueue.filter(
+      (s) => s.nextReviewAt && new Date(s.nextReviewAt).getTime() <= nowMs
+    );
+  }, [isAdmin, recentQueue, nowMs]);
+
   const folderSetCounts = useMemo(() => {
     const counts = new Map<string, number>();
     for (const s of studySets) {
@@ -1063,7 +1073,7 @@ export default function VocabLearn() {
       setSrsBanner({
         text:
           res.enrolled > 0
-            ? res.deferred > 0
+            ? isAdmin && res.deferred > 0
               ? `Đã chuyển ${res.enrolled} từ từ “${set.title}” (${res.deferred} từ được dời lịch sang từ ${res.scheduledFromDay ?? "ngày sau"} do hôm nay đã đủ chỉ tiêu).`
               : `Đã chuyển ${res.enrolled} từ mới từ “${set.title}” vào Ôn tập ngắt quãng.`
             : `Các từ trong “${set.title}” đã nằm sẵn trong Ôn tập ngắt quãng.`,
@@ -1093,6 +1103,7 @@ export default function VocabLearn() {
           title={activeSession.title}
           words={activeSession.words}
           wordPool={words}
+          isAdmin={isAdmin}
           onBack={() => setActiveSession(null)}
           onSwitchToFlashcards={() =>
             setActiveSession((prev) => (prev ? { ...prev, mode: "flashcards" } : null))
@@ -1106,6 +1117,7 @@ export default function VocabLearn() {
         setId={activeSession.id}
         title={activeSession.title}
         words={activeSession.words}
+        isAdmin={isAdmin}
         onBack={() => setActiveSession(null)}
         onSwitchToLearn={() =>
           setActiveSession((prev) => (prev ? { ...prev, mode: "learn" } : null))
@@ -1141,7 +1153,7 @@ export default function VocabLearn() {
       <section className="grid gap-4 md:grid-cols-3">
         {[
           ["Học phần đã tạo", `${studySets.length} học phần`, "text-brand-hover"],
-          ["Đã thuộc (≥ 7 ngày)", `${stats.masteredCount} từ`, "text-emerald-600 dark:text-emerald-300"],
+          [isAdmin ? "Đã thuộc (≥ 7 ngày)" : "Từ đã thành thạo", `${stats.masteredCount} từ`, "text-emerald-600 dark:text-emerald-300"],
           ["Tổng từ trong kho", `${stats.totalWords} từ`, "text-orange-600 dark:text-orange-300"],
         ].map(([l, v, c]) => (
           <div key={l} className="rounded-2xl bg-card p-5">
@@ -1151,8 +1163,8 @@ export default function VocabLearn() {
         ))}
       </section>
 
-      {/* Mục tự ôn lại tối đa 5 học phần học gần nhất (ưu tiên học lâu nhất trước) */}
-      {!activeFolder && studySets.length > 0 && (
+      {/* Mục tự ôn lại tối đa 5 học phần học gần nhất (Admin thấy đủ chi tiết & cấu hình; User chỉ thấy học phần đến hạn) */}
+      {!activeFolder && studySets.length > 0 && (isAdmin || visibleQueue.length > 0) && (
         <section className="rounded-3xl border border-line bg-card p-5 sm:p-6">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="min-w-0">
@@ -1168,23 +1180,27 @@ export default function VocabLearn() {
                 )}
               </div>
               <p className="mt-0.5 text-xs text-muted">
-                Theo dõi tối đa 5 học phần học gần nhất · Ưu tiên nhắc học phần đã học lâu nhất trước.
+                {isAdmin
+                  ? "Theo dõi tối đa 5 học phần học gần nhất · Ưu tiên nhắc học phần đã học lâu nhất trước."
+                  : "Các học phần được gợi ý ôn lại để nhớ lâu hơn."}
               </p>
             </div>
 
-            <button
-              type="button"
-              onClick={() => setReviewCfgOpen((v) => !v)}
-              className="inline-flex items-center gap-1.5 rounded-full border border-line bg-bg px-3.5 py-1.5 text-xs font-bold text-muted transition hover:border-brand-hover hover:text-ink"
-            >
-              <Settings2 size={14} />
-              {reviewConfig.mode === "srs"
-                ? "Chu kỳ: 1→3→7→14→30 ngày"
-                : `Cố định: ${reviewConfig.fixedDays} ngày`}
-            </button>
+            {isAdmin && (
+              <button
+                type="button"
+                onClick={() => setReviewCfgOpen((v) => !v)}
+                className="inline-flex items-center gap-1.5 rounded-full border border-line bg-bg px-3.5 py-1.5 text-xs font-bold text-muted transition hover:border-brand-hover hover:text-ink"
+              >
+                <Settings2 size={14} />
+                {reviewConfig.mode === "srs"
+                  ? "Chu kỳ: 1→3→7→14→30 ngày"
+                  : `Cố định: ${reviewConfig.fixedDays} ngày`}
+              </button>
+            )}
           </div>
 
-          {reviewCfgOpen && (
+          {isAdmin && reviewCfgOpen && (
             <div className="mt-4 rounded-2xl border border-line bg-bg p-4 text-xs">
               <div className="font-bold text-ink">Cài đặt lịch tự ôn lại học phần</div>
               <div className="mt-2.5 flex flex-wrap items-center gap-2">
@@ -1239,13 +1255,13 @@ export default function VocabLearn() {
             </div>
           )}
 
-          {recentQueue.length === 0 ? (
+          {visibleQueue.length === 0 ? (
             <div className="mt-4 rounded-2xl bg-bg/70 px-4 py-4 text-xs text-muted">
               Chưa có học phần nào được học gần đây. Hãy bấm <b>Lật thẻ</b> hoặc <b>Luyện tập</b> ở một học phần bên dưới — sau khi học xong hệ thống sẽ tự xếp lịch ôn lại tại đây.
             </div>
           ) : (
             <div className="mt-4 space-y-2.5">
-              {recentQueue.map((s, index) => {
+              {visibleQueue.map((s, index) => {
                 const setWords = s.wordIds
                   .map((id) => wordMap.get(id))
                   .filter((w): w is Word => !!w);
@@ -1268,20 +1284,26 @@ export default function VocabLearn() {
                             : "bg-card text-muted"
                         }`}
                       >
-                        #{index + 1}
+                        {isAdmin ? `#${index + 1}` : <Layers size={14} />}
                       </span>
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-2">
                           <span className="break-words font-bold text-ink">{s.title}</span>
-                          <span
-                            className={`inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-2.5 py-0.5 text-[11px] font-bold ${
-                              status.isDue
-                                ? "bg-rose-500/15 text-rose-700 dark:text-rose-300"
-                                : "bg-sky-500/15 text-sky-700 dark:text-sky-300"
-                            }`}
-                          >
-                            <Clock size={11} /> {status.badgeText}
-                          </span>
+                          {isAdmin ? (
+                            <span
+                              className={`inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-2.5 py-0.5 text-[11px] font-bold ${
+                                status.isDue
+                                  ? "bg-rose-500/15 text-rose-700 dark:text-rose-300"
+                                  : "bg-sky-500/15 text-sky-700 dark:text-sky-300"
+                              }`}
+                            >
+                              <Clock size={11} /> {status.badgeText}
+                            </span>
+                          ) : status.isDue ? (
+                            <span className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full bg-rose-500/15 px-2.5 py-0.5 text-[11px] font-bold text-rose-700 dark:text-rose-300">
+                              <Clock size={11} /> Cần ôn
+                            </span>
+                          ) : null}
                           {setFolder && (
                             <span className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full bg-card px-2 py-0.5 text-[10px] font-semibold text-muted">
                               <Folder size={10} /> {setFolder.name}
@@ -1290,11 +1312,11 @@ export default function VocabLearn() {
                         </div>
                         <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted">
                           <span>{setWords.length} thẻ</span>
-                          {status.lastStudiedLabel && <span>{status.lastStudiedLabel}</span>}
-                          {typeof s.lastScore === "number" && (
+                          {isAdmin && status.lastStudiedLabel && <span>{status.lastStudiedLabel}</span>}
+                          {isAdmin && typeof s.lastScore === "number" && (
                             <span>Lần trước: {s.lastScore}%</span>
                           )}
-                          {(s.reviewLevel ?? 0) > 0 && (
+                          {isAdmin && (s.reviewLevel ?? 0) > 0 && (
                             <span>Mức {s.reviewLevel}/5</span>
                           )}
                         </div>
@@ -1693,7 +1715,7 @@ export default function VocabLearn() {
                       </div>
                     </div>
 
-                    {reviewStatus && (
+                    {reviewStatus && isAdmin ? (
                       <div className="mt-3 flex flex-wrap items-center gap-1.5">
                         <span
                           className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-bold ${
@@ -1714,7 +1736,13 @@ export default function VocabLearn() {
                           </span>
                         )}
                       </div>
-                    )}
+                    ) : reviewStatus?.isDue ? (
+                      <div className="mt-3 flex flex-wrap items-center gap-1.5">
+                        <span className="inline-flex items-center gap-1 rounded-full bg-rose-500/15 px-2.5 py-0.5 text-[11px] font-bold text-rose-700 dark:text-rose-300">
+                          <Clock size={11} /> Cần ôn
+                        </span>
+                      </div>
+                    ) : null}
 
                     {folders.length > 0 && (
                       <div className="mt-3 flex flex-wrap items-center gap-2">

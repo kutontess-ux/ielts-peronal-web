@@ -134,6 +134,7 @@ export default function StudySetLearn({
   title,
   words,
   wordPool,
+  isAdmin = false,
   onBack,
   onSwitchToFlashcards,
   onCompleted,
@@ -142,6 +143,7 @@ export default function StudySetLearn({
   title: string;
   words: Word[];
   wordPool: Word[];
+  isAdmin?: boolean;
   onBack: () => void;
   onSwitchToFlashcards?: () => void;
   onCompleted?: (result: LearnCompletionPayload) => StudySetReviewResult | null | void;
@@ -538,7 +540,7 @@ export default function StudySetLearn({
           {title} · {totalCount} từ vựng
         </p>
 
-        {reviewSchedule && (
+        {isAdmin && reviewSchedule && (
           <div className="mx-auto mt-4 inline-flex flex-wrap items-center justify-center gap-2 rounded-2xl bg-brand/15 px-4 py-2 text-xs font-bold text-brand-hover">
             <CalendarClock size={15} />
             Đã hẹn tự ôn lại học phần sau {reviewSchedule.intervalDays} ngày (Mức {reviewSchedule.nextLevel}/5)
@@ -1122,7 +1124,8 @@ export default function StudySetLearn({
       </div>
 
       <p className="mt-4 text-center text-xs text-muted">
-        Phím tắt: 1–4 chọn trắc nghiệm · Enter kiểm tra / tiếp tục · Học phần này sẽ tự được hẹn ôn lại sau khi hoàn thành
+        Phím tắt: 1–4 chọn trắc nghiệm · Enter kiểm tra / tiếp tục
+        {isAdmin ? " · Học phần này sẽ tự được hẹn ôn lại sau khi hoàn thành" : ""}
       </p>
     </div>
   );

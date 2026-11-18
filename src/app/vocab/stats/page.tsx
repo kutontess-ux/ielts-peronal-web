@@ -26,6 +26,7 @@ import {
   useStudySets,
 } from "@/lib/study-sets";
 import type { AtRiskWord } from "@/app/api/vocab/stats/route";
+import { useMe } from "@/lib/use-me";
 
 type StatsPayload = {
   reviewedToday: number;
@@ -105,6 +106,7 @@ export default function VocabStatsPage() {
   const [err, setErr] = useState("");
   const [riskFilter, setRiskFilter] = useState<"all" | "overdue" | "due-soon" | "lapsed">("all");
   const [todayKey, setTodayKey] = useState("");
+  const { isAdmin } = useMe();
 
   const studySets = useStudySets();
   const studyHistory = useStudyHistory();
@@ -172,7 +174,9 @@ export default function VocabStatsPage() {
             <BarChart3 size={24} className="text-brand-hover" /> Thống kê từ vựng
           </h1>
           <p className="text-sm text-muted">
-            Theo dõi tiến độ ôn tập hôm nay, học phần đã học, phân bố Level 1–5 và các từ sắp quên.
+            {isAdmin
+              ? "Theo dõi tiến độ ôn tập hôm nay, học phần đã học, phân bố Level 1–5 và các từ sắp quên."
+              : "Theo dõi tiến độ ôn tập hôm nay, học phần đã học và các từ cần chú ý."}
           </p>
         </div>
 
@@ -239,7 +243,7 @@ export default function VocabStatsPage() {
 
             <div className="rounded-2xl border border-line/60 bg-card p-5">
               <div className="flex items-center justify-between text-xs font-semibold text-muted">
-                <span>Thành thạo (Level 5)</span>
+                <span>{isAdmin ? "Thành thạo (Level 5)" : "Từ đã thành thạo"}</span>
                 <Trophy size={16} className="text-emerald-500" />
               </div>
               <div className="mt-2 text-2xl font-bold text-emerald-600 dark:text-emerald-300">
@@ -253,51 +257,53 @@ export default function VocabStatsPage() {
             </div>
           </section>
 
-          {/* Phân bố Leitner Level 1 - 5 */}
-          <section className="rounded-3xl border border-line bg-card p-5 sm:p-6">
-            <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-              <div>
-                <h2 className="text-lg font-bold">Phân bố Level 1 – 5 (Leitner)</h2>
-                <p className="text-xs text-muted">
-                  Trả lời đúng sẽ lên Level và giãn lịch ôn; trả lời sai sẽ quay về Level 1.
-                </p>
+          {/* Phân bố Leitner Level 1 - 5 (chỉ Admin xem) */}
+          {isAdmin && (
+            <section className="rounded-3xl border border-line bg-card p-5 sm:p-6">
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <h2 className="text-lg font-bold">Phân bố Level 1 – 5 (Leitner)</h2>
+                  <p className="text-xs text-muted">
+                    Trả lời đúng sẽ lên Level và giãn lịch ôn; trả lời sai sẽ quay về Level 1.
+                  </p>
+                </div>
+                <span className="rounded-full bg-bg px-3 py-1 text-xs font-bold text-muted">
+                  Tổng đang học: {data.enrolledCount} từ
+                </span>
               </div>
-              <span className="rounded-full bg-bg px-3 py-1 text-xs font-bold text-muted">
-                Tổng đang học: {data.enrolledCount} từ
-              </span>
-            </div>
 
-            <div className="space-y-3">
-              {LEVEL_META.map((m) => {
-                const count = data.levelCounts[m.level] ?? 0;
-                const pct =
-                  data.enrolledCount > 0
-                    ? Math.round((count / data.enrolledCount) * 100)
-                    : 0;
-                return (
-                  <div key={m.level} className="space-y-1.5">
-                    <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
-                      <div className="flex items-center gap-2">
-                        <span className={`rounded-full px-2.5 py-0.5 font-bold ${m.badgeCls}`}>
-                          {m.title}
-                        </span>
-                        <span className="text-muted">Chu kỳ {m.interval}</span>
+              <div className="space-y-3">
+                {LEVEL_META.map((m) => {
+                  const count = data.levelCounts[m.level] ?? 0;
+                  const pct =
+                    data.enrolledCount > 0
+                      ? Math.round((count / data.enrolledCount) * 100)
+                      : 0;
+                  return (
+                    <div key={m.level} className="space-y-1.5">
+                      <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                        <div className="flex items-center gap-2">
+                          <span className={`rounded-full px-2.5 py-0.5 font-bold ${m.badgeCls}`}>
+                            {m.title}
+                          </span>
+                          <span className="text-muted">Chu kỳ {m.interval}</span>
+                        </div>
+                        <div className="font-bold text-ink">
+                          {count} từ <span className="font-normal text-muted">({pct}%)</span>
+                        </div>
                       </div>
-                      <div className="font-bold text-ink">
-                        {count} từ <span className="font-normal text-muted">({pct}%)</span>
+                      <div className="h-2.5 overflow-hidden rounded-full bg-bg">
+                        <div
+                          className={`h-full rounded-full transition-all ${m.barCls}`}
+                          style={{ width: `${pct}%` }}
+                        />
                       </div>
                     </div>
-                    <div className="h-2.5 overflow-hidden rounded-full bg-bg">
-                      <div
-                        className={`h-full rounded-full transition-all ${m.barCls}`}
-                        style={{ width: `${pct}%` }}
-                      />
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </section>
+                  );
+                })}
+              </div>
+            </section>
+          )}
 
           {/* Danh sách từ sắp quên */}
           <section className="rounded-3xl border border-line bg-card p-5 sm:p-6">
@@ -307,7 +313,9 @@ export default function VocabStatsPage() {
                   <AlertTriangle size={18} className="text-orange-500" /> Từ sắp quên
                 </h2>
                 <p className="text-xs text-muted">
-                  Gồm từ đã đến hạn ({data.dueNowCount}), sắp đến hạn trong 48h ({data.dueSoonCount}) hoặc từng quên nhiều lần.
+                  {isAdmin
+                    ? `Gồm từ đã đến hạn (${data.dueNowCount}), sắp đến hạn trong 48h (${data.dueSoonCount}) hoặc từng quên nhiều lần.`
+                    : `Gồm các từ cần ôn (${data.dueNowCount}) và từ bạn dễ quên.`}
                 </p>
               </div>
 
@@ -316,7 +324,7 @@ export default function VocabStatsPage() {
                   [
                     ["all", `Tất cả (${data.atRiskWords.length})`],
                     ["overdue", "Đã đến hạn"],
-                    ["due-soon", "Sắp đến hạn (48h)"],
+                    ["due-soon", isAdmin ? "Sắp đến hạn (48h)" : "Sắp ôn"],
                     ["lapsed", "Từng quên"],
                   ] as const
                 ).map(([key, label]) => (
@@ -346,6 +354,12 @@ export default function VocabStatsPage() {
                   const lvBadge =
                     LEVEL_META.find((m) => m.level === w.level_srs)?.badgeCls ??
                     "bg-bg text-muted";
+                  const memberRiskLabel =
+                    w.risk === "overdue"
+                      ? "Cần ôn ngay"
+                      : w.risk === "due-soon"
+                        ? "Sắp ôn"
+                        : "Cần chú ý";
                   return (
                     <div
                       key={w.id}
@@ -365,9 +379,11 @@ export default function VocabStatsPage() {
                           <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${levelColor[w.level as Word["level"]] ?? ""}`}>
                             {w.level}
                           </span>
-                          <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${lvBadge}`}>
-                            Lv.{w.level_srs}
-                          </span>
+                          {isAdmin && (
+                            <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${lvBadge}`}>
+                              Lv.{w.level_srs}
+                            </span>
+                          )}
                           {w.lapses > 0 && (
                             <span className="rounded-full bg-rose-500/15 px-2 py-0.5 text-[10px] font-bold text-rose-700 dark:text-rose-300">
                               Quên {w.lapses} lần
@@ -387,7 +403,8 @@ export default function VocabStatsPage() {
                                 : "bg-card text-muted"
                           }`}
                         >
-                          <Clock size={11} /> {formatRelativeDue(w.next_review_at)}
+                          <Clock size={11} />{" "}
+                          {isAdmin ? formatRelativeDue(w.next_review_at) : memberRiskLabel}
                         </span>
                       </div>
                     </div>

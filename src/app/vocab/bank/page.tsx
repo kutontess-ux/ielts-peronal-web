@@ -9,6 +9,7 @@ import { notifyDueUpdated } from "@/lib/due-events";
 import { setActivityLabel } from "@/lib/activity";
 import ExportButton from "@/components/ExportPanel";
 import { BadgePickerModal, CardBadge, EditBadgeButton, useCardBadges } from "@/components/CardBadgePicker";
+import { useMe } from "@/lib/use-me";
 import BookSection from "./BookSection";
 
 type Tab = "all" | "topic" | "level" | "book";
@@ -499,7 +500,7 @@ export default function Bank() {
   const [tab, setTab] = useState<Tab>("all");
   const [sel, setSel] = useState<Sel>(null);
   const [importing, setImporting] = useState(false);
-  const [isAdmin, setIsAdmin] = useState(false);
+  const { realIsAdmin: isAdmin } = useMe();
 
   // Bộ lọc cho tab Tất cả
   const [q, setQ] = useState("");
@@ -617,16 +618,8 @@ export default function Bank() {
     const t = setTimeout(() => {
       void load();
     }, 0);
-    let active = true;
-    fetch("/api/me", { cache: "no-store" })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((j) => {
-        if (active && j) setIsAdmin(Boolean(j.isAdmin));
-      })
-      .catch(() => {});
     return () => {
       clearTimeout(t);
-      active = false;
     };
   }, [load]);
 

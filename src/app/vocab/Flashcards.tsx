@@ -29,6 +29,7 @@ export default function Flashcards({
   setId,
   title,
   words,
+  isAdmin = false,
   onBack,
   onSwitchToLearn,
   onCompleted,
@@ -36,6 +37,7 @@ export default function Flashcards({
   setId?: string;
   title: string;
   words: Word[];
+  isAdmin?: boolean;
   onBack: () => void;
   onSwitchToLearn?: () => void;
   onCompleted?: (result: FlashcardCompletionPayload) => StudySetReviewResult | null | void;
@@ -72,7 +74,7 @@ export default function Flashcards({
       notifyDueUpdated();
       setSrsMsg(
         res.enrolled > 0
-          ? res.deferred > 0
+          ? isAdmin && res.deferred > 0
             ? `Đã chuyển ${res.enrolled} từ vào Ôn tập (${res.deferred} từ mới được dời sang từ ${res.scheduledFromDay ?? "ngày sau"} vì hôm nay đã đủ chỉ tiêu — nên ôn hết từ cũ trước)`
             : `Đã chuyển ${res.enrolled} từ mới vào Ôn tập ngắt quãng`
           : "Các từ trong học phần này đã nằm sẵn trong Ôn tập ngắt quãng"
@@ -80,7 +82,7 @@ export default function Flashcards({
     } catch {
       // bỏ qua nếu chưa kết nối DB
     }
-  }, []);
+  }, [isAdmin]);
 
   const mark = useCallback(
     (status: HistoryStatus) => {
@@ -202,7 +204,7 @@ export default function Flashcards({
         <h1 className="mt-4 text-2xl font-bold sm:text-3xl">Chúc mừng! Bạn đã học xong bộ thẻ</h1>
         <p className="mt-2 text-muted">{title} · {deck.length} thẻ</p>
 
-        {reviewSchedule && (
+        {isAdmin && reviewSchedule && (
           <div className="mx-auto mt-4 inline-flex flex-wrap items-center justify-center gap-2 rounded-2xl bg-brand/15 px-4 py-2 text-xs font-bold text-brand-hover">
             <CalendarClock size={15} />
             Đã hẹn tự ôn lại học phần sau {reviewSchedule.intervalDays} ngày (Mức {reviewSchedule.nextLevel}/5)

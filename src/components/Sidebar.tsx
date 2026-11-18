@@ -4,27 +4,15 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import {
-  BarChart3, Bell, BookOpen, Home, Layers, LogIn, LogOut, Menu, Newspaper, Package, PenLine, Repeat, Shield, Target, X,
+  BarChart3, Bell, BookOpen, Eye, Home, Layers, LogIn, LogOut, Menu, Newspaper, Package, PenLine, Repeat, Shield, Target, X,
   type LucideIcon,
 } from "lucide-react";
 import { DUE_EVENT, isNotifSeenToday, markNotifSeenToday, NOTIF_SEEN_EVENT } from "@/lib/due-events";
 import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
+import { useMe, type MeInfo } from "@/lib/use-me";
 import ThemeToggle from "@/components/ThemeToggle";
 
 type Item = { href: string; label: string; icon: LucideIcon; exact?: boolean; badge?: number; soon?: boolean };
-
-type MeInfo = {
-  profile: {
-    id: string;
-    email: string;
-    full_name: string;
-    avatar_url: string | null;
-    role: "admin" | "member";
-    daily_ai_limit: number;
-  };
-  isAdmin: boolean;
-  aiUsage: { usedToday: number; limit: number | null };
-};
 
 const SKILLS: Item[] = [
   { href: "/reading", label: "Reading", icon: BookOpen },
@@ -66,11 +54,15 @@ function UserFooter({
   me,
   meLoaded,
   signingOut,
+  previewAsUser,
+  onTogglePreview,
   onSignOut,
 }: {
   me: MeInfo | null;
   meLoaded: boolean;
   signingOut: boolean;
+  previewAsUser: boolean;
+  onTogglePreview: () => void;
   onSignOut: () => void;
 }) {
   if (!me) {
@@ -106,11 +98,25 @@ function UserFooter({
       </div>
       <div className="mt-0.5 truncate text-[11px] text-muted">{me.profile.email}</div>
       <div className="mt-1.5 text-[11px] font-medium text-muted">{quotaText}</div>
+      {me.isAdmin && (
+        <button
+          type="button"
+          onClick={onTogglePreview}
+          className={`mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] font-semibold transition ${
+            previewAsUser
+              ? "border-amber-500/50 bg-amber-500/15 text-amber-800 dark:text-amber-300"
+              : "border-line bg-bg text-muted hover:border-brand-hover hover:text-ink"
+          }`}
+        >
+          <Eye size={13} />
+          {previewAsUser ? "Đang xem kiểu User · Bật lại Admin" : "Xem thử giao diện User"}
+        </button>
+      )}
       <button
         type="button"
         onClick={onSignOut}
         disabled={signingOut}
-        className="mt-2.5 flex w-full items-center justify-center gap-1.5 rounded-lg border border-line bg-bg px-2.5 py-1.5 text-xs font-semibold text-muted transition hover:border-rose-400/50 hover:text-rose-500 disabled:opacity-50"
+        className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg border border-line bg-bg px-2.5 py-1.5 text-xs font-semibold text-muted transition hover:border-rose-400/50 hover:text-rose-500 disabled:opacity-50"
       >
         <LogOut size={13} />
         {signingOut ? "Đang đăng xuất..." : "Đăng xuất"}
@@ -126,9 +132,8 @@ export default function Sidebar() {
   const [dueCount, setDueCount] = useState(0);
   const [notifSeen, setNotifSeen] = useState(true);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [me, setMe] = useState<MeInfo | null>(null);
-  const [meLoaded, setMeLoaded] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
+  const { me, meLoaded, previewAsUser, togglePreviewAsUser, clearMe } = useMe({ skip: isAuthPage });
 
   // Chỉ cập nhật trạng thái đã xem thông báo khi đổi route
   useEffect(() => {
@@ -144,7 +149,7 @@ export default function Sidebar() {
     return () => cancelAnimationFrame(raf);
   }, [path, isAuthPage]);
 
-  // Fetch số từ đến hạn và thông tin tài khoản một lần (và khi có DUE_EVENT)
+  // Fetch số từ đến hạn một lần (và khi có DUE_EVENT)
   useEffect(() => {
     if (isAuthPage) return;
     let active = true;
@@ -161,22 +166,7 @@ export default function Sidebar() {
       }
     };
 
-    const fetchMe = async () => {
-      try {
-        const r = await fetch("/api/me", { cache: "no-store" });
-        if (r.ok && active) {
-          const j = (await r.json()) as MeInfo;
-          setMe(j);
-        }
-      } catch {
-        // bỏ qua lỗi mạng tạm thời
-      } finally {
-        if (active) setMeLoaded(true);
-      }
-    };
-
     void fetchDue();
-    void fetchMe();
 
     const onDueEvent = (e: Event) => {
       const detail = (e as CustomEvent<{ dueCount?: number }>).detail;
@@ -206,7 +196,7 @@ export default function Sidebar() {
     } catch {
       // Vẫn điều hướng về /login nếu session local đã hết hạn
     } finally {
-      setMe(null);
+      clearMe();
       setDueCount(0);
       setSigningOut(false);
       router.replace("/login");
@@ -310,7 +300,14 @@ export default function Sidebar() {
             ))}
             <div className="mt-auto space-y-2.5 pt-3">
               <ThemeToggle variant="switch" />
-              <UserFooter me={me} meLoaded={meLoaded} signingOut={signingOut} onSignOut={handleSignOut} />
+              <UserFooter
+                me={me}
+                meLoaded={meLoaded}
+                signingOut={signingOut}
+                previewAsUser={previewAsUser}
+                onTogglePreview={togglePreviewAsUser}
+                onSignOut={handleSignOut}
+              />
             </div>
           </div>
         </div>
@@ -366,7 +363,14 @@ export default function Sidebar() {
             </div>
             IELTS Academic
           </div>
-          <UserFooter me={me} meLoaded={meLoaded} signingOut={signingOut} onSignOut={handleSignOut} />
+          <UserFooter
+            me={me}
+            meLoaded={meLoaded}
+            signingOut={signingOut}
+            previewAsUser={previewAsUser}
+            onTogglePreview={togglePreviewAsUser}
+            onSignOut={handleSignOut}
+          />
         </div>
       </aside>
     </>
