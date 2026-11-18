@@ -28,14 +28,19 @@ export async function GET() {
 
     const ids = (data ?? []).map((p) => p.id);
     const noteCounts = new Map<number, number>();
+    const translatedPassages = new Set<number>();
     if (ids.length > 0) {
       const { data: notes } = await ctx.db
         .from("reading_notes")
-        .select("passage_id")
+        .select("passage_id,target_text")
         .eq("user_id", ctx.user.id)
         .in("passage_id", ids);
       for (const n of notes ?? []) {
-        noteCounts.set(n.passage_id, (noteCounts.get(n.passage_id) ?? 0) + 1);
+        if (n.target_text === "__PASSAGE_TRANSLATION__") {
+          translatedPassages.add(n.passage_id);
+        } else {
+          noteCounts.set(n.passage_id, (noteCounts.get(n.passage_id) ?? 0) + 1);
+        }
       }
     }
 
@@ -49,6 +54,7 @@ export async function GET() {
       score_total: p.score_total,
       studied_at: p.studied_at,
       notes_count: noteCounts.get(p.id) ?? 0,
+      has_translation: translatedPassages.has(p.id),
     }));
 
     return NextResponse.json({ passages, needsMigration: false });

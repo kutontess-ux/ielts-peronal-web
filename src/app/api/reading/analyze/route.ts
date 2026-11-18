@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { askJsonWithProfile, TOPICS } from "@/lib/ai";
-import { cleanTerm, normKey } from "@/lib/normalize";
+import { cleanTerm, normKey, possibleLemmas } from "@/lib/normalize";
 import { requireAuth } from "@/lib/supabase-server";
 import { consumeAiQuota } from "@/lib/ai-quota";
 
@@ -13,17 +13,25 @@ function safeLevel(lv?: string): "A2" | "B1" | "B2" | "C1" | "C2" {
 type VocabResult = {
   valid: boolean;
   lemma: string;
+  surface?: string;
   ipa: string;
   pos: string;
   meaning_vi: string;
   meaning_in_context: string;
   definition_en: string;
   example?: string;
+  example_vi?: string;
   cefr_level: "A2" | "B1" | "B2" | "C1" | "C2";
   topic: string;
   is_awl: boolean;
   collocations: string[];
   synonyms: string[];
+};
+
+type PassageTranslationPayload = {
+  paragraphs: string[];
+  sentences: { en: string; vi: string }[];
+  translated_at: string;
 };
 
 type SentenceResult = {
@@ -51,7 +59,7 @@ export async function POST(req: Request) {
     const userId = ctx.user.id;
 
     const body = (await req.json()) as {
-      mode: "vocab" | "sentence" | "question" | "batch_vocab";
+      mode: "vocab" | "sentence" | "question" | "batch_vocab" | "full_translate";
       passageId?: number;
       term?: string;
       sentence?: string;
@@ -67,8 +75,10 @@ export async function POST(req: Request) {
       const sentence = (body.sentence ?? "").trim();
       if (!rawTerm) return NextResponse.json({ error: "Chưa chọn từ cần tra" }, { status: 400 });
       const searchKey = normKey(rawTerm);
+      const candidateKeys = possibleLemmas(rawTerm);
+      const candidateSet = new Set(candidateKeys.length > 0 ? candidateKeys : [searchKey]);
 
-      // Tầng 1: Kiểm tra lịch sử tra từ trong reading_notes của bài này (0 token)
+      // Tầng 1: Kiểm tra lịch sử tra từ / từ đã dịch sẵn trong reading_notes của bài này (0 token)
       let existingNoteId: number | null = null;
       if (body.passageId) {
         const { data: noteRows } = await db
@@ -81,7 +91,14 @@ export async function POST(req: Request) {
         const matchedNote = (noteRows ?? []).find((n) => {
           const rj = (n.result_json ?? {}) as Record<string, unknown>;
           const nk = typeof rj.norm_key === "string" ? rj.norm_key : normKey(n.target_text);
-          return nk === searchKey || cleanTerm(n.target_text) === rawTerm;
+          const surface = typeof rj.surface === "string" ? cleanTerm(rj.surface) : "";
+          const surfaceKey = surface ? normKey(surface) : "";
+          return (
+            candidateSet.has(nk) ||
+            cleanTerm(n.target_text) === rawTerm ||
+            surface === rawTerm ||
+            (surfaceKey !== "" && candidateSet.has(surfaceKey))
+          );
         });
 
         if (matchedNote) {
@@ -109,15 +126,19 @@ export async function POST(req: Request) {
         }
       }
 
-      // Tầng 2: Kiểm tra trong Kho từ vựng (words) (0 token)
+      // Tầng 2: Kiểm tra trong Kho từ vựng (words) kể cả khi từ trong bài đang chia thì/số nhiều (0 token)
       if (!body.forceAi) {
-        const { data: bankWord } = await db
+        const keysToQuery = Array.from(candidateSet);
+        const { data: bankWords } = await db
           .from("words")
           .select("*")
-          .eq("norm_key", searchKey)
-          .maybeSingle();
+          .in("norm_key", keysToQuery);
 
-        if (bankWord) {
+        if (bankWords && bankWords.length > 0) {
+          // Ưu tiên khớp chính xác searchKey trước, sau đó đến các biến thể gốc
+          const bankWord =
+            bankWords.find((w) => w.norm_key === searchKey) ?? bankWords[0];
+
           return NextResponse.json({
             vocab: {
               lemma: bankWord.lemma,
@@ -158,6 +179,7 @@ Phân tích từ/cụm từ tiếng Anh dựa trên câu ngữ cảnh. Trả v�
   "meaning_vi": "nghĩa tiếng Việt chính ngắn gọn (<=8 từ)",
   "meaning_in_context": "nghĩa sát nhất trong câu ngữ cảnh này (<=12 từ)",
   "definition_en": "định nghĩa tiếng Anh đơn giản (<=20 từ)",
+  "example_vi": "dịch câu ngữ cảnh sang tiếng Việt tự nhiên",
   "cefr_level": "A2|B1|B2|C1|C2",
   "topic": "chọn 1 trong: ${TOPICS.join(", ")}",
   "is_awl": true/false,
@@ -180,9 +202,11 @@ Phân tích từ/cụm từ tiếng Anh dựa trên câu ngữ cảnh. Trả v�
 
       const vocabPayload = {
         ...ai,
+        surface: rawTerm,
         cefr_level: safeLevel(ai.cefr_level),
         norm_key: key,
         example: sentence,
+        example_vi: ai.example_vi ?? "",
         existsInBank: !!existing,
         bankSource: existing?.source ?? null,
       };
@@ -215,6 +239,180 @@ Phân tích từ/cụm từ tiếng Anh dựa trên câu ngữ cảnh. Trả v�
       }
 
       return NextResponse.json({ vocab: vocabPayload, note: savedNote, cached: false });
+    }
+
+    // Chế độ dịch toàn bài + trích sẵn bộ từ vựng/cụm từ của cả bài chỉ trong 1 request AI duy nhất
+    if (body.mode === "full_translate") {
+      const passageContent = (body.passageContent ?? "").trim();
+      if (!passageContent) {
+        return NextResponse.json({ error: "Thiếu nội dung bài đọc" }, { status: 400 });
+      }
+
+      // Kiểm tra nếu bài đọc đã có bản dịch toàn bài và không bắt buộc gọi lại AI
+      let existingTransNoteId: number | null = null;
+      if (body.passageId) {
+        const { data: existingTrans } = await db
+          .from("reading_notes")
+          .select("*")
+          .eq("passage_id", body.passageId)
+          .eq("user_id", userId)
+          .eq("target_text", "__PASSAGE_TRANSLATION__")
+          .maybeSingle();
+
+        if (existingTrans) {
+          existingTransNoteId = existingTrans.id;
+          if (!body.forceAi) {
+            return NextResponse.json({
+              passageTranslation: existingTrans.result_json,
+              addedNotes: [],
+              items: [],
+              cached: true,
+            });
+          }
+        }
+      }
+
+      const quotaErr = await consumeAiQuota(ctx, "reading-full-translate");
+      if (quotaErr) return quotaErr;
+
+      const rawParagraphs = passageContent
+        .split(/\n+/)
+        .map((p) => p.trim())
+        .filter(Boolean);
+
+      const numberedParagraphs = rawParagraphs
+        .map((p, i) => `[Đoạn ${i + 1}]: ${p}`)
+        .join("\n\n");
+
+      const ai = await askJsonWithProfile<{
+        paragraphs?: string[];
+        sentences?: { en: string; vi: string }[];
+        items?: VocabResult[];
+      }>(
+        "vocab",
+        `Bạn là chuyên gia IELTS Reading và từ điển học thuật cho người Việt (B1 -> 6.5+).
+Nhiệm vụ của bạn trong 1 lần xử lý duy nhất cho bài đọc dưới đây:
+1. "paragraphs": Dịch toàn bộ bài đọc sang tiếng Việt tự nhiên, chuẩn học thuật. Mảng "paragraphs" PHẢI có đúng ${rawParagraphs.length} phần tử tương ứng chính xác với từng đoạn từ [Đoạn 1] đến [Đoạn ${rawParagraphs.length}].
+2. "sentences": Tách các câu quan trọng trong bài kèm bản dịch tiếng Việt tương ứng {"en": "câu gốc tiếng Anh trong bài", "vi": "bản dịch tiếng Việt sát nghĩa"}.
+3. "items": Trích xuất từ 28 đến 40 từ vựng / cụm từ (collocations/phrasal verbs) mức B1-C2 đáng tra cứu nhất trải đều khắp bài đọc để học viên bấm vào từ nào trong bài cũng có sẵn nghĩa mà không tốn thêm request.
+Với mỗi từ trong "items":
+- "lemma": dạng nguyên mẫu chữ thường (vd: "cultivated" -> "cultivate").
+- "surface": từ/cụm từ đúng như hình thái xuất hiện trong bài (vd: "cultivated").
+- "ipa": phiên âm IPA Anh-Anh.
+- "pos": "n|v|adj|adv|phr|prep|conj".
+- "meaning_vi": nghĩa tiếng Việt chính ngắn gọn (<=8 từ).
+- "meaning_in_context": nghĩa sát nhất theo ngữ cảnh bài đọc (<=12 từ).
+- "definition_en": định nghĩa tiếng Anh ngắn (<=18 từ).
+- "example": trích câu chứa từ đó trong bài.
+- "example_vi": dịch câu example sang tiếng Việt.
+- "cefr_level": "B1|B2|C1|C2".
+- "topic": chọn 1 trong: ${TOPICS.join(", ")}.
+- "is_awl": true/false.
+- "collocations": tối đa 3 cụm từ hay đi kèm.
+- "synonyms": tối đa 3 từ đồng nghĩa.
+Trả về đúng định dạng JSON: {"paragraphs": ["..."], "sentences": [{"en": "...", "vi": "..."}], "items": [...]}`,
+        numberedParagraphs.slice(0, 9000)
+      );
+
+      const translationPayload: PassageTranslationPayload = {
+        paragraphs: Array.isArray(ai.paragraphs) ? ai.paragraphs.map((p) => String(p ?? "").trim()) : [],
+        sentences: Array.isArray(ai.sentences)
+          ? ai.sentences
+              .filter((s) => s && s.en && s.vi)
+              .map((s) => ({ en: String(s.en).trim(), vi: String(s.vi).trim() }))
+          : [],
+        translated_at: new Date().toISOString(),
+      };
+
+      if (body.passageId) {
+        if (existingTransNoteId) {
+          await db
+            .from("reading_notes")
+            .update({ result_json: translationPayload })
+            .eq("id", existingTransNoteId)
+            .eq("user_id", userId);
+        } else {
+          await db.from("reading_notes").insert({
+            user_id: userId,
+            passage_id: body.passageId,
+            kind: "sentence",
+            target_text: "__PASSAGE_TRANSLATION__",
+            result_json: translationPayload,
+          });
+        }
+      }
+
+      const rawItems = (ai.items ?? []).filter((x) => x && x.lemma);
+      const keys = rawItems.map((x) => normKey(x.lemma)).filter(Boolean);
+
+      const bankMap = new Map<string, string>();
+      if (keys.length > 0) {
+        const { data: bankRows } = await db
+          .from("words")
+          .select("norm_key,source")
+          .in("norm_key", keys);
+        for (const r of bankRows ?? []) bankMap.set(r.norm_key, r.source ?? "import");
+      }
+
+      const existingNoteKeys = new Set<string>();
+      if (body.passageId) {
+        const { data: noteRows } = await db
+          .from("reading_notes")
+          .select("target_text,result_json")
+          .eq("passage_id", body.passageId)
+          .eq("user_id", userId)
+          .eq("kind", "vocab");
+        for (const n of noteRows ?? []) {
+          const rj = (n.result_json ?? {}) as Record<string, unknown>;
+          existingNoteKeys.add(typeof rj.norm_key === "string" ? rj.norm_key : normKey(n.target_text));
+        }
+      }
+
+      const toInsert: {
+        user_id: string;
+        passage_id: number;
+        kind: "vocab";
+        target_text: string;
+        result_json: Record<string, unknown>;
+      }[] = [];
+
+      const items = rawItems.map((it) => {
+        const nk = normKey(it.lemma);
+        const bankSource = bankMap.get(nk) ?? null;
+        const payload = {
+          ...it,
+          valid: true,
+          surface: it.surface ? cleanTerm(it.surface) : cleanTerm(it.lemma),
+          cefr_level: safeLevel(it.cefr_level),
+          norm_key: nk,
+          existsInBank: !!bankSource,
+          bankSource,
+        };
+        if (body.passageId && nk && !existingNoteKeys.has(nk)) {
+          existingNoteKeys.add(nk);
+          toInsert.push({
+            user_id: userId,
+            passage_id: body.passageId,
+            kind: "vocab",
+            target_text: it.lemma.toLowerCase().trim(),
+            result_json: payload,
+          });
+        }
+        return payload;
+      });
+
+      let addedNotes: unknown[] = [];
+      if (toInsert.length > 0) {
+        const { data } = await db.from("reading_notes").insert(toInsert).select("*");
+        addedNotes = data ?? [];
+      }
+
+      return NextResponse.json({
+        passageTranslation: translationPayload,
+        items,
+        addedNotes,
+        cached: false,
+      });
     }
 
     if (body.mode === "batch_vocab") {

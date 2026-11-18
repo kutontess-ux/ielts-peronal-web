@@ -1,13 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useParams } from "next/navigation";
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  ArrowLeft, BookMarked, BookmarkCheck, Check, ChevronDown, ChevronUp, Edit3,
+  ArrowLeft, BookMarked, BookmarkCheck, BookOpenCheck, Check, ChevronDown, ChevronUp, Edit3,
   FolderPlus, HelpCircle, Languages, Loader2, Plus, RefreshCw, Sparkles,
   SplitSquareVertical, Trash2, Volume2, X, Zap,
 } from "lucide-react";
+import { cleanTerm, normKey, possibleLemmas } from "@/lib/normalize";
 
 type Passage = {
   id: number;
@@ -29,8 +30,15 @@ type ReadingNote = {
   created_at: string;
 };
 
+type PassageTranslation = {
+  paragraphs: string[];
+  sentences: { en: string; vi: string }[];
+  translated_at?: string;
+};
+
 type VocabLookup = {
   lemma: string;
+  surface?: string;
   norm_key: string;
   ipa: string;
   pos: string;
@@ -38,6 +46,7 @@ type VocabLookup = {
   meaning_in_context: string;
   definition_en: string;
   example: string;
+  example_vi?: string;
   cefr_level: string;
   topic: string;
   is_awl: boolean;
@@ -118,10 +127,15 @@ function speakWord(text: string) {
 
 function ReadingDetailInner() {
   const params = useParams<{ id: string }>();
+  const searchParams = useSearchParams();
+  const router = useRouter();
   const passageId = Number(params.id);
+  const autoTranslateParam = searchParams.get("autoTranslate") === "1";
 
   const [passage, setPassage] = useState<Passage | null>(null);
   const [notes, setNotes] = useState<ReadingNote[]>([]);
+  const [passageTranslation, setPassageTranslation] = useState<PassageTranslation | null>(null);
+  const [showBilingual, setShowBilingual] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -141,14 +155,19 @@ function ReadingDetailInner() {
   const [vocabResult, setVocabResult] = useState<VocabLookup | null>(null);
   const [vocabNoteId, setVocabNoteId] = useState<number | null>(null);
   const [vocabCached, setVocabCached] = useState(false);
-  const [lastLookupTerm, setLastLookupTerm] = useState<{ term: string; sentence: string }>({ term: "", sentence: "" });
+  const [contextSentenceVi, setContextSentenceVi] = useState("");
+  const [lastLookupTerm, setLastLookupTerm] = useState<{ term: string; sentence: string; paragraphIdx?: number }>({
+    term: "",
+    sentence: "",
+  });
   const [addingWord, setAddingWord] = useState(false);
   const [addedBookTitle, setAddedBookTitle] = useState("");
   const [manualTerm, setManualTerm] = useState("");
 
-  // Batch soạn sẵn từ khó (1 lượt AI)
-  const [batchLoading, setBatchLoading] = useState(false);
+  // Dịch toàn bài & Soạn sẵn từ vựng (1 lượt AI)
+  const [fullTranslateLoading, setFullTranslateLoading] = useState(false);
   const [batchMsg, setBatchMsg] = useState("");
+  const autoTriggeredRef = useRef(false);
 
   // Admin sửa nghĩa từ hiện tại hoặc thêm từ tay
   const [editingVocabMeaning, setEditingVocabMeaning] = useState(false);
@@ -204,6 +223,9 @@ function ReadingDetailInner() {
         if (!r.ok) throw new Error(j.error || "Không tải được bài đọc");
         setPassage(j.passage);
         setNotes(j.notes ?? []);
+        if (j.passageTranslation) {
+          setPassageTranslation(j.passageTranslation as PassageTranslation);
+        }
         setScInput(j.passage.score_correct !== null ? String(j.passage.score_correct) : "");
         setStInput(j.passage.score_total !== null ? String(j.passage.score_total) : "13");
       } catch (e) {
@@ -241,10 +263,120 @@ function ReadingDetailInner() {
 
   const vocabNotes = useMemo(() => notes.filter((n) => n.kind === "vocab"), [notes]);
 
+  // Tìm bản dịch tiếng Việt của một câu tiếng Anh từ dữ liệu dịch toàn bài đã lưu (0 token)
+  const findSentenceTranslationVi = useCallback(
+    (sentenceEn: string, paragraphIdx?: number): string => {
+      if (!passageTranslation) return "";
+      const cleanSent = sentenceEn.trim().toLowerCase();
+      if (cleanSent && Array.isArray(passageTranslation.sentences)) {
+        const exactOrSub = passageTranslation.sentences.find((s) => {
+          const enLower = (s.en || "").trim().toLowerCase();
+          return (
+            enLower &&
+            (enLower === cleanSent ||
+              enLower.includes(cleanSent.slice(0, Math.min(40, cleanSent.length))) ||
+              cleanSent.includes(enLower.slice(0, Math.min(40, enLower.length))))
+          );
+        });
+        if (exactOrSub?.vi) return exactOrSub.vi;
+      }
+      if (
+        paragraphIdx !== undefined &&
+        Array.isArray(passageTranslation.paragraphs) &&
+        passageTranslation.paragraphs[paragraphIdx]
+      ) {
+        return passageTranslation.paragraphs[paragraphIdx];
+      }
+      return "";
+    },
+    [passageTranslation]
+  );
+
+  // Tìm từ vựng trực tiếp trong danh sách từ đã dịch sẵn của bài trên trình duyệt (0ms, 0 request)
+  const findLocalVocabNote = useCallback(
+    (rawTerm: string): ReadingNote | undefined => {
+      const clean = cleanTerm(rawTerm);
+      if (!clean) return undefined;
+      const candidates = new Set(possibleLemmas(clean));
+      candidates.add(normKey(clean));
+
+      return vocabNotes.find((n) => {
+        const rj = (n.result_json ?? {}) as Record<string, unknown>;
+        const nk = typeof rj.norm_key === "string" ? rj.norm_key : normKey(n.target_text);
+        const surface = typeof rj.surface === "string" ? cleanTerm(rj.surface) : "";
+        const surfaceKey = surface ? normKey(surface) : "";
+        return (
+          candidates.has(nk) ||
+          cleanTerm(n.target_text) === clean ||
+          surface === clean ||
+          (surfaceKey !== "" && candidates.has(surfaceKey))
+        );
+      });
+    },
+    [vocabNotes]
+  );
+
+  const handleFullTranslate = useCallback(
+    async (forceAi = false) => {
+      if (!passage || fullTranslateLoading) return;
+      setFullTranslateLoading(true);
+      setBatchMsg("");
+      setVocabError("");
+      try {
+        const r = await fetch("/api/reading/analyze", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            mode: "full_translate",
+            passageId: passage.id,
+            passageContent: passage.content,
+            forceAi,
+          }),
+        });
+        const j = await r.json();
+        if (!r.ok) throw new Error(j.error || "Không dịch được toàn bài");
+        if (j.passageTranslation) {
+          setPassageTranslation(j.passageTranslation as PassageTranslation);
+          setShowBilingual(true);
+        }
+        const added: ReadingNote[] = j.addedNotes ?? [];
+        if (added.length > 0) {
+          setNotes((prev) => [...added, ...prev]);
+        }
+        const count = (j.items ?? []).length;
+        setBatchMsg(
+          j.cached
+            ? "Đã tải bản dịch toàn bài từ bộ nhớ (0 token)!"
+            : `Đã dịch toàn bài (${(j.passageTranslation?.paragraphs ?? []).length} đoạn) & soạn sẵn ${count} từ vựng trong 1 request duy nhất! Từ giờ bấm tra từ tốn 0 request.`
+        );
+      } catch (e) {
+        setVocabError((e as Error).message);
+      } finally {
+        setFullTranslateLoading(false);
+      }
+    },
+    [passage, fullTranslateLoading]
+  );
+
+  // Tự động dịch toàn bài 1 lần ngay khi vừa tạo bài đọc mới (?autoTranslate=1)
+  useEffect(() => {
+    if (
+      !loading &&
+      passage &&
+      autoTranslateParam &&
+      !passageTranslation &&
+      !autoTriggeredRef.current
+    ) {
+      autoTriggeredRef.current = true;
+      router.replace(`/reading/${passage.id}`, { scroll: false });
+      void handleFullTranslate(false);
+    }
+  }, [loading, passage, autoTranslateParam, passageTranslation, handleFullTranslate, router]);
+
   async function saveScore() {
     if (!passage) return;
     const sc = scInput.trim() === "" ? null : Number(scInput);
-    const st = stInput.trim() === "" ? null : Number(stInput);
+    const st = stInput.trim() === "" ? null : Number(scoreTotalOrDefault(stInput));
     const r = await fetch("/api/reading", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -264,19 +396,58 @@ function ReadingDetailInner() {
     }
   }
 
-  async function lookupTerm(term: string, sentence: string, forceAi = false) {
+  function scoreTotalOrDefault(val: string) {
+    return val;
+  }
+
+  async function lookupTerm(term: string, sentence: string, forceAi = false, paragraphIdx?: number) {
     const clean = term.trim();
     if (!clean || !passage) return;
     setActiveTool("vocab");
     setMobileSheetOpen(true);
-    setVocabLoading(true);
     setVocabError("");
+    setAddedBookTitle("");
+    setEditingVocabMeaning(false);
+    setLastLookupTerm({ term: clean, sentence, paragraphIdx });
+
+    const preTranslatedVi = findSentenceTranslationVi(sentence, paragraphIdx);
+    setContextSentenceVi(preTranslatedVi);
+
+    // Tầng 0 (Client-side 0ms, 0 request): Nếu từ đã có trong danh sách từ đã dịch sẵn của bài thì hiện ngay lập tức!
+    if (!forceAi) {
+      const localMatch = findLocalVocabNote(clean);
+      if (localMatch) {
+        const rj = localMatch.result_json as Partial<VocabLookup>;
+        setVocabResult({
+          lemma: rj.lemma ?? localMatch.target_text,
+          surface: rj.surface ?? clean,
+          norm_key: rj.norm_key ?? normKey(localMatch.target_text),
+          ipa: rj.ipa ?? "",
+          pos: rj.pos ?? "",
+          meaning_vi: rj.meaning_vi ?? "",
+          meaning_in_context: rj.meaning_in_context ?? rj.meaning_vi ?? "",
+          definition_en: rj.definition_en ?? "",
+          example: rj.example || sentence,
+          example_vi: rj.example_vi || preTranslatedVi,
+          cefr_level: rj.cefr_level ?? "B2",
+          topic: rj.topic ?? "Other",
+          is_awl: !!rj.is_awl,
+          collocations: rj.collocations ?? [],
+          synonyms: rj.synonyms ?? [],
+          existsInBank: !!rj.existsInBank,
+          bankSource: rj.bankSource ?? null,
+        });
+        setVocabNoteId(localMatch.id);
+        setVocabCached(true);
+        setVocabLoading(false);
+        return;
+      }
+    }
+
+    setVocabLoading(true);
     setVocabResult(null);
     setVocabNoteId(null);
     setVocabCached(false);
-    setAddedBookTitle("");
-    setEditingVocabMeaning(false);
-    setLastLookupTerm({ term: clean, sentence });
 
     try {
       const r = await fetch("/api/reading/analyze", {
@@ -292,7 +463,10 @@ function ReadingDetailInner() {
       });
       const j = await r.json();
       if (!r.ok) throw new Error(j.error || "Không tra được từ này");
-      setVocabResult(j.vocab);
+      setVocabResult({
+        ...j.vocab,
+        example_vi: j.vocab?.example_vi || preTranslatedVi,
+      });
       setVocabCached(!!j.cached);
       if (j.note) {
         setVocabNoteId(j.note.id);
@@ -302,35 +476,6 @@ function ReadingDetailInner() {
       setVocabError((e as Error).message);
     } finally {
       setVocabLoading(false);
-    }
-  }
-
-  async function handleBatchVocab() {
-    if (!passage || batchLoading) return;
-    setBatchLoading(true);
-    setBatchMsg("");
-    setVocabError("");
-    try {
-      const r = await fetch("/api/reading/analyze", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          mode: "batch_vocab",
-          passageId: passage.id,
-          passageContent: passage.content,
-        }),
-      });
-      const j = await r.json();
-      if (!r.ok) throw new Error(j.error || "Không soạn được từ vựng");
-      const added: ReadingNote[] = j.addedNotes ?? [];
-      if (added.length > 0) {
-        setNotes((prev) => [...added, ...prev]);
-      }
-      setBatchMsg(`Đã soạn sẵn ${(j.items ?? []).length} từ B2–C1 vào lịch sử tra từ (0 token khi bấm lại)!`);
-    } catch (e) {
-      setVocabError((e as Error).message);
-    } finally {
-      setBatchLoading(false);
     }
   }
 
@@ -485,7 +630,7 @@ function ReadingDetailInner() {
     }
   }
 
-  function handleParagraphMouseUp(paragraph: string) {
+  function handleParagraphMouseUp(paragraph: string, paragraphIdx?: number) {
     const sel = window.getSelection()?.toString().trim() ?? "";
     if (sel) {
       if (activeTool === "sentence" && sel.split(/\s+/).length > 4) {
@@ -494,12 +639,12 @@ function ReadingDetailInner() {
       }
       if (activeTool === "vocab" && sel.split(/\s+/).length <= 5) {
         const sentence = extractSentenceFromParagraph(paragraph, sel);
-        lookupTerm(sel, sentence);
+        lookupTerm(sel, sentence, false, paragraphIdx);
       }
     }
   }
 
-  function handleWordClick(word: string, paragraph: string) {
+  function handleWordClick(word: string, paragraph: string, paragraphIdx?: number) {
     if (activeTool !== "vocab") return;
     const sel = window.getSelection()?.toString().trim() ?? "";
     if (sel && sel.split(/\s+/).length > 1) return;
@@ -507,7 +652,7 @@ function ReadingDetailInner() {
     const clean = word.replace(/^[^a-zA-Z]+|[^a-zA-Z'-]+$/g, "");
     if (!clean) return;
     const sentence = extractSentenceFromParagraph(paragraph, clean);
-    lookupTerm(clean, sentence);
+    lookupTerm(clean, sentence, false, paragraphIdx);
   }
 
   async function analyzeSentence(e?: React.FormEvent, forceAi = false) {
@@ -608,35 +753,40 @@ function ReadingDetailInner() {
   function renderParagraph(p: string, idx: number) {
     const quote = highlightQuote.trim();
     const hasQuote = quote.length > 12 && p.toLowerCase().includes(quote.toLowerCase());
+    const translatedParagraph = passageTranslation?.paragraphs?.[idx] ?? "";
+
+    let englishNode: React.ReactNode;
 
     if (activeTool === "vocab") {
       const tokens = p.split(/(\s+)/);
-      return (
-        <p key={idx} onMouseUp={() => handleParagraphMouseUp(p)} className="text-[15.5px] leading-8 text-ink">
-          {tokens.map((tok, i) =>
-            /^\s+$/.test(tok) ? (
-              tok
-            ) : (
+      englishNode = (
+        <p onMouseUp={() => handleParagraphMouseUp(p, idx)} className="text-[15.5px] leading-8 text-ink">
+          {tokens.map((tok, i) => {
+            if (/^\s+$/.test(tok)) return tok;
+            const isPreCached = !!findLocalVocabNote(tok);
+            return (
               <span
                 key={i}
-                onClick={() => handleWordClick(tok, p)}
-                className="cursor-pointer rounded px-0.5 transition hover:bg-brand/25 hover:text-ink"
+                onClick={() => handleWordClick(tok, p, idx)}
+                className={`cursor-pointer rounded px-0.5 transition hover:bg-brand/25 hover:text-ink ${
+                  isPreCached
+                    ? "underline decoration-emerald-500/45 decoration-dotted underline-offset-4"
+                    : ""
+                }`}
               >
                 {tok}
               </span>
-            )
-          )}
+            );
+          })}
         </p>
       );
-    }
-
-    if (hasQuote) {
+    } else if (hasQuote) {
       const pos = p.toLowerCase().indexOf(quote.toLowerCase());
       const before = p.slice(0, pos);
       const match = p.slice(pos, pos + quote.length);
       const after = p.slice(pos + quote.length);
-      return (
-        <p key={idx} onMouseUp={() => handleParagraphMouseUp(p)} className="text-[15.5px] leading-8 text-ink">
+      englishNode = (
+        <p onMouseUp={() => handleParagraphMouseUp(p, idx)} className="text-[15.5px] leading-8 text-ink">
           {before}
           <mark className="rounded bg-amber-300/45 px-1 py-0.5 text-amber-950 ring-1 ring-amber-500/50 dark:bg-amber-400/25 dark:text-amber-100 dark:ring-amber-400/50">
             {match}
@@ -644,12 +794,23 @@ function ReadingDetailInner() {
           {after}
         </p>
       );
+    } else {
+      englishNode = (
+        <p onMouseUp={() => handleParagraphMouseUp(p, idx)} className="text-[15.5px] leading-8 text-ink">
+          {p}
+        </p>
+      );
     }
 
     return (
-      <p key={idx} onMouseUp={() => handleParagraphMouseUp(p)} className="text-[15.5px] leading-8 text-ink">
-        {p}
-      </p>
+      <div key={idx} className="space-y-2">
+        {englishNode}
+        {showBilingual && translatedParagraph && (
+          <div className="rounded-xl border-l-2 border-emerald-500/60 bg-emerald-500/5 px-3.5 py-2.5 text-[14px] leading-relaxed text-ink/85 dark:bg-emerald-500/10">
+            {translatedParagraph}
+          </div>
+        )}
+      </div>
     );
   }
 
@@ -733,6 +894,30 @@ function ReadingDetailInner() {
 
         {/* Thanh công cụ chế độ */}
         <div className="flex flex-wrap items-center gap-2">
+          {passageTranslation ? (
+            <button
+              onClick={() => setShowBilingual((v) => !v)}
+              className={`inline-flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-semibold transition ${
+                showBilingual
+                  ? "bg-emerald-600 text-white"
+                  : "border border-emerald-500/40 bg-emerald-500/10 text-emerald-700 hover:bg-emerald-500/20 dark:text-emerald-300"
+              }`}
+              title="Bật/tắt bản dịch tiếng Việt ngay dưới từng đoạn văn (0 token)"
+            >
+              <BookOpenCheck size={15} /> {showBilingual ? "Đang bật Song ngữ" : "Xem Song ngữ (0 token)"}
+            </button>
+          ) : (
+            <button
+              onClick={() => handleFullTranslate(false)}
+              disabled={fullTranslateLoading}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-3.5 py-2 text-xs font-semibold text-emerald-700 transition hover:bg-emerald-500/20 disabled:opacity-50 dark:text-emerald-300"
+              title="Dịch toàn bộ bài đọc và trích xuất sẵn bộ từ vựng chỉ trong 1 request AI"
+            >
+              {fullTranslateLoading ? <Loader2 size={15} className="animate-spin" /> : <Sparkles size={15} />}
+              {fullTranslateLoading ? "Đang dịch toàn bài..." : "Dịch toàn bài & Soạn từ (1 request)"}
+            </button>
+          )}
+
           <button
             onClick={() => {
               if (activeTool === "vocab") {
@@ -747,7 +932,7 @@ function ReadingDetailInner() {
               activeTool === "vocab" ? "bg-brand text-white" : "border border-line bg-card text-muted hover:text-ink"
             }`}
           >
-            <Languages size={15} /> Tra từ
+            <Languages size={15} /> Tra từ ({vocabNotes.length})
           </button>
 
           <button
@@ -805,10 +990,28 @@ function ReadingDetailInner() {
         </div>
       </div>
 
+      {fullTranslateLoading && (
+        <div className="flex items-center gap-2.5 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-4 py-3 text-xs text-emerald-800 dark:text-emerald-200">
+          <Loader2 size={16} className=" shrink-0 animate-spin" />
+          <span>
+            <b>Đang dịch toàn bộ bài đọc & trích sẵn bộ từ vựng (1 request AI duy nhất)...</b> Sau khi hoàn tất, bạn có thể xem song ngữ và bấm tra từ thoải mái mà không tốn thêm request.
+          </span>
+        </div>
+      )}
+
+      {!fullTranslateLoading && batchMsg && (
+        <div className="flex items-center justify-between gap-2 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-4 py-2.5 text-xs text-emerald-800 dark:text-emerald-200">
+          <span>⚡ {batchMsg}</span>
+          <button onClick={() => setBatchMsg("")} className="text-muted hover:text-ink">
+            <X size={14} />
+          </button>
+        </div>
+      )}
+
       {activeTool === "vocab" && (
         <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-brand/40 bg-brand/10 px-4 py-2.5 text-xs text-brand-hover">
           <span>
-            <b>Chế độ Tra từ đang bật:</b> Chạm vào từ hoặc bôi đen cụm từ trong bài để mở popup nghĩa (0 token nếu đã tra).
+            <b>Chế độ Tra từ đang bật:</b> Chạm vào bất kỳ từ nào trong bài để xem nghĩa + câu dịch ngữ cảnh. Các từ có gạch chân chấm xanh đã được dịch sẵn (0ms, 0 token).
           </span>
           <div className="flex items-center gap-3">
             <button
@@ -875,7 +1078,7 @@ function ReadingDetailInner() {
               {/* TAB 1: TRA TỪ */}
               {activeTool === "vocab" && (
                 <div className="space-y-4">
-                  {/* Thanh tra nhanh + Nút Admin soạn sẵn / thêm tay */}
+                  {/* Thanh tra nhanh + Nút Dịch toàn bài / thêm tay */}
                   <form
                     onSubmit={(e) => {
                       e.preventDefault();
@@ -897,12 +1100,14 @@ function ReadingDetailInner() {
                   <div className="flex flex-wrap gap-2">
                     <button
                       type="button"
-                      onClick={handleBatchVocab}
-                      disabled={batchLoading}
-                      className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-brand/40 bg-brand/10 px-3 py-2 text-[11px] font-semibold text-brand-hover hover:bg-brand/20 disabled:opacity-50"
+                      onClick={() => handleFullTranslate(!!passageTranslation)}
+                      disabled={fullTranslateLoading}
+                      className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-[11px] font-semibold text-emerald-700 hover:bg-emerald-500/20 disabled:opacity-50 dark:text-emerald-300"
                     >
-                      {batchLoading ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />}
-                      Soạn sẵn 10 từ B2–C1 (1 lượt AI)
+                      {fullTranslateLoading ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />}
+                      {passageTranslation
+                        ? "Dịch lại toàn bài & Soạn từ (1 lượt AI)"
+                        : "Dịch toàn bài & Soạn 35 từ (1 lượt AI)"}
                     </button>
                     <button
                       type="button"
@@ -912,12 +1117,6 @@ function ReadingDetailInner() {
                       <Edit3 size={13} /> Tự thêm tay (0 token)
                     </button>
                   </div>
-
-                  {batchMsg && (
-                    <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-[11px] text-emerald-700 dark:text-emerald-200">
-                      {batchMsg}
-                    </div>
-                  )}
 
                   {showManualAdd && (
                     <form onSubmit={saveManualVocab} className="space-y-2 rounded-xl border border-line bg-bg p-3 text-xs">
@@ -962,8 +1161,16 @@ function ReadingDetailInner() {
                   )}
 
                   {vocabLoading && (
-                    <div className="flex items-center gap-2 py-6 text-sm text-muted">
-                      <Loader2 size={16} className="animate-spin" /> Đang kiểm tra Kho & tra nghĩa...
+                    <div className="space-y-2 py-4 text-xs text-muted">
+                      <div className="flex items-center gap-2 text-sm">
+                        <Loader2 size={16} className="animate-spin" /> Đang kiểm tra Kho & tra nghĩa...
+                      </div>
+                      {contextSentenceVi && (
+                        <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-2.5 text-ink">
+                          <span className="font-semibold text-emerald-700 dark:text-emerald-300">Dịch câu ngữ cảnh (0 token): </span>
+                          {contextSentenceVi}
+                        </div>
+                      )}
                     </div>
                   )}
 
@@ -978,11 +1185,18 @@ function ReadingDetailInner() {
                       {vocabCached && (
                         <div className="flex items-center justify-between text-[11px]">
                           <span className="inline-flex items-center gap-1 rounded bg-emerald-500/15 px-2 py-0.5 font-semibold text-emerald-700 dark:text-emerald-300">
-                            <Zap size={11} /> Lấy từ lịch sử / Kho (0 token)
+                            <Zap size={11} /> Lấy từ bản dịch bài / Kho (0 token)
                           </span>
                           {lastLookupTerm.term && (
                             <button
-                              onClick={() => lookupTerm(lastLookupTerm.term, lastLookupTerm.sentence, true)}
+                              onClick={() =>
+                                lookupTerm(
+                                  lastLookupTerm.term,
+                                  lastLookupTerm.sentence,
+                                  true,
+                                  lastLookupTerm.paragraphIdx
+                                )
+                              }
                               className="inline-flex items-center gap-1 text-muted hover:text-ink"
                             >
                               <RefreshCw size={11} /> Hỏi lại AI
@@ -1058,6 +1272,19 @@ function ReadingDetailInner() {
                         </div>
                       )}
 
+                      {(vocabResult.example || vocabResult.example_vi || contextSentenceVi) && (
+                        <div className="space-y-1 rounded-xl border border-line/70 bg-card/70 p-2.5 text-xs">
+                          {vocabResult.example && (
+                            <div className="italic text-ink/90">“{vocabResult.example}”</div>
+                          )}
+                          {(vocabResult.example_vi || contextSentenceVi) && (
+                            <div className="text-emerald-700 dark:text-emerald-300">
+                              → {vocabResult.example_vi || contextSentenceVi}
+                            </div>
+                          )}
+                        </div>
+                      )}
+
                       {vocabResult.collocations?.length > 0 && (
                         <div className="text-xs">
                           <span className="font-semibold text-muted">Collocations: </span>
@@ -1100,7 +1327,7 @@ function ReadingDetailInner() {
                     </div>
                   )}
 
-                  {/* Lịch sử các từ đã tra trong bài — có nút đóng/mở gọn gàng */}
+                  {/* Lịch sử các từ đã dịch sẵn / đã tra trong bài — có nút đóng/mở gọn gàng */}
                   {vocabNotes.length > 0 && (
                     <div className="space-y-2 border-t border-line pt-3">
                       <button
@@ -1108,7 +1335,7 @@ function ReadingDetailInner() {
                         onClick={() => setVocabHistoryOpen((v) => !v)}
                         className="flex w-full items-center justify-between text-xs font-semibold text-muted hover:text-ink"
                       >
-                        <span>Đã tra trong bài này ({vocabNotes.length}) — bấm xem lại 0 token</span>
+                        <span>Từ đã dịch sẵn trong bài ({vocabNotes.length}) — bấm xem 0 token</span>
                         {vocabHistoryOpen ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
                       </button>
 
@@ -1122,6 +1349,7 @@ function ReadingDetailInner() {
                                 onClick={() => {
                                   setVocabResult({
                                     lemma: rj.lemma ?? n.target_text,
+                                    surface: rj.surface ?? n.target_text,
                                     norm_key: rj.norm_key ?? n.target_text,
                                     ipa: rj.ipa ?? "",
                                     pos: rj.pos ?? "",
@@ -1129,6 +1357,7 @@ function ReadingDetailInner() {
                                     meaning_in_context: rj.meaning_in_context ?? rj.meaning_vi ?? "",
                                     definition_en: rj.definition_en ?? "",
                                     example: rj.example ?? "",
+                                    example_vi: rj.example_vi ?? "",
                                     cefr_level: rj.cefr_level ?? "B2",
                                     topic: rj.topic ?? "Other",
                                     is_awl: !!rj.is_awl,
@@ -1166,6 +1395,16 @@ function ReadingDetailInner() {
                       placeholder="Bôi đen 1 câu trong bài đọc (sẽ tự điền vào đây) hoặc dán câu khó hiểu..."
                       className="w-full rounded-xl border border-line px-3 py-2 text-xs leading-relaxed outline-none focus:border-brand"
                     />
+                    {sentenceInput.trim() && !sentenceResult && findSentenceTranslationVi(sentenceInput) && (
+                      <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-xs">
+                        <div className="flex items-center gap-1 font-semibold text-emerald-700 dark:text-emerald-300">
+                          <Zap size={12} /> Bản dịch có sẵn từ bài đọc (0 token):
+                        </div>
+                        <p className="mt-1 leading-relaxed text-ink">
+                          {findSentenceTranslationVi(sentenceInput)}
+                        </p>
+                      </div>
+                    )}
                     <button
                       type="submit"
                       disabled={sentenceLoading || !sentenceInput.trim()}
@@ -1177,7 +1416,7 @@ function ReadingDetailInner() {
                         </>
                       ) : (
                         <>
-                          <Sparkles size={15} /> Phân tích cấu trúc câu
+                          <Sparkles size={15} /> Phân tích cấu trúc ngữ pháp chi tiết
                         </>
                       )}
                     </button>

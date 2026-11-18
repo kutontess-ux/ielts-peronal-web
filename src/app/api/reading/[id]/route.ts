@@ -33,7 +33,9 @@ export async function GET(_req: Request, context: { params: Promise<{ id: string
       .eq("user_id", ctx.user.id)
       .order("created_at", { ascending: false });
 
-    const notes = rawNotes ?? [];
+    const allNotes = rawNotes ?? [];
+    const translationNote = allNotes.find((n) => n.target_text === "__PASSAGE_TRANSLATION__");
+    const notes = allNotes.filter((n) => n.target_text !== "__PASSAGE_TRANSLATION__");
 
     // Đối chiếu trực tiếp các ghi chú từ vựng với bảng words để biết từ nào đã có trong Kho
     const vocabKeys = notes
@@ -71,7 +73,11 @@ export async function GET(_req: Request, context: { params: Promise<{ id: string
       };
     });
 
-    return NextResponse.json({ passage, notes: enrichedNotes });
+    return NextResponse.json({
+      passage,
+      notes: enrichedNotes,
+      passageTranslation: translationNote?.result_json ?? null,
+    });
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message }, { status: 500 });
   }

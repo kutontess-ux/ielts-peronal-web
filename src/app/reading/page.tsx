@@ -17,6 +17,7 @@ type PassageSummary = {
   score_total: number | null;
   studied_at: string;
   notes_count: number;
+  has_translation?: boolean;
 };
 
 const TOPICS = [
@@ -93,7 +94,7 @@ export default function ReadingHistoryPage() {
       });
       const j = await r.json();
       if (!r.ok) throw new Error(j.error || "Không lưu được bài đọc");
-      router.push(`/reading/${j.id}`);
+      router.push(`/reading/${j.id}?autoTranslate=1`);
     } catch (err) {
       setError((err as Error).message);
       setSaving(false);
@@ -122,7 +123,7 @@ export default function ReadingHistoryPage() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Reading – Phân tích sau khi làm đề</h1>
           <p className="mt-1 text-sm text-muted">
-            Lưu lại bài đã làm, điểm số theo ngày, tra từ theo ngữ cảnh và giải mã câu khó.
+            Tự động dịch toàn bài & soạn sẵn từ vựng chỉ trong 1 request khi nhập bài mới, tra từ 0 token.
           </p>
         </div>
         <button
@@ -197,6 +198,11 @@ export default function ReadingHistoryPage() {
                     <span className="rounded-lg bg-brand/15 px-2 py-0.5 text-xs font-medium text-brand-hover">
                       {p.topic}
                     </span>
+                    {p.has_translation && (
+                      <span className="rounded-lg bg-emerald-500/15 px-2 py-0.5 text-xs font-medium text-emerald-700 dark:text-emerald-300">
+                        Đã dịch toàn bài
+                      </span>
+                    )}
                   </div>
                   <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-muted sm:gap-4">
                     <span className="inline-flex items-center gap-1.5">
@@ -207,7 +213,7 @@ export default function ReadingHistoryPage() {
                     </span>
                     {p.notes_count > 0 && (
                       <span className="inline-flex items-center gap-1.5 text-emerald-700 dark:text-emerald-300">
-                        <CheckCircle2 size={13} /> {p.notes_count} ghi chú đã lưu
+                        <CheckCircle2 size={13} /> {p.notes_count} từ/ghi chú sẵn sàng (0 token)
                       </span>
                     )}
                   </div>
@@ -337,6 +343,9 @@ export default function ReadingHistoryPage() {
                   placeholder="Dán toàn bộ đoạn văn bài đọc vào đây..."
                   className="w-full rounded-xl border border-line px-3 py-2.5 text-sm leading-relaxed outline-none focus:border-brand"
                 />
+                <p className="mt-1.5 text-[11px] text-muted">
+                  ⚡ Khi lưu, hệ thống sẽ <b>tự động dịch toàn bài và soạn sẵn bộ từ vựng chỉ trong 1 request AI</b>. Từ các lần sau bấm tra từ sẽ không tốn thêm request.
+                </p>
               </div>
             </div>
 
@@ -353,7 +362,7 @@ export default function ReadingHistoryPage() {
                 disabled={saving}
                 className="rounded-xl bg-brand px-5 py-2 text-sm font-semibold text-white transition hover:bg-brand-hover hover:text-bg disabled:opacity-50"
               >
-                {saving ? "Đang lưu..." : "Lưu & Mở bài đọc"}
+                {saving ? "Đang lưu..." : "Lưu & Tự động dịch bài (1 request)"}
               </button>
             </div>
           </form>
