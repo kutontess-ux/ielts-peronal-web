@@ -1505,12 +1505,12 @@ export default function VocabLearn() {
       ) : (
         <>
       {/* Khung tổng quan 4 thẻ lướt ngang trên mobile, 4 cột gọn trên desktop */}
-      <section className="rounded-3xl border border-line bg-card p-3 sm:p-4">
+      <section>
         <div className="flex snap-x snap-mandatory gap-2.5 overflow-x-auto pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:grid md:grid-cols-4 md:overflow-visible md:pb-0">
           {stats.dueCount > 0 ? (
             <Link
               href="/vocab/review"
-              className="flex w-[210px] shrink-0 snap-start flex-col justify-between rounded-2xl border border-brand/50 bg-brand/5 p-3.5 transition hover:bg-brand/10 md:w-auto"
+              className="flex w-[210px] shrink-0 snap-start flex-col justify-between rounded-2xl border border-transparent bg-brand/5 p-3.5 transition hover:border-brand/50 hover:bg-brand/10 md:w-auto"
             >
               <div className="flex items-center justify-between gap-2 text-xs font-semibold text-brand-hover">
                 <span className="inline-flex items-center gap-1.5">
@@ -1525,7 +1525,7 @@ export default function VocabLearn() {
               </div>
             </Link>
           ) : (
-            <div className="flex w-[210px] shrink-0 snap-start flex-col justify-between rounded-2xl bg-bg/75 p-3.5 md:w-auto">
+            <div className="flex w-[210px] shrink-0 snap-start flex-col justify-between rounded-2xl border border-transparent bg-transparent p-3.5 transition hover:border-line hover:bg-card/70 md:w-auto">
               <div className="flex items-center gap-1.5 text-xs font-semibold text-emerald-700 dark:text-emerald-300">
                 <CheckCircle2 size={14} strokeWidth={2} /> Ôn tập hôm nay
               </div>
@@ -1547,7 +1547,7 @@ export default function VocabLearn() {
           ].map(([label, val, color]) => (
             <div
               key={label}
-              className="flex w-[165px] shrink-0 snap-start flex-col justify-between rounded-2xl bg-bg/75 p-3.5 md:w-auto"
+              className="flex w-[165px] shrink-0 snap-start flex-col justify-between rounded-2xl border border-transparent bg-transparent p-3.5 transition hover:border-line hover:bg-card/70 md:w-auto"
             >
               <div className="text-xs text-muted">{label}</div>
               <div className={`mt-1.5 text-xl font-bold ${color}`}>{val}</div>
@@ -1832,7 +1832,7 @@ export default function VocabLearn() {
           </div>
         ) : (
           <div className="mb-3">
-            <h2 className="text-lg font-bold">Học phần của bạn</h2>
+            <h2 className="text-[32px] font-bold leading-tight">Học phần của bạn</h2>
             {isAdmin && (
               <p className="mt-0.5 text-xs text-muted">
                 Sắp xếp học phần theo thư mục giống Quizlet để luyện Flashcards và chuyển vào Ôn tập ngắt quãng.
@@ -1988,7 +1988,7 @@ export default function VocabLearn() {
                   <div
                     key={f.id}
                     onClick={() => setActiveFolderId(f.id)}
-                    className="group flex cursor-pointer items-center justify-between gap-3 rounded-2xl border-2 border-transparent bg-card p-4 transition hover:border-brand-hover"
+                    className="group flex cursor-pointer items-center justify-between gap-3 rounded-2xl border border-transparent bg-transparent p-4 transition hover:border-line hover:bg-card"
                   >
                     <div className="flex min-w-0 items-center gap-3">
                       <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand/15 text-brand-hover">
@@ -2110,13 +2110,13 @@ export default function VocabLearn() {
                       setSelectedSetId(s.id);
                     }
                   }}
-                  className={`group relative flex cursor-pointer flex-col justify-between rounded-2xl border-2 border-transparent bg-card p-5 text-left transition hover:border-brand-hover ${
-                    menuOpen ? "z-20" : ""
+                  className={`group relative flex cursor-pointer flex-col justify-between rounded-2xl border border-transparent bg-transparent p-5 text-left transition hover:border-line hover:bg-card ${
+                    menuOpen ? "z-20 border-line bg-card" : ""
                   }`}
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex min-w-0 flex-1 items-start gap-3">
-                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-bg text-brand-hover">
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-card text-brand-hover transition group-hover:bg-bg">
                         <Layers size={20} strokeWidth={1.6} />
                       </div>
                       <div className="min-w-0 flex-1">
@@ -2221,7 +2221,7 @@ export default function VocabLearn() {
                         <Folder size={12} /> {setFolder.name}
                       </span>
                     ) : (
-                      <span className="inline-flex items-center gap-1.5 rounded-full bg-bg px-2.5 py-1 text-[11px] font-medium text-muted">
+                      <span className="inline-flex items-center gap-1.5 rounded-full bg-card px-2.5 py-1 text-[11px] font-medium text-muted transition group-hover:bg-bg">
                         <Folder size={12} /> Chưa có thư mục
                       </span>
                     )}
