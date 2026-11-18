@@ -9,6 +9,7 @@ export async function getLegacyCounts(db: ReturnType<typeof supabaseAdmin>) {
     legacyPassagesRes,
     legacyNotesRes,
     legacySettingsRes,
+    legacyDailyRes,
   ] = await Promise.all([
     db.from("reviews").select("word_id", { count: "exact", head: true }).is("user_id", null),
     db.from("study_sets").select("id", { count: "exact", head: true }).is("user_id", null),
@@ -16,6 +17,7 @@ export async function getLegacyCounts(db: ReturnType<typeof supabaseAdmin>) {
     db.from("reading_passages").select("id", { count: "exact", head: true }).is("user_id", null),
     db.from("reading_notes").select("id", { count: "exact", head: true }).is("user_id", null),
     db.from("user_settings").select("id", { count: "exact", head: true }).is("user_id", null),
+    db.from("daily_words").select("id", { count: "exact", head: true }).is("user_id", null),
   ]);
 
   const legacyCounts = {
@@ -25,6 +27,7 @@ export async function getLegacyCounts(db: ReturnType<typeof supabaseAdmin>) {
     reading_passages: legacyPassagesRes.count ?? 0,
     reading_notes: legacyNotesRes.count ?? 0,
     user_settings: legacySettingsRes.count ?? 0,
+    daily_words: legacyDailyRes.error ? 0 : (legacyDailyRes.count ?? 0),
   };
   const totalLegacy = Object.values(legacyCounts).reduce((a, b) => a + b, 0);
   return { legacyCounts, totalLegacy };
@@ -84,6 +87,47 @@ export async function claimLegacyDataForUser(
       .delete()
       .is("user_id", null)
       .in("id", dupIds.slice(i, i + 500));
+  }
+
+  // Gộp các bản ghi daily_words cũ (user_id IS NULL) về Admin nếu cột user_id đã tồn tại
+  try {
+    const [{ data: adminDailyRows, error: adErr }, { data: legacyDailyRows, error: ldErr }] =
+      await Promise.all([
+        db.from("daily_words").select("day,word_id").eq("user_id", adminId),
+        db.from("daily_words").select("id,day,word_id").is("user_id", null),
+      ]);
+
+    if (!adErr && !ldErr && legacyDailyRows && legacyDailyRows.length > 0) {
+      const adminDailyKeys = new Set(
+        (adminDailyRows ?? []).map((r) => `${String(r.day)}:${Number(r.word_id)}`)
+      );
+      const claimDailyIds: number[] = [];
+      const dupDailyIds: number[] = [];
+      for (const r of legacyDailyRows) {
+        const key = `${String(r.day)}:${Number(r.word_id)}`;
+        if (adminDailyKeys.has(key)) dupDailyIds.push(Number(r.id));
+        else {
+          adminDailyKeys.add(key);
+          claimDailyIds.push(Number(r.id));
+        }
+      }
+      for (let i = 0; i < claimDailyIds.length; i += 500) {
+        await db
+          .from("daily_words")
+          .update({ user_id: adminId })
+          .is("user_id", null)
+          .in("id", claimDailyIds.slice(i, i + 500));
+      }
+      for (let i = 0; i < dupDailyIds.length; i += 500) {
+        await db
+          .from("daily_words")
+          .delete()
+          .is("user_id", null)
+          .in("id", dupDailyIds.slice(i, i + 500));
+      }
+    }
+  } catch {
+    // Bỏ qua nếu chưa chạy migration daily_words.user_id
   }
 }
 

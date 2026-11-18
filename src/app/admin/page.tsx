@@ -206,7 +206,8 @@ export default function AdminPage() {
               </div>
               <p className="mt-0.5 text-xs text-muted">
                 Bao gồm: {data.legacyCounts.reviews} từ đang ôn, {data.legacyCounts.study_sets} học phần,{" "}
-                {data.legacyCounts.study_folders} thư mục, {data.legacyCounts.reading_passages} bài đọc.
+                {data.legacyCounts.study_folders} thư mục, {data.legacyCounts.reading_passages} bài đọc
+                {data.legacyCounts.daily_words ? `, ${data.legacyCounts.daily_words} từ hằng ngày` : ""}.
               </p>
             </div>
           </div>

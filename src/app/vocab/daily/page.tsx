@@ -1,9 +1,22 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Calendar, ChevronDown, ChevronRight, ExternalLink, GraduationCap, History, Loader2, Newspaper, Volume2 } from "lucide-react";
+import {
+  Bell,
+  BellOff,
+  Calendar,
+  ChevronDown,
+  ChevronRight,
+  ExternalLink,
+  GraduationCap,
+  History,
+  Loader2,
+  Newspaper,
+  Sparkles,
+  Volume2,
+} from "lucide-react";
 import { levelColor } from "@/lib/mock";
-import { notifyDueUpdated } from "@/lib/due-events";
+import { notifyDueUpdated, notifySettingsUpdated } from "@/lib/due-events";
 import ExportButton from "@/components/ExportPanel";
 import type { DailyGroup, DailyWord } from "@/app/api/daily/route";
 
@@ -201,9 +214,31 @@ export default function Daily() {
   const [groups, setGroups] = useState<DailyGroup[]>([]);
   const [openDates, setOpenDates] = useState<Set<string>>(new Set());
   const [history, setHistory] = useState<string[]>([]);
+  const [dailyEnabled, setDailyEnabled] = useState(true);
+  const [togglingDaily, setTogglingDaily] = useState(false);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [err, setErr] = useState("");
+
+  const generateToday = useCallback(async () => {
+    setLoading(true);
+    setGenerating(true);
+    setErr("");
+    try {
+      const pr = await fetch("/api/daily", { method: "POST" });
+      const pj = await pr.json();
+      if (!pr.ok) throw new Error(pj.error);
+      setNews(pj.news ?? []);
+      setIelts(pj.ielts ?? []);
+      setHistory((h) => (h.includes(pj.date) ? h : [pj.date, ...h]));
+      if (pj.generated) notifyDueUpdated();
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setGenerating(false);
+      setLoading(false);
+    }
+  }, []);
 
   const loadDay = useCallback(async (targetDate?: string) => {
     setLoading(true);
@@ -218,8 +253,11 @@ export default function Daily() {
       setToday(j.today);
       setYesterday(j.yesterday);
       setHistory(j.history ?? []);
+      if (typeof j.dailyEnabled === "boolean") {
+        setDailyEnabled(j.dailyEnabled);
+      }
 
-      // Chỉ gọi POST (đọc RSS + AI) đúng 1 lần trong ngày nếu hôm nay chưa có từ nào
+      // Chỉ tự động gọi POST (đọc RSS + AI) nếu user đang bật nhận từ hằng ngày và hôm nay chưa đủ 10 từ
       if (j.needsGenerate) {
         setGenerating(true);
         const pr = await fetch("/api/daily", { method: "POST" });
@@ -251,6 +289,9 @@ export default function Daily() {
       const nextGroups = (j.groups ?? []) as DailyGroup[];
       setToday(j.today);
       setYesterday(j.yesterday);
+      if (typeof j.dailyEnabled === "boolean") {
+        setDailyEnabled(j.dailyEnabled);
+      }
       setGroups(nextGroups);
       setOpenDates(new Set(nextGroups[0] ? [nextGroups[0].date] : []));
       setHistory(j.history ?? []);
@@ -260,6 +301,32 @@ export default function Daily() {
       setLoading(false);
     }
   }, []);
+
+  const toggleDailySetting = async (nextVal?: boolean) => {
+    if (togglingDaily) return;
+    const target = typeof nextVal === "boolean" ? nextVal : !dailyEnabled;
+    setTogglingDaily(true);
+    setErr("");
+    try {
+      const r = await fetch("/api/settings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ notify_daily_vocab: target }),
+      });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.error || "Không lưu được cài đặt");
+      setDailyEnabled(target);
+      notifySettingsUpdated({ notify_daily_vocab: target });
+
+      if (target && mode === "today" && (news.length < 5 || ielts.length < 5)) {
+        await generateToday();
+      }
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setTogglingDaily(false);
+    }
+  };
 
   useEffect(() => {
     const id = requestAnimationFrame(() => {
@@ -306,10 +373,29 @@ export default function Daily() {
             {mode === "7d"
               ? `Tổng hợp 7 ngày qua · ${all7d.length} từ đã lưu · Bấm thẻ để lật xem nghĩa`
               : date
-                ? `Ngày ${date} · 5 từ báo & 5 từ IELTS · Bấm thẻ để lật xem nghĩa`
+                ? `Ngày ${date} · 5 từ báo & 5 từ IELTS riêng của bạn · Bấm thẻ để lật xem nghĩa`
                 : "Đang tải..."}
           </p>
         </div>
+
+        <button
+          type="button"
+          disabled={togglingDaily || loading}
+          onClick={() => toggleDailySetting()}
+          title={
+            dailyEnabled
+              ? "Bấm để ngừng nhận thông báo và tắt tự động tìm từ mỗi ngày"
+              : "Bấm để bật lại thông báo và tự động tìm 10 từ mỗi ngày"
+          }
+          className={`inline-flex items-center gap-1.5 rounded-full border px-4 py-2 text-xs font-bold transition disabled:opacity-50 ${
+            dailyEnabled
+              ? "border-line bg-card text-muted hover:border-rose-400/50 hover:text-rose-500"
+              : "border-amber-500/40 bg-amber-500/10 text-amber-700 hover:bg-amber-500/20 dark:text-amber-300"
+          }`}
+        >
+          {dailyEnabled ? <BellOff size={14} /> : <Bell size={14} />}
+          {dailyEnabled ? "Ngừng nhận thông báo" : "Đã tắt thông báo · Bật lại"}
+        </button>
 
         {mode !== "7d" && allSingle.length > 0 && (
           <ExportButton words={allSingle} filename={`tu-hang-ngay-${date}`} label="Xuất văn bản (Quizlet)" />
@@ -389,7 +475,7 @@ export default function Daily() {
             </div>
             <div className="text-sm">
               {generating
-                ? "Agent đang đọc RSS báo BBC/Guardian, lọc trùng với kho và bổ sung nghĩa (chỉ chạy 1 lần trong ngày)."
+                ? "Agent đang đọc RSS báo BBC/Guardian, lọc trùng theo lịch sử của bạn và bổ sung nghĩa (tính 1 lượt AI trong ngày)."
                 : "Đang lấy danh sách từ đã lưu từ Supabase."}
             </div>
           </div>
@@ -400,11 +486,58 @@ export default function Daily() {
 
       {!loading && !err && mode !== "7d" && (
         allSingle.length === 0 ? (
-          <div className="rounded-2xl bg-card p-10 text-center text-muted">
-            Ngày <b className="text-ink">{date}</b> chưa có từ vựng hằng ngày nào được lưu.
-          </div>
+          date === today && !dailyEnabled ? (
+            <div className="rounded-2xl border border-line bg-card p-8 text-center">
+              <BellOff size={30} className="mx-auto text-muted" />
+              <div className="mt-3 text-base font-bold text-ink">
+                Bạn đang tắt thông báo & tự động tìm từ hằng ngày
+              </div>
+              <p className="mx-auto mt-1 max-w-md text-sm text-muted">
+                Hệ thống sẽ không tự chạy AI hoặc gửi nhắc nhở khi bạn không có nhu cầu tìm từ mới. Bạn vẫn có thể tìm thủ công cho hôm nay bất cứ lúc nào.
+              </p>
+              <div className="mt-5 flex flex-wrap justify-center gap-2.5">
+                <button
+                  type="button"
+                  onClick={generateToday}
+                  className="inline-flex items-center gap-1.5 rounded-full bg-brand px-5 py-2.5 text-sm font-bold text-white hover:bg-brand-hover hover:text-bg"
+                >
+                  <Sparkles size={15} />
+                  Tìm 10 từ hôm nay (1 lượt AI)
+                </button>
+                <button
+                  type="button"
+                  disabled={togglingDaily}
+                  onClick={() => toggleDailySetting(true)}
+                  className="rounded-full border border-line bg-bg px-5 py-2.5 text-sm font-bold text-muted hover:text-ink disabled:opacity-50"
+                >
+                  Bật lại tự tìm mỗi ngày
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="rounded-2xl bg-card p-10 text-center text-muted">
+              Ngày <b className="text-ink">{date}</b> chưa có từ vựng hằng ngày nào được lưu.
+            </div>
+          )
         ) : (
-          <WordCards news={news} ielts={ielts} date={date} speak={speak} />
+          <div className="space-y-4">
+            {date === today && !dailyEnabled && (news.length < 5 || ielts.length < 5) && (
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-line bg-card/70 px-4 py-3 text-sm">
+                <span className="text-muted">
+                  Chế độ tự động tìm đang tắt · Hôm nay hiện có <b className="text-ink">{allSingle.length}/10</b> từ.
+                </span>
+                <button
+                  type="button"
+                  onClick={generateToday}
+                  className="inline-flex items-center gap-1.5 rounded-full bg-brand px-4 py-1.5 text-xs font-bold text-white hover:bg-brand-hover hover:text-bg"
+                >
+                  <Sparkles size={13} />
+                  Tìm bù cho đủ 10 từ
+                </button>
+              </div>
+            )}
+            <WordCards news={news} ielts={ielts} date={date} speak={speak} />
+          </div>
         )
       )}
 

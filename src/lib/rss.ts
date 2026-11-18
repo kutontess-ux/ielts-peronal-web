@@ -49,9 +49,17 @@ export async function fetchRecentNews(limitPerFeed = 5): Promise<NewsItem[]> {
     })
   );
 
+  const perFeed = results
+    .filter((r): r is PromiseFulfilledResult<NewsItem[]> => r.status === "fulfilled")
+    .map((r) => r.value.filter((x) => x.title && x.summary && x.url));
+
+  // Trộn xen kẽ các nguồn báo (BBC & Guardian) để 5–15 bài đầu luôn đa dạng chủ đề
   const out: NewsItem[] = [];
-  for (const r of results) {
-    if (r.status === "fulfilled") out.push(...r.value);
+  const maxLen = Math.max(0, ...perFeed.map((list) => list.length));
+  for (let i = 0; i < maxLen; i++) {
+    for (const list of perFeed) {
+      if (list[i]) out.push(list[i]);
+    }
   }
-  return out.filter((x) => x.title && x.summary && x.url);
+  return out;
 }

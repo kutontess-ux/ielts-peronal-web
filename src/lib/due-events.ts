@@ -1,11 +1,18 @@
-// Sự kiện đồng bộ số từ cần ôn & trạng thái đã xem thông báo giữa các trang và Sidebar
+// Sự kiện đồng bộ số từ cần ôn, cài đặt thông báo & trạng thái đã xem thông báo giữa các trang và Sidebar
 export const DUE_EVENT = "ielts-due-updated";
 export const NOTIF_SEEN_EVENT = "ielts-notif-seen";
+export const SETTINGS_EVENT = "ielts-settings-updated";
 const NOTIF_SEEN_KEY = "ielts_notif_seen_date_v1";
 
 export function notifyDueUpdated(dueCount?: number) {
   if (typeof window !== "undefined") {
     window.dispatchEvent(new CustomEvent(DUE_EVENT, { detail: { dueCount } }));
+  }
+}
+
+export function notifySettingsUpdated(settings?: Record<string, unknown>) {
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent(SETTINGS_EVENT, { detail: settings }));
   }
 }
 

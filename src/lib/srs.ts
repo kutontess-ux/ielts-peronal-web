@@ -28,6 +28,29 @@ export const DEFAULT_USER_SETTINGS: UserSettings = {
   session_size: 15,
 };
 
+export type NotificationSettings = {
+  notify_daily_vocab: boolean;
+  notify_review_due: boolean;
+  notify_writing_streak: boolean;
+  notify_morning: boolean;
+  notify_evening: boolean;
+};
+
+export const DEFAULT_NOTIFICATION_SETTINGS: NotificationSettings = {
+  notify_daily_vocab: true,
+  notify_review_due: true,
+  notify_writing_streak: true,
+  notify_morning: true,
+  notify_evening: true,
+};
+
+export type FullUserSettings = UserSettings & NotificationSettings;
+
+export const DEFAULT_FULL_USER_SETTINGS: FullUserSettings = {
+  ...DEFAULT_USER_SETTINGS,
+  ...DEFAULT_NOTIFICATION_SETTINGS,
+};
+
 export const LEITNER_INTERVAL_DAYS: Record<LeitnerLevel, number> = {
   1: 1,
   2: 3,

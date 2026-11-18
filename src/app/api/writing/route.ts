@@ -109,10 +109,11 @@ async function fetchTargetVocabForWriting(
     pushWord(w, 30 + levelBonus);
   }
 
-  // 2. Lấy thêm từ hằng ngày gần nhất
+  // 2. Lấy thêm từ hằng ngày gần nhất của chính người dùng
   const { data: dailyRows } = await ctx.db
     .from("daily_words")
     .select("day,kind,words(id,lemma,ipa,pos,meaning_vi,example,cefr_level,topic,collocations)")
+    .eq("user_id", ctx.user.id)
     .order("day", { ascending: false })
     .limit(20);
 

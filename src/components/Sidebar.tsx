@@ -7,7 +7,13 @@ import {
   BarChart3, Bell, BookOpen, Eye, Home, Layers, LogIn, LogOut, Menu, Newspaper, Package, PenLine, Repeat, Shield, Target, X,
   type LucideIcon,
 } from "lucide-react";
-import { DUE_EVENT, isNotifSeenToday, markNotifSeenToday, NOTIF_SEEN_EVENT } from "@/lib/due-events";
+import {
+  DUE_EVENT,
+  isNotifSeenToday,
+  markNotifSeenToday,
+  NOTIF_SEEN_EVENT,
+  SETTINGS_EVENT,
+} from "@/lib/due-events";
 import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
 import { useMe, type MeInfo } from "@/lib/use-me";
 import ThemeToggle from "@/components/ThemeToggle";
@@ -136,6 +142,7 @@ export default function Sidebar() {
   const isAuthPage = path.startsWith("/login") || path.startsWith("/auth");
   const [dueCount, setDueCount] = useState(0);
   const [notifSeen, setNotifSeen] = useState(true);
+  const [notifyReviewDue, setNotifyReviewDue] = useState(true);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
   const { me, meLoaded, previewAsUser, togglePreviewAsUser, clearMe } = useMe({ skip: isAuthPage });
@@ -154,7 +161,7 @@ export default function Sidebar() {
     return () => cancelAnimationFrame(raf);
   }, [path, isAuthPage]);
 
-  // Fetch số từ đến hạn một lần (và khi có DUE_EVENT)
+  // Fetch số từ đến hạn & cài đặt thông báo (và cập nhật khi có DUE_EVENT / SETTINGS_EVENT)
   useEffect(() => {
     if (isAuthPage) return;
     let active = true;
@@ -171,7 +178,22 @@ export default function Sidebar() {
       }
     };
 
+    const fetchNotifSetting = async () => {
+      try {
+        const r = await fetch("/api/settings", { cache: "no-store" });
+        if (r.ok && active) {
+          const j = await r.json();
+          if (typeof j.notify_review_due === "boolean") {
+            setNotifyReviewDue(j.notify_review_due);
+          }
+        }
+      } catch {
+        // bỏ qua lỗi mạng tạm thời
+      }
+    };
+
     void fetchDue();
+    void fetchNotifSetting();
 
     const onDueEvent = (e: Event) => {
       const detail = (e as CustomEvent<{ dueCount?: number }>).detail;
@@ -182,13 +204,23 @@ export default function Sidebar() {
       void fetchDue();
     };
     const onNotifSeen = () => setNotifSeen(true);
+    const onSettingsEvent = (e: Event) => {
+      const detail = (e as CustomEvent<{ notify_review_due?: boolean } | undefined>).detail;
+      if (typeof detail?.notify_review_due === "boolean") {
+        setNotifyReviewDue(detail.notify_review_due);
+        return;
+      }
+      void fetchNotifSetting();
+    };
 
     window.addEventListener(DUE_EVENT, onDueEvent);
     window.addEventListener(NOTIF_SEEN_EVENT, onNotifSeen);
+    window.addEventListener(SETTINGS_EVENT, onSettingsEvent);
     return () => {
       active = false;
       window.removeEventListener(DUE_EVENT, onDueEvent);
       window.removeEventListener(NOTIF_SEEN_EVENT, onNotifSeen);
+      window.removeEventListener(SETTINGS_EVENT, onSettingsEvent);
     };
   }, [isAuthPage]);
 
@@ -211,7 +243,7 @@ export default function Sidebar() {
 
   if (isAuthPage) return null;
 
-  const notifBadge = dueCount > 0 && !notifSeen ? 1 : 0;
+  const notifBadge = notifyReviewDue && dueCount > 0 && !notifSeen ? 1 : 0;
 
   const MAIN: Item[] = [
     { href: "/", label: "Trang chủ", icon: Home, exact: true },

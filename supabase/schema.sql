@@ -33,18 +33,20 @@ create table if not exists public.imports (
   created_at  timestamptz not null default now()
 );
 
--- Từ hằng ngày
+-- Từ hằng ngày (riêng cho từng người dùng)
 create table if not exists public.daily_words (
   id              bigint generated always as identity primary key,
+  user_id         uuid references auth.users(id) on delete cascade,
   day             date not null,
   word_id         bigint not null references public.words(id) on delete cascade,
   kind            text not null check (kind in ('news','ielts')),
   source_sentence text,
   article_title   text,
   article_url     text,
-  unique (day, word_id)
+  unique (user_id, day, word_id)
 );
 create index if not exists daily_day_idx on public.daily_words (day);
+create index if not exists daily_words_user_day_idx on public.daily_words (user_id, day desc);
 
 -- Ôn tập ngắt quãng Leitner 5 cấp độ (mỗi từ 1 dòng)
 create table if not exists public.reviews (
@@ -58,13 +60,18 @@ create table if not exists public.reviews (
 create index if not exists reviews_priority_idx on public.reviews (level asc, next_review_at asc);
 create index if not exists reviews_due_idx on public.reviews (next_review_at);
 
--- Cài đặt người dùng cho ôn tập ngắt quãng
+-- Cài đặt người dùng cho ôn tập ngắt quãng & thông báo
 create table if not exists public.user_settings (
-  id                 int primary key default 1 check (id = 1),
-  daily_review_limit int not null default 50 check (daily_review_limit between 5 and 500),
-  daily_new_limit    int not null default 15 check (daily_new_limit between 0 and 200),
-  session_size       int not null default 15 check (session_size between 5 and 50),
-  updated_at         timestamptz not null default now()
+  id                    int primary key default 1 check (id = 1),
+  daily_review_limit    int not null default 50 check (daily_review_limit between 5 and 500),
+  daily_new_limit       int not null default 15 check (daily_new_limit between 0 and 200),
+  session_size          int not null default 15 check (session_size between 5 and 50),
+  notify_daily_vocab    boolean not null default true,
+  notify_review_due     boolean not null default true,
+  notify_writing_streak boolean not null default true,
+  notify_morning        boolean not null default true,
+  notify_evening        boolean not null default true,
+  updated_at            timestamptz not null default now()
 );
 insert into public.user_settings (id) values (1) on conflict (id) do nothing;
 
