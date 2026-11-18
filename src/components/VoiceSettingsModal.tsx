@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   Volume2,
   X,
@@ -59,17 +60,22 @@ export function VoiceSettingsModal({ isOpen, onClose }: VoiceSettingsModalProps)
     return () => window.removeEventListener(TTS_SETTINGS_CHANGED_EVENT, onSettingsChanged);
   }, []);
 
-  // Lắng nghe phím ESC để đóng modal
+  // Khoá cuộn trang nền và lắng nghe phím ESC khi mở modal
   useEffect(() => {
     if (!isOpen) return;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
     };
     window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      window.removeEventListener("keydown", handleKeyDown);
+    };
   }, [isOpen, onClose]);
 
-  if (!isOpen) return null;
+  if (!isOpen || typeof document === "undefined") return null;
 
   const handleUpdate = (patch: Partial<TtsSettings>) => {
     const next = saveTtsSettings(patch);
@@ -106,8 +112,13 @@ export function VoiceSettingsModal({ isOpen, onClose }: VoiceSettingsModalProps)
 
   const currentMatchedVoice = findMatchingVoice(voices, settings);
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[100] flex items-end justify-center sm:items-center sm:p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Cài đặt giọng đọc và phát âm"
+    >
       {/* Backdrop */}
       <div
         className="fixed inset-0 bg-black/60 backdrop-blur-sm transition-opacity"
@@ -115,33 +126,38 @@ export function VoiceSettingsModal({ isOpen, onClose }: VoiceSettingsModalProps)
       />
 
       {/* Modal Dialog */}
-      <div className="relative z-10 w-full max-w-lg rounded-2xl border border-line bg-card p-6 shadow-2xl transition-all max-h-[90vh] overflow-y-auto">
-        {/* Header */}
-        <div className="flex items-center justify-between border-b border-line/70 pb-4">
-          <div className="flex items-center gap-2.5">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand/15 text-brand-hover">
-              <Volume2 size={20} />
+      <div className="relative z-10 flex max-h-[88dvh] w-full max-w-lg flex-col overflow-hidden rounded-t-2xl border border-line bg-card shadow-2xl transition-all sm:max-h-[90vh] sm:rounded-2xl">
+        {/* Header cố định */}
+        <div className="flex shrink-0 items-center justify-between border-b border-line/70 px-4 py-3.5 sm:px-6 sm:py-4">
+          <div className="flex min-w-0 items-center gap-2.5">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-brand/15 text-brand-hover sm:h-10 sm:w-10">
+              <Volume2 size={18} />
             </div>
-            <div>
-              <h3 className="text-base font-bold text-ink">Cài đặt giọng đọc & phát âm</h3>
-              <p className="text-xs text-muted">Tuỳ chỉnh giọng đọc (Accent), tốc độ và âm điệu</p>
+            <div className="min-w-0">
+              <h3 className="truncate text-sm font-bold text-ink sm:text-base">
+                Cài đặt giọng đọc &amp; phát âm
+              </h3>
+              <p className="truncate text-[11px] text-muted sm:text-xs">
+                Tuỳ chỉnh giọng đọc (Accent), tốc độ và âm điệu
+              </p>
             </div>
           </div>
           <button
+            type="button"
             onClick={onClose}
-            className="rounded-lg p-2 text-muted hover:bg-bg hover:text-ink transition"
+            className="shrink-0 rounded-lg p-2 text-muted transition hover:bg-bg hover:text-ink"
             aria-label="Đóng"
           >
             <X size={18} />
           </button>
         </div>
 
-        {/* Content */}
-        <div className="mt-5 space-y-6">
+        {/* Nội dung cuộn được */}
+        <div className="flex-1 space-y-5 overflow-y-auto px-4 py-4 sm:space-y-6 sm:px-6 sm:py-5">
           {/* 1. Chọn Accent / Giọng đọc */}
           <div>
-            <label className="mb-2 flex items-center justify-between text-xs font-bold uppercase tracking-wider text-muted">
-              <span>1. Vùng miền & Accent</span>
+            <label className="mb-2 flex flex-wrap items-center justify-between gap-1 text-xs font-bold uppercase tracking-wider text-muted">
+              <span>1. Vùng miền &amp; Accent</span>
               <span className="text-[11px] font-normal normal-case text-brand-hover">
                 Ưu tiên IELTS: Anh - Anh hoặc Anh - Mỹ
               </span>
@@ -154,14 +170,14 @@ export function VoiceSettingsModal({ isOpen, onClose }: VoiceSettingsModalProps)
                     key={opt.id}
                     type="button"
                     onClick={() => handleSelectAccent(opt.id)}
-                    className={`flex flex-col items-start gap-1 rounded-xl border p-3 text-left transition ${
+                    className={`flex flex-col items-start gap-0.5 rounded-xl border p-2.5 text-left transition sm:gap-1 sm:p-3 ${
                       active
                         ? "border-brand bg-brand/10 text-brand-hover ring-2 ring-brand/30"
                         : "border-line bg-bg hover:border-line/80 hover:bg-card"
                     }`}
                   >
                     <div className="flex w-full items-center justify-between">
-                      <span className="text-lg">{opt.flag}</span>
+                      <span className="text-base sm:text-lg">{opt.flag}</span>
                       {active && <Check size={14} className="text-brand-hover" />}
                     </div>
                     <span className="text-xs font-bold text-ink">{opt.label}</span>
@@ -175,10 +191,10 @@ export function VoiceSettingsModal({ isOpen, onClose }: VoiceSettingsModalProps)
           {/* 2. Chi tiết giọng đọc trong trình duyệt (Voice Engine) */}
           {displayVoices.length > 0 && (
             <div>
-              <label className="mb-1.5 flex items-center justify-between text-xs font-bold uppercase tracking-wider text-muted">
-                <span>Giọng đọc trình duyệt ({displayVoices.length} giọng sẵn có)</span>
+              <label className="mb-1.5 flex flex-wrap items-center justify-between gap-x-2 gap-y-0.5 text-xs font-bold uppercase tracking-wider text-muted">
+                <span>Giọng đọc trình duyệt ({displayVoices.length} giọng)</span>
                 {currentMatchedVoice && (
-                  <span className="text-[11px] font-normal normal-case text-muted truncate max-w-[200px]">
+                  <span className="max-w-full truncate text-[11px] font-normal normal-case text-muted sm:max-w-[200px]">
                     Đang dùng: {currentMatchedVoice.name}
                   </span>
                 )}
@@ -218,7 +234,7 @@ export function VoiceSettingsModal({ isOpen, onClose }: VoiceSettingsModalProps)
                     key={p.value}
                     type="button"
                     onClick={() => handleUpdate({ rate: p.value })}
-                    className={`rounded-lg border py-1.5 text-xs font-semibold transition ${
+                    className={`rounded-lg border px-1 py-1.5 text-[11px] font-semibold transition sm:text-xs ${
                       active
                         ? "border-brand bg-brand text-white"
                         : "border-line bg-bg text-muted hover:text-ink"
@@ -253,7 +269,7 @@ export function VoiceSettingsModal({ isOpen, onClose }: VoiceSettingsModalProps)
               <label className="text-xs font-bold uppercase tracking-wider text-muted">
                 3. Cao độ giọng (Pitch)
               </label>
-              <span className="rounded-md bg-card px-2 py-0.5 text-xs font-medium text-muted">
+              <span className="rounded-md bg-bg px-2 py-0.5 text-xs font-medium text-muted">
                 {settings.pitch === 1.0
                   ? "Tự nhiên (1.0)"
                   : settings.pitch < 1.0
@@ -278,7 +294,7 @@ export function VoiceSettingsModal({ isOpen, onClose }: VoiceSettingsModalProps)
           </div>
 
           {/* 5. Thử giọng & Kiểm tra trực tiếp */}
-          <div className="rounded-xl border border-line bg-bg p-3.5">
+          <div className="rounded-xl border border-line bg-bg p-3 sm:p-3.5">
             <label className="mb-1.5 block text-xs font-bold text-muted">
               Nghe thử trực tiếp:
             </label>
@@ -288,12 +304,12 @@ export function VoiceSettingsModal({ isOpen, onClose }: VoiceSettingsModalProps)
                 value={testPhrase}
                 onChange={(e) => setTestPhrase(e.target.value)}
                 placeholder="Nhập câu tiếng Anh để nghe thử..."
-                className="flex-1 rounded-xl border border-line bg-card px-3 py-2 text-xs text-ink focus:border-brand focus:outline-none"
+                className="min-w-0 flex-1 rounded-xl border border-line bg-card px-3 py-2 text-xs text-ink focus:border-brand focus:outline-none"
               />
               <button
                 type="button"
                 onClick={handleTestVoice}
-                className="inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-brand px-3.5 py-2 text-xs font-bold text-white transition hover:bg-brand-hover hover:text-bg"
+                className="inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-brand px-3 py-2 text-xs font-bold text-white transition hover:bg-brand-hover hover:text-bg sm:px-3.5"
               >
                 <Play size={13} fill="currentColor" />
                 {isPlayingTest ? "Đang đọc..." : "Nghe thử"}
@@ -302,12 +318,12 @@ export function VoiceSettingsModal({ isOpen, onClose }: VoiceSettingsModalProps)
           </div>
         </div>
 
-        {/* Footer */}
-        <div className="mt-6 flex items-center justify-between border-t border-line/70 pt-4">
+        {/* Footer cố định */}
+        <div className="flex shrink-0 items-center justify-between border-t border-line/70 px-4 py-3.5 pb-[max(0.875rem,env(safe-area-inset-bottom))] sm:px-6 sm:py-4">
           <button
             type="button"
             onClick={handleReset}
-            className="flex items-center gap-1.5 text-xs font-medium text-muted hover:text-ink transition"
+            className="flex items-center gap-1.5 text-xs font-medium text-muted transition hover:text-ink"
           >
             <RotateCcw size={13} />
             Khôi phục mặc định
@@ -321,7 +337,8 @@ export function VoiceSettingsModal({ isOpen, onClose }: VoiceSettingsModalProps)
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
