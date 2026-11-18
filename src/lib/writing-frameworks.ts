@@ -307,7 +307,7 @@ export const WEEKLY_DISCIPLINE_SCHEDULE: DailyDisciplineScheduleItem[] = [
     subtitle: "Viết 2–3 câu Mở bài chuẩn học thuật: Paraphrase đề + Nêu Thesis Statement rõ ràng.",
     minWords: 50,
     recommendedMinutes: 10,
-    badgeText: "Micro-Writing · 10 phút",
+    badgeText: "10 phút",
   },
   {
     dayOfWeek: 2,
@@ -321,7 +321,7 @@ export const WEEKLY_DISCIPLINE_SCHEDULE: DailyDisciplineScheduleItem[] = [
     subtitle: "Rèn tư duy triển khai đoạn văn chặt chẽ: Point → Explain → Example → Link.",
     minWords: 90,
     recommendedMinutes: 15,
-    badgeText: "Micro-Writing · 15 phút",
+    badgeText: "15 phút",
   },
   {
     dayOfWeek: 3,
@@ -335,7 +335,7 @@ export const WEEKLY_DISCIPLINE_SCHEDULE: DailyDisciplineScheduleItem[] = [
     subtitle: "Phần quyết định điểm Band 6.5+ Task Achievement: Paraphrase đề + Tóm tắt 2 đặc điểm nổi bật nhất.",
     minWords: 60,
     recommendedMinutes: 12,
-    badgeText: "Micro-Writing · 12 phút",
+    badgeText: "12 phút",
   },
   {
     dayOfWeek: 4,
@@ -349,7 +349,7 @@ export const WEEKLY_DISCIPLINE_SCHEDULE: DailyDisciplineScheduleItem[] = [
     subtitle: "Phát triển góc nhìn phản biện / luận điểm thứ 2 và chốt lại toàn bài sắc bén.",
     minWords: 100,
     recommendedMinutes: 15,
-    badgeText: "Micro-Writing · 15 phút",
+    badgeText: "15 phút",
   },
   {
     dayOfWeek: 5,
@@ -363,7 +363,7 @@ export const WEEKLY_DISCIPLINE_SCHEDULE: DailyDisciplineScheduleItem[] = [
     subtitle: "Luyện cách trích dẫn số liệu, so sánh hơn/kém/gấp bội và dùng từ nối tương phản.",
     minWords: 90,
     recommendedMinutes: 15,
-    badgeText: "Micro-Writing · 15 phút",
+    badgeText: "15 phút",
   },
   {
     dayOfWeek: 6,
@@ -377,7 +377,7 @@ export const WEEKLY_DISCIPLINE_SCHEDULE: DailyDisciplineScheduleItem[] = [
     subtitle: "Tổng hợp kỹ năng cả tuần vào bài viết 4 đoạn hoàn chỉnh (Mở bài, 2 Body PEEL, Kết bài) có bấm giờ.",
     minWords: 250,
     recommendedMinutes: 40,
-    badgeText: "Full Practice · 40 phút",
+    badgeText: "40 phút",
   },
   {
     dayOfWeek: 0,
@@ -391,7 +391,7 @@ export const WEEKLY_DISCIPLINE_SCHEDULE: DailyDisciplineScheduleItem[] = [
     subtitle: "Hoàn thành báo cáo Task 1 trọn vẹn 4 đoạn (Intro, Overview, Body 1, Body 2) trong 20 phút.",
     minWords: 150,
     recommendedMinutes: 20,
-    badgeText: "Full Practice · 20 phút",
+    badgeText: "20 phút",
   },
 ];
 
@@ -964,6 +964,7 @@ export function getDrillFocusMeta(drillFocus: DrillFocus, taskType: WritingTaskT
     id: drillFocus,
     taskType: bp.taskType,
     title: bp.title,
+    purposeVi: bp.purposeVi,
     minWords: bp.minWords,
     recommendedMinutes: bp.recommendedMinutes,
   };

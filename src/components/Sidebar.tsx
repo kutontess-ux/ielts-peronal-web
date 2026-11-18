@@ -17,6 +17,7 @@ type Item = { href: string; label: string; icon: LucideIcon; exact?: boolean; ba
 const SKILLS: Item[] = [
   { href: "/reading", label: "Reading", icon: BookOpen },
   { href: "/writing", label: "Writing", icon: PenLine },
+  { href: "/writing/stats", label: "Thống kê Writing", icon: BarChart3 },
 ];
 
 function NavLink({
@@ -28,7 +29,11 @@ function NavLink({
   path: string;
   onClick?: () => void;
 }) {
-  const active = item.exact ? path === item.href : path.startsWith(item.href);
+  const active = item.exact
+    ? path === item.href
+    : item.href === "/writing"
+    ? path === "/writing" || (path.startsWith("/writing/") && !path.startsWith("/writing/stats"))
+    : path.startsWith(item.href);
   const Icon = item.icon;
   return (
     <Link

@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
-  Calendar,
+  BarChart3,
   Check,
   CheckCircle2,
   ChevronDown,
@@ -19,8 +19,6 @@ import {
   Flame,
   Image as ImageIcon,
   Layers,
-  ListChecks,
-  PenLine,
   Play,
   Plus,
   Search,
@@ -31,7 +29,6 @@ import {
   X,
 } from "lucide-react";
 import {
-  computeWritingStreak,
   DRILL_FOCUS_OPTIONS,
   getDrillFocusMeta,
   getSubTypeMeta,
@@ -43,7 +40,6 @@ import {
   type DailyDisciplineScheduleItem,
   type DrillFocus,
   type WritingMode,
-  type WritingStreakSummary,
   type WritingSubType,
   type WritingTaskType,
 } from "@/lib/writing-frameworks";
@@ -198,16 +194,6 @@ const ERROR_LABELS: Record<
   },
 };
 
-const INITIAL_STREAK: WritingStreakSummary = {
-  currentStreak: 0,
-  longestStreak: 0,
-  completedToday: false,
-  hasWrittenToday: false,
-  hasGradedToday: false,
-  totalCompletedDays: 0,
-  last14Days: [],
-};
-
 export default function WritingHubPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
@@ -217,7 +203,6 @@ export default function WritingHubPage() {
 
   const [prompts, setPrompts] = useState<WritingPromptItem[]>([]);
   const [submissions, setSubmissions] = useState<WritingSubmissionItem[]>([]);
-  const [streak, setStreak] = useState<WritingStreakSummary>(INITIAL_STREAK);
   const [todaySchedule, setTodaySchedule] = useState<DailyDisciplineScheduleItem>(
     WEEKLY_DISCIPLINE_SCHEDULE[0]
   );
@@ -230,10 +215,12 @@ export default function WritingHubPage() {
   });
   const [recentMistakes, setRecentMistakes] = useState<MistakeItem[]>([]);
 
-  // Lựa chọn nhiệm vụ hôm nay
+  // Tab Hôm nay / Tuần và lựa chọn nhiệm vụ
+  const [missionViewTab, setMissionViewTab] = useState<"today" | "week">("today");
   const [selectedDrillFocus, setSelectedDrillFocus] = useState<DrillFocus>(
     WEEKLY_DISCIPLINE_SCHEDULE[0].drillFocus
   );
+  const [selectedWeekTaskType, setSelectedWeekTaskType] = useState<WritingTaskType | null>(null);
   const [selectedMissionPromptId, setSelectedMissionPromptId] = useState<number | null>(null);
   const [startingSessionId, setStartingSessionId] = useState<number | null>(null);
 
@@ -286,7 +273,6 @@ export default function WritingHubPage() {
     let active = true;
     (async () => {
       const fallbackSched = getTodaySchedule();
-      const fallbackStreak = computeWritingStreak([]);
       try {
         const res = await fetch("/api/writing", { cache: "no-store" });
         const j = await res.json().catch(() => ({}));
@@ -294,14 +280,12 @@ export default function WritingHubPage() {
         if (!res.ok) {
           setTodaySchedule(fallbackSched);
           setSelectedDrillFocus(fallbackSched.drillFocus);
-          setStreak(fallbackStreak);
           setError(j.error || "Không tải được dữ liệu Writing");
           return;
         }
         setNeedsMigration(Boolean(j.needsMigration));
         setPrompts(j.prompts ?? []);
         setSubmissions(j.submissions ?? []);
-        setStreak(j.streak ?? fallbackStreak);
         const sched = j.todaySchedule ?? fallbackSched;
         setTodaySchedule(sched);
         setSelectedDrillFocus(sched.drillFocus);
@@ -314,7 +298,6 @@ export default function WritingHubPage() {
         if (active) {
           setTodaySchedule(fallbackSched);
           setSelectedDrillFocus(fallbackSched.drillFocus);
-          setStreak(fallbackStreak);
           setError((e as Error).message);
         }
       } finally {
@@ -326,20 +309,25 @@ export default function WritingHubPage() {
     };
   }, []);
 
+  const effectiveDrillFocus: DrillFocus =
+    missionViewTab === "today" ? todaySchedule.drillFocus : selectedDrillFocus;
+
   // Nhiệm vụ đang chọn thuộc Task 1 hay Task 2
   const missionTaskType: WritingTaskType = useMemo(() => {
-    if (selectedDrillFocus === "task1_overview" || selectedDrillFocus === "task1_body") {
+    if (effectiveDrillFocus === "task1_overview" || effectiveDrillFocus === "task1_body") {
       return "task1";
     }
-    if (selectedDrillFocus === "full") {
-      return todaySchedule.taskType;
+    if (effectiveDrillFocus === "full") {
+      return missionViewTab === "week" && selectedWeekTaskType
+        ? selectedWeekTaskType
+        : todaySchedule.taskType;
     }
     return "task2";
-  }, [selectedDrillFocus, todaySchedule.taskType]);
+  }, [effectiveDrillFocus, missionViewTab, selectedWeekTaskType, todaySchedule.taskType]);
 
   const missionMeta = useMemo(
-    () => getDrillFocusMeta(selectedDrillFocus, missionTaskType),
-    [selectedDrillFocus, missionTaskType]
+    () => getDrillFocusMeta(effectiveDrillFocus, missionTaskType),
+    [effectiveDrillFocus, missionTaskType]
   );
 
   // Đề bài phù hợp cho thẻ Nhiệm vụ hôm nay
@@ -356,27 +344,6 @@ export default function WritingHubPage() {
     const firstQueued = matchingMissionPrompts.find((p) => p.status === "queued");
     return firstQueued ?? matchingMissionPrompts[0] ?? null;
   }, [matchingMissionPrompts, selectedMissionPromptId]);
-
-  // Điểm trung bình các bài đã chấm
-  const bandStats = useMemo(() => {
-    const graded = submissions.filter(
-      (s) => s.overall_band !== null && s.overall_band !== undefined
-    );
-    if (graded.length === 0) return null;
-    const avg = (arr: (number | null)[]) => {
-      const nums = arr.map((x) => Number(x)).filter((n) => Number.isFinite(n) && n > 0);
-      if (nums.length === 0) return 0;
-      return Math.round((nums.reduce((a, b) => a + b, 0) / nums.length) * 10) / 10;
-    };
-    return {
-      count: graded.length,
-      overall: avg(graded.map((s) => s.overall_band)),
-      tr: avg(graded.map((s) => s.tr_band)),
-      cc: avg(graded.map((s) => s.cc_band)),
-      lr: avg(graded.map((s) => s.lr_band)),
-      gra: avg(graded.map((s) => s.gra_band)),
-    };
-  }, [submissions]);
 
   // Lọc danh sách đề trong Kho
   const filteredPrompts = useMemo(() => {
@@ -573,7 +540,6 @@ export default function WritingHubPage() {
       if (res.ok) {
         const nextSubs = submissions.filter((s) => s.id !== id);
         setSubmissions(nextSubs);
-        setStreak(computeWritingStreak(nextSubs));
       }
     } catch (err) {
       setError((err as Error).message);
@@ -589,19 +555,15 @@ export default function WritingHubPage() {
   return (
     <div className="space-y-8">
       {/* Header */}
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <div className="inline-flex items-center gap-2 rounded-full bg-brand/15 px-3 py-1 text-xs font-bold text-brand-hover">
-            <PenLine size={14} /> Hệ thống Luyện IELTS Writing Kỷ luật · B1 → Band 6.5+
-          </div>
-          <h1 className="mt-2 text-2xl font-bold tracking-tight sm:text-3xl">
-            IELTS Writing – Kỷ luật Hằng ngày & Chấm chữa 4 Tiêu chí
-          </h1>
-          <p className="mt-1 text-sm text-muted">
-            100% đề thi thật do bạn sưu tầm (Cam / Actual Test) · Lộ trình xoay vòng 7 ngày · Chấm 4 tiêu chí & bắt buộc gõ sửa câu sai để giữ Streak 🔥
-          </p>
-        </div>
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">IELTS Writing</h1>
         <div className="flex flex-wrap items-center gap-2.5">
+          <Link
+            href="/writing/stats"
+            className="inline-flex items-center gap-2 rounded-full border border-line bg-card px-4 py-2.5 text-sm font-bold text-ink transition hover:border-brand-hover"
+          >
+            <BarChart3 size={16} /> Thống kê
+          </Link>
           <button
             type="button"
             onClick={() => openAddPromptModal(false)}
@@ -663,243 +625,134 @@ export default function WritingHubPage() {
         </div>
       )}
 
-      {/* SECTION 1: THANH KỶ LUẬT & TIẾN ĐỘ (DISCIPLINE HEADER) */}
-      <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {/* Card 1: Streak */}
-        <div className="flex flex-col justify-between rounded-2xl border border-line bg-card p-5">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold uppercase tracking-wider text-muted">
-              Chuỗi Kỷ Luật Writing
-            </span>
-            <span
-              className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-bold ${
-                streak.completedToday
-                  ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300"
-                  : "bg-orange-500/15 text-orange-700 dark:text-orange-300"
-              }`}
-            >
-              <Flame size={13} />
-              {streak.completedToday ? "Đã giữ chuỗi hôm nay" : "Hôm nay chưa xong"}
-            </span>
-          </div>
-          <div className="mt-3 flex items-baseline gap-2">
-            <span className="text-4xl font-extrabold text-ink">{streak.currentStreak}</span>
-            <span className="text-sm font-semibold text-muted">ngày liên tiếp 🔥</span>
-          </div>
-          <div className="mt-3 flex items-center justify-between border-t border-line pt-2.5 text-xs text-muted">
-            <span>Kỷ lục: {streak.longestStreak} ngày</span>
-            <span>Tổng: {streak.totalCompletedDays} ngày hoàn tất</span>
-          </div>
-        </div>
-
-        {/* Card 2: Quy tắc 3 bước hôm nay */}
-        <div className="flex flex-col justify-between rounded-2xl border border-line bg-card p-5">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold uppercase tracking-wider text-muted">
-              Quy tắc Kỷ luật 3 Bước
-            </span>
-            <ListChecks size={16} className="text-brand-hover" />
-          </div>
-          <div className="mt-3 space-y-2 text-xs">
-            <div className="flex items-center gap-2">
-              <span
-                className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[11px] font-bold ${
-                  streak.hasWrittenToday
-                    ? "bg-emerald-500 text-white"
-                    : "border border-line bg-bg text-muted"
-                }`}
-              >
-                {streak.hasWrittenToday ? <Check size={12} /> : "1"}
-              </span>
-              <span className={streak.hasWrittenToday ? "font-semibold text-ink" : "text-muted"}>
-                Bước 1: Viết đủ số từ tối thiểu
-              </span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span
-                className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[11px] font-bold ${
-                  streak.hasGradedToday
-                    ? "bg-emerald-500 text-white"
-                    : "border border-line bg-bg text-muted"
-                }`}
-              >
-                {streak.hasGradedToday ? <Check size={12} /> : "2"}
-              </span>
-              <span className={streak.hasGradedToday ? "font-semibold text-ink" : "text-muted"}>
-                Bước 2: Chấm chữa chuẩn 4 tiêu chí AI
-              </span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span
-                className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[11px] font-bold ${
-                  streak.completedToday
-                    ? "bg-emerald-500 text-white"
-                    : "border border-line bg-bg text-muted"
-                }`}
-              >
-                {streak.completedToday ? <Check size={12} /> : "3"}
-              </span>
-              <span className={streak.completedToday ? "font-semibold text-ink" : "text-muted"}>
-                Bước 3: Gõ sửa lại câu sai (+1 Streak)
-              </span>
-            </div>
-          </div>
-        </div>
-
-        {/* Card 3: Điểm Band trung bình */}
-        <div className="flex flex-col justify-between rounded-2xl border border-line bg-card p-5">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold uppercase tracking-wider text-muted">
-              Điểm Band Trung Bình
-            </span>
-            <Target size={16} className="text-brand-hover" />
-          </div>
-          {bandStats ? (
-            <>
-              <div className="mt-2 flex items-baseline gap-2">
-                <span className="text-3xl font-extrabold text-brand-hover">
-                  Band {bandStats.overall.toFixed(1)}
-                </span>
-                <span className="text-xs text-muted">({bandStats.count} bài đã chấm)</span>
-              </div>
-              <div className="mt-3 grid grid-cols-4 gap-1.5 text-center text-[11px]">
-                <div className="rounded-lg bg-bg px-1.5 py-1">
-                  <div className="text-muted">TR/TA</div>
-                  <div className="font-bold text-ink">{bandStats.tr.toFixed(1)}</div>
-                </div>
-                <div className="rounded-lg bg-bg px-1.5 py-1">
-                  <div className="text-muted">CC</div>
-                  <div className="font-bold text-ink">{bandStats.cc.toFixed(1)}</div>
-                </div>
-                <div className="rounded-lg bg-bg px-1.5 py-1">
-                  <div className="text-muted">LR</div>
-                  <div className="font-bold text-ink">{bandStats.lr.toFixed(1)}</div>
-                </div>
-                <div className="rounded-lg bg-bg px-1.5 py-1">
-                  <div className="text-muted">GRA</div>
-                  <div className="font-bold text-ink">{bandStats.gra.toFixed(1)}</div>
-                </div>
-              </div>
-            </>
-          ) : (
-            <div className="my-auto py-2 text-xs text-muted">
-              Chưa có bài viết nào được chấm. Hãy hoàn thành nhiệm vụ hôm nay để xem phân tích 4 tiêu chí!
-            </div>
-          )}
-        </div>
-
-        {/* Card 4: Lịch nhiệt 14 ngày */}
-        <div className="flex flex-col justify-between rounded-2xl border border-line bg-card p-5">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold uppercase tracking-wider text-muted">
-              Lịch nhiệt 14 ngày gần nhất
-            </span>
-            <Calendar size={16} className="text-brand-hover" />
-          </div>
-          <div className="mt-3 grid grid-cols-7 gap-1.5">
-            {streak.last14Days.map((d) => (
-              <div
-                key={d.date}
-                title={`${d.label}: ${
-                  d.completed
-                    ? "Đã hoàn thành kỷ luật 3 bước"
-                    : d.count > 0
-                    ? `Đã viết ${d.count} bài (chưa hoàn tất bước 3)`
-                    : "Chưa luyện viết"
-                }`}
-                className={`flex flex-col items-center justify-center rounded-lg py-1.5 text-[10px] font-bold transition ${
-                  d.completed
-                    ? "bg-emerald-500 text-white shadow-xs"
-                    : d.count > 0
-                    ? "border border-amber-500/50 bg-amber-500/15 text-amber-700 dark:text-amber-300"
-                    : "border border-line bg-bg text-muted"
-                }`}
-              >
-                <span>{d.label.split("/")[0]}</span>
-              </div>
-            ))}
-          </div>
-          <div className="mt-2.5 flex items-center justify-between text-[11px] text-muted">
-            <span className="inline-flex items-center gap-1">
-              <span className="h-2.5 w-2.5 rounded-xs bg-emerald-500" /> Đủ 3 bước
-            </span>
-            <span className="inline-flex items-center gap-1">
-              <span className="h-2.5 w-2.5 rounded-xs bg-amber-500/40" /> Đang làm
-            </span>
-            <span className="inline-flex items-center gap-1">
-              <span className="h-2.5 w-2.5 rounded-xs border border-line bg-bg" /> Trống
-            </span>
-          </div>
-        </div>
-      </section>
-
-      {/* SECTION 2: NHIỆM VỤ KHOA HỌC HÔM NAY (TODAY'S MISSION CARD) */}
+      {/* SECTION 1: NHIỆM VỤ (HÔM NAY | TUẦN) */}
       <section className="rounded-3xl border border-line bg-card p-5 sm:p-6">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line pb-4">
+        <div className="flex flex-wrap items-start justify-between gap-3 border-b border-line pb-4">
           <div>
             <div className="flex flex-wrap items-center gap-2">
               <span className="rounded-full bg-brand px-3 py-0.5 text-xs font-bold text-white">
-                Lịch hôm nay · {todaySchedule.dayLabel}
+                {missionViewTab === "today"
+                  ? todaySchedule.dayLabel
+                  : WEEKLY_DISCIPLINE_SCHEDULE.find(
+                      (item) =>
+                        item.drillFocus === effectiveDrillFocus &&
+                        item.taskType === missionTaskType
+                    )?.dayLabel ?? todaySchedule.dayLabel}
               </span>
               <span className="rounded-full bg-bg px-3 py-0.5 text-xs font-semibold text-muted">
-                {todaySchedule.badgeText}
+                {missionMeta.recommendedMinutes} phút
               </span>
             </div>
             <h2 className="mt-2 text-lg font-bold sm:text-xl">{missionMeta.title}</h2>
-            <p className="mt-0.5 text-xs text-muted">{todaySchedule.subtitle}</p>
+            <p className="mt-0.5 text-xs text-muted">
+              {missionViewTab === "today"
+                ? todaySchedule.subtitle
+                : missionMeta.purposeVi}
+            </p>
           </div>
 
-          {/* Lộ trình xoay vòng 7 ngày trong tuần */}
-          <div className="flex flex-wrap items-center gap-1.5">
-            {WEEKLY_DISCIPLINE_SCHEDULE.map((item) => {
-              const isToday = item.dayOfWeek === todaySchedule.dayOfWeek;
-              const isSelected = item.drillFocus === selectedDrillFocus && item.taskType === missionTaskType;
-              return (
-                <button
-                  key={item.dayOfWeek}
-                  type="button"
-                  onClick={() => setSelectedDrillFocus(item.drillFocus)}
-                  title={`${item.dayLabel}: ${item.title}`}
-                  className={`rounded-xl px-2.5 py-1.5 text-xs font-bold transition ${
-                    isSelected
-                      ? "bg-brand text-white"
-                      : isToday
-                      ? "border border-brand bg-brand/10 text-brand-hover"
-                      : "bg-bg text-muted hover:text-ink"
-                  }`}
-                >
-                  {item.shortDay}
-                </button>
-              );
-            })}
+          {/* 2 Tab: Hôm nay | Tuần */}
+          <div className="inline-flex rounded-xl border border-line bg-bg p-1">
+            <button
+              type="button"
+              onClick={() => {
+                setMissionViewTab("today");
+                setSelectedWeekTaskType(null);
+              }}
+              className={`rounded-lg px-3.5 py-1.5 text-xs font-bold transition ${
+                missionViewTab === "today"
+                  ? "bg-brand text-white"
+                  : "text-muted hover:text-ink"
+              }`}
+            >
+              Hôm nay
+            </button>
+            <button
+              type="button"
+              onClick={() => setMissionViewTab("week")}
+              className={`rounded-lg px-3.5 py-1.5 text-xs font-bold transition ${
+                missionViewTab === "week"
+                  ? "bg-brand text-white"
+                  : "text-muted hover:text-ink"
+              }`}
+            >
+              Tuần
+            </button>
           </div>
         </div>
 
-        {/* Bộ chọn chuyển đổi tự do dạng bài tập */}
-        <div className="mt-4">
-          <div className="mb-2 text-xs font-semibold text-muted">
-            Chế độ luyện tập (Tự động gợi ý theo ngày hoặc bạn có thể đổi tự do):
+        {/* Chi tiết Lịch Tuần & Chế độ luyện tập (chỉ hiện khi bấm tab Tuần) */}
+        {missionViewTab === "week" && (
+          <div className="mt-4 space-y-4 border-b border-line pb-4">
+            <div>
+              <div className="mb-2 text-xs font-semibold text-muted">
+                Lộ trình theo từng ngày trong tuần:
+              </div>
+              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                {WEEKLY_DISCIPLINE_SCHEDULE.map((item) => {
+                  const isToday = item.dayOfWeek === todaySchedule.dayOfWeek;
+                  const isSelected =
+                    item.drillFocus === selectedDrillFocus && item.taskType === missionTaskType;
+                  return (
+                    <button
+                      key={item.dayOfWeek}
+                      type="button"
+                      onClick={() => {
+                        setSelectedDrillFocus(item.drillFocus);
+                        setSelectedWeekTaskType(item.taskType);
+                      }}
+                      className={`rounded-xl border p-3 text-left transition ${
+                        isSelected
+                          ? "border-brand bg-brand/15 text-ink"
+                          : isToday
+                          ? "border-brand/40 bg-bg text-ink hover:border-brand-hover"
+                          : "border-line bg-bg text-muted hover:border-brand-hover/50 hover:text-ink"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-xs font-bold text-brand-hover">
+                          {item.dayLabel} {isToday ? "(Hôm nay)" : ""}
+                        </span>
+                        <span className="text-[11px] text-muted">{item.badgeText}</span>
+                      </div>
+                      <div className="mt-1 line-clamp-2 text-xs font-semibold text-ink">
+                        {item.title}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div>
+              <div className="mb-2 text-xs font-semibold text-muted">
+                Hoặc đổi sang dạng bài khác:
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {DRILL_FOCUS_OPTIONS.map((opt) => {
+                  const active = selectedDrillFocus === opt.id;
+                  return (
+                    <button
+                      key={opt.id}
+                      type="button"
+                      onClick={() => {
+                        setSelectedDrillFocus(opt.id);
+                        setSelectedWeekTaskType(null);
+                      }}
+                      className={`rounded-xl border px-3 py-1.5 text-xs font-semibold transition ${
+                        active
+                          ? "border-brand bg-brand/15 text-brand-hover"
+                          : "border-line bg-bg text-muted hover:text-ink"
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
           </div>
-          <div className="flex flex-wrap gap-2">
-            {DRILL_FOCUS_OPTIONS.map((opt) => {
-              const active = selectedDrillFocus === opt.id;
-              return (
-                <button
-                  key={opt.id}
-                  type="button"
-                  onClick={() => setSelectedDrillFocus(opt.id)}
-                  className={`rounded-xl border px-3 py-1.5 text-xs font-semibold transition ${
-                    active
-                      ? "border-brand bg-brand/15 text-brand-hover"
-                      : "border-line bg-bg text-muted hover:text-ink"
-                  }`}
-                >
-                  {opt.label}
-                </button>
-              );
-            })}
-          </div>
-        </div>
+        )}
 
         {/* Đề bài được bốc từ Kho đề chờ luyện */}
         <div className="mt-5 rounded-2xl border border-line bg-bg p-4 sm:p-5">
@@ -1019,7 +872,7 @@ export default function WritingHubPage() {
                   <button
                     type="button"
                     onClick={() =>
-                      openAddPromptModal(true, missionTaskType, selectedDrillFocus)
+                      openAddPromptModal(true, missionTaskType, effectiveDrillFocus)
                     }
                     className="rounded-full border border-line bg-card px-4 py-2 text-xs font-bold text-ink transition hover:border-brand-hover"
                   >
@@ -1029,7 +882,7 @@ export default function WritingHubPage() {
                     type="button"
                     disabled={startingSessionId === activeMissionPrompt.id}
                     onClick={() =>
-                      startSessionWithPrompt(activeMissionPrompt, selectedDrillFocus)
+                      startSessionWithPrompt(activeMissionPrompt, effectiveDrillFocus)
                     }
                     className="inline-flex items-center gap-1.5 rounded-full bg-brand px-5 py-2 text-xs font-bold text-white transition hover:bg-brand-hover hover:text-bg disabled:opacity-50"
                   >
@@ -1045,10 +898,10 @@ export default function WritingHubPage() {
             <div className="flex flex-col items-center justify-between gap-4 py-4 text-center sm:flex-row sm:text-left">
               <div>
                 <div className="font-bold text-ink">
-                  Kho đề chờ luyện của bạn đang trống (Cam kết 0% đề tự chế bởi AI)
+                  Kho đề chờ luyện của bạn đang trống
                 </div>
                 <p className="mt-1 text-xs text-muted">
-                  Hãy lưu trước vài đề thi thật từ bộ Cambridge IELTS / Actual Tests (có thể dán trực tiếp ảnh biểu đồ Task 1 bằng Ctrl+V) để mỗi ngày hệ thống tự bốc 1 đề nhắc bạn luyện tập!
+                  Hãy lưu trước vài đề từ bộ Cambridge IELTS / Actual Tests (có thể dán trực tiếp ảnh biểu đồ Task 1 bằng Ctrl+V) để hệ thống gợi ý cho bạn luyện tập mỗi ngày.
                 </p>
               </div>
               <div className="flex shrink-0 flex-wrap gap-2">
@@ -1062,7 +915,7 @@ export default function WritingHubPage() {
                 <button
                   type="button"
                   onClick={() =>
-                    openAddPromptModal(true, missionTaskType, selectedDrillFocus)
+                    openAddPromptModal(true, missionTaskType, effectiveDrillFocus)
                   }
                   className="rounded-full bg-brand px-5 py-2 text-xs font-bold text-white hover:bg-brand-hover hover:text-bg"
                 >
