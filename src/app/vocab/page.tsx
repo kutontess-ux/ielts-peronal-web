@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft, BarChart3, Bell, Bot, CalendarClock, Check, CheckCircle2, ChevronDown, ChevronUp, Clock, Folder, FolderInput, FolderOpen, FolderPlus, Layers, ListChecks, Loader2, MoreVertical, Pencil, PenLine, Plus, Repeat, Search, Settings2, Sparkles, Trash2, X,
 } from "lucide-react";
@@ -1231,7 +1231,27 @@ export default function VocabLearn() {
   const [enrollingId, setEnrollingId] = useState<string | null>(null);
   const [srsBanner, setSrsBanner] = useState<{ text: string; isErr?: boolean } | null>(null);
   const [reviewCfgOpen, setReviewCfgOpen] = useState(false);
+  const [actionsMenuOpen, setActionsMenuOpen] = useState(false);
   const [nowMs, setNowMs] = useState(0);
+  const actionsMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!actionsMenuOpen) return;
+    const onPointerDown = (e: MouseEvent) => {
+      if (actionsMenuRef.current && !actionsMenuRef.current.contains(e.target as Node)) {
+        setActionsMenuOpen(false);
+      }
+    };
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setActionsMenuOpen(false);
+    };
+    window.addEventListener("mousedown", onPointerDown);
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      window.removeEventListener("mousedown", onPointerDown);
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [actionsMenuOpen]);
 
   const studySets = useStudySets();
   const folders = useStudyFolders();
@@ -1420,7 +1440,7 @@ export default function VocabLearn() {
     selectedSet?.folderId ? folderMap.get(selectedSet.folderId) ?? null : null;
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6 sm:space-y-8">
       {selectedSet ? (
         <>
           {srsBanner && (
@@ -1484,38 +1504,56 @@ export default function VocabLearn() {
         </>
       ) : (
         <>
-      {stats.dueCount > 0 ? (
-        <Link href="/vocab/review" className="flex items-center justify-between gap-4 rounded-3xl border border-brand/60 bg-card p-6 transition hover:bg-card-hover">
-          <div>
-            <div className="flex items-center gap-2 text-sm font-semibold text-brand-hover">
-              <Bell size={16} strokeWidth={1.75} /> Nhắc ôn tập ngắt quãng
+      {/* Khung tổng quan 4 thẻ lướt ngang trên mobile, 4 cột gọn trên desktop */}
+      <section className="rounded-3xl border border-line bg-card p-3 sm:p-4">
+        <div className="flex snap-x snap-mandatory gap-2.5 overflow-x-auto pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:grid md:grid-cols-4 md:overflow-visible md:pb-0">
+          {stats.dueCount > 0 ? (
+            <Link
+              href="/vocab/review"
+              className="flex w-[210px] shrink-0 snap-start flex-col justify-between rounded-2xl border border-brand/50 bg-brand/5 p-3.5 transition hover:bg-brand/10 md:w-auto"
+            >
+              <div className="flex items-center justify-between gap-2 text-xs font-semibold text-brand-hover">
+                <span className="inline-flex items-center gap-1.5">
+                  <Bell size={14} strokeWidth={1.9} /> Cần ôn hôm nay
+                </span>
+              </div>
+              <div className="mt-1.5 flex items-baseline justify-between gap-2">
+                <span className="text-xl font-bold text-ink">{stats.dueCount} từ</span>
+                <span className="rounded-full bg-brand px-2.5 py-0.5 text-[11px] font-bold text-white">
+                  Ôn ngay
+                </span>
+              </div>
+            </Link>
+          ) : (
+            <div className="flex w-[210px] shrink-0 snap-start flex-col justify-between rounded-2xl bg-bg/75 p-3.5 md:w-auto">
+              <div className="flex items-center gap-1.5 text-xs font-semibold text-emerald-700 dark:text-emerald-300">
+                <CheckCircle2 size={14} strokeWidth={2} /> Ôn tập hôm nay
+              </div>
+              <div className="mt-1.5 text-sm font-bold text-emerald-700 dark:text-emerald-300">
+                Đã hoàn thành
+              </div>
+              <div className="text-[11px] text-muted">Không có từ đến hạn</div>
             </div>
-            <div className="mt-1 text-xl font-bold">Bạn có {stats.dueCount} từ sắp quên cần ôn hôm nay</div>
-            <div className="text-sm text-muted">Ôn đúng lúc để nhớ lâu hơn</div>
-          </div>
-          <span className="shrink-0 rounded-full bg-brand px-6 py-2.5 text-sm font-bold text-white">Ôn ngay</span>
-        </Link>
-      ) : (
-        <div className="flex items-center gap-3 rounded-3xl bg-card p-5 text-emerald-700 dark:text-emerald-300">
-          <CheckCircle2 size={22} strokeWidth={1.75} />
-          <div>
-            <div className="font-bold">Đã hoàn thành ôn tập hôm nay</div>
-            <div className="text-sm text-muted">Không có từ nào đến hạn ôn.</div>
-          </div>
-        </div>
-      )}
+          )}
 
-      <section className="grid gap-4 md:grid-cols-3">
-        {[
-          ["Học phần đã tạo", `${studySets.length} học phần`, "text-brand-hover"],
-          [isAdmin ? "Đã thuộc (≥ 7 ngày)" : "Từ đã thành thạo", `${stats.masteredCount} từ`, "text-emerald-600 dark:text-emerald-300"],
-          ["Tổng từ trong kho", `${stats.totalWords} từ`, "text-orange-600 dark:text-orange-300"],
-        ].map(([l, v, c]) => (
-          <div key={l} className="rounded-2xl bg-card p-5">
-            <div className="text-sm text-muted">{l}</div>
-            <div className={`mt-1 text-2xl font-bold ${c}`}>{v}</div>
-          </div>
-        ))}
+          {[
+            ["Học phần đã tạo", `${studySets.length} học phần`, "text-brand-hover"],
+            [
+              isAdmin ? "Đã thuộc (≥ 7 ngày)" : "Từ đã thành thạo",
+              `${stats.masteredCount} từ`,
+              "text-emerald-600 dark:text-emerald-300",
+            ],
+            ["Tổng từ trong kho", `${stats.totalWords} từ`, "text-orange-600 dark:text-orange-300"],
+          ].map(([label, val, color]) => (
+            <div
+              key={label}
+              className="flex w-[165px] shrink-0 snap-start flex-col justify-between rounded-2xl bg-bg/75 p-3.5 md:w-auto"
+            >
+              <div className="text-xs text-muted">{label}</div>
+              <div className={`mt-1.5 text-xl font-bold ${color}`}>{val}</div>
+            </div>
+          ))}
+        </div>
       </section>
 
       {/* Mục tự ôn lại tối đa 5 học phần học gần nhất (Admin thấy đủ chi tiết & cấu hình; User chỉ thấy học phần đến hạn) */}
@@ -1526,7 +1564,9 @@ export default function VocabLearn() {
               <div className="flex flex-wrap items-center gap-2">
                 <h2 className="flex items-center gap-2 text-lg font-bold">
                   <CalendarClock size={20} className="shrink-0 text-brand-hover" />
-                  Học phần cần ôn hôm nay
+                  {isAdmin && dueSetCount === 0
+                    ? "Theo dõi lịch ôn học phần"
+                    : "Học phần cần ôn hôm nay"}
                 </h2>
                 {dueSetCount > 0 && (
                   <span className="whitespace-nowrap rounded-full bg-rose-500/15 px-2.5 py-0.5 text-xs font-bold text-rose-700 dark:text-rose-300">
@@ -1791,35 +1831,13 @@ export default function VocabLearn() {
             </div>
           </div>
         ) : (
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <h2 className="text-lg font-bold">Học phần của bạn</h2>
-              <p className="text-xs text-muted">
+          <div className="mb-3">
+            <h2 className="text-lg font-bold">Học phần của bạn</h2>
+            {isAdmin && (
+              <p className="mt-0.5 text-xs text-muted">
                 Sắp xếp học phần theo thư mục giống Quizlet để luyện Flashcards và chuyển vào Ôn tập ngắt quãng.
               </p>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <Link
-                href="/vocab/stats"
-                className="inline-flex items-center gap-2 rounded-full border border-line bg-card px-4 py-2.5 text-sm font-bold text-ink transition hover:border-brand-hover"
-              >
-                <BarChart3 size={16} strokeWidth={2} /> Thống kê
-              </Link>
-              <button
-                type="button"
-                onClick={() => setFolderModal({ open: true, editing: null })}
-                className="inline-flex items-center gap-2 rounded-full border border-line bg-card px-4 py-2.5 text-sm font-bold text-ink transition hover:border-brand-hover"
-              >
-                <FolderPlus size={16} strokeWidth={2} /> Tạo thư mục
-              </button>
-              <button
-                type="button"
-                onClick={() => setModalState({ open: true, editing: null })}
-                className="inline-flex items-center gap-2 rounded-full bg-brand px-5 py-2.5 text-sm font-bold text-white hover:bg-brand-hover hover:text-bg"
-              >
-                <Plus size={16} strokeWidth={2.2} /> Tạo học phần
-              </button>
-            </div>
+            )}
           </div>
         )}
 
@@ -1843,36 +1861,86 @@ export default function VocabLearn() {
         )}
 
         {!activeFolder && (
-          <div className="mb-5 flex flex-wrap items-center justify-between gap-3 border-b border-line">
-            <div className="flex items-center gap-6">
-              <button
-                type="button"
-                onClick={() => setActiveTab("sets")}
-                className={`relative inline-flex items-center gap-2 pb-3 text-sm font-bold transition ${
-                  activeTab === "sets" ? "text-brand-hover" : "text-muted hover:text-ink"
-                }`}
-              >
-                <Layers size={16} /> Học phần ({studySets.length})
-                {activeTab === "sets" && (
-                  <span className="absolute inset-x-0 bottom-0 h-0.5 rounded-full bg-brand-hover" />
+          <div className="mb-5 space-y-3">
+            <div className="flex items-center justify-between gap-2 border-b border-line">
+              <div className="flex items-center gap-5 sm:gap-6">
+                <button
+                  type="button"
+                  onClick={() => setActiveTab("sets")}
+                  className={`relative inline-flex items-center gap-2 pb-3 text-sm font-bold transition ${
+                    activeTab === "sets" ? "text-brand-hover" : "text-muted hover:text-ink"
+                  }`}
+                >
+                  <Layers size={16} /> Học phần ({studySets.length})
+                  {activeTab === "sets" && (
+                    <span className="absolute inset-x-0 bottom-0 h-0.5 rounded-full bg-brand-hover" />
+                  )}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab("folders")}
+                  className={`relative inline-flex items-center gap-2 pb-3 text-sm font-bold transition ${
+                    activeTab === "folders" ? "text-brand-hover" : "text-muted hover:text-ink"
+                  }`}
+                >
+                  <Folder size={16} /> Thư mục ({folders.length})
+                  {activeTab === "folders" && (
+                    <span className="absolute inset-x-0 bottom-0 h-0.5 rounded-full bg-brand-hover" />
+                  )}
+                </button>
+              </div>
+
+              <div ref={actionsMenuRef} className="relative pb-2">
+                <button
+                  type="button"
+                  aria-label="Thao tác học phần và thư mục"
+                  aria-expanded={actionsMenuOpen}
+                  onClick={() => setActionsMenuOpen((v) => !v)}
+                  className={`inline-flex h-8 w-8 items-center justify-center rounded-full border transition ${
+                    actionsMenuOpen
+                      ? "border-brand bg-brand/10 text-brand-hover"
+                      : "border-line bg-card text-muted hover:border-brand-hover hover:text-ink"
+                  }`}
+                >
+                  <MoreVertical size={16} />
+                </button>
+
+                {actionsMenuOpen && (
+                  <div className="absolute right-0 top-10 z-30 w-52 rounded-2xl border border-line bg-card p-1.5 shadow-xl">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setActionsMenuOpen(false);
+                        setModalState({ open: true, editing: null });
+                      }}
+                      className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-sm font-semibold text-ink transition hover:bg-bg"
+                    >
+                      <Plus size={16} className="text-brand-hover" /> Tạo học phần
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setActionsMenuOpen(false);
+                        setFolderModal({ open: true, editing: null });
+                      }}
+                      className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-sm font-semibold text-ink transition hover:bg-bg"
+                    >
+                      <FolderPlus size={16} className="text-brand-hover" /> Tạo thư mục
+                    </button>
+                    <Link
+                      href="/vocab/stats"
+                      onClick={() => setActionsMenuOpen(false)}
+                      className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-sm font-semibold text-ink transition hover:bg-bg"
+                    >
+                      <BarChart3 size={16} className="text-brand-hover" /> Thống kê
+                    </Link>
+                  </div>
                 )}
-              </button>
-              <button
-                type="button"
-                onClick={() => setActiveTab("folders")}
-                className={`relative inline-flex items-center gap-2 pb-3 text-sm font-bold transition ${
-                  activeTab === "folders" ? "text-brand-hover" : "text-muted hover:text-ink"
-                }`}
-              >
-                <Folder size={16} /> Thư mục ({folders.length})
-                {activeTab === "folders" && (
-                  <span className="absolute inset-x-0 bottom-0 h-0.5 rounded-full bg-brand-hover" />
-                )}
-              </button>
+              </div>
             </div>
 
             {activeTab === "sets" && folders.length > 0 && studySets.length > 0 && (
-              <div className="flex gap-1.5 pb-2.5">
+              <div className="flex flex-wrap gap-1.5">
                 <button
                   type="button"
                   onClick={() => setSetFilter("all")}
