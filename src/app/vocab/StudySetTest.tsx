@@ -383,6 +383,7 @@ type TestDraft = {
   mcAnswers: Record<string, string>;
   writtenAnswers: Record<string, string>;
   matchAnswers: Record<string, Record<string, string>>;
+  updatedAt?: number;
 };
 
 function restoreTestDraft(setId: string, words: Word[]): (TestDraft & { testWords: Word[] }) | null {
@@ -544,6 +545,7 @@ export default function StudySetTest({
       mcAnswers,
       writtenAnswers,
       matchAnswers,
+      updatedAt: Date.now(),
     });
   }, [
     draftKey,

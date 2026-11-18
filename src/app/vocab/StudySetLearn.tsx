@@ -65,6 +65,7 @@ type LearnDraft = {
   phase1PassedIds: number[];
   masteredIds: number[];
   missedIds: number[];
+  updatedAt?: number;
 };
 
 function restoreLearnDraft(setId: string, words: Word[]) {
@@ -274,6 +275,7 @@ export default function StudySetLearn({
       phase1PassedIds: Array.from(phase1PassedIds),
       masteredIds: Array.from(masteredIds),
       missedIds: Array.from(missedIds),
+      updatedAt: Date.now(),
     });
   }, [
     draftKey,

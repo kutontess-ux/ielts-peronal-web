@@ -27,6 +27,7 @@ type FlashcardsDraft = {
   meaningFirst: boolean;
   star: Record<number, boolean>;
   history: { wordId: number; status: HistoryStatus }[];
+  updatedAt?: number;
 };
 
 function restoreFlashcardsDraft(setId: string | undefined, words: Word[]) {
@@ -107,6 +108,7 @@ export default function Flashcards({
       meaningFirst,
       star,
       history: history.map((h) => ({ wordId: h.word.id, status: h.status })),
+      updatedAt: Date.now(),
     });
   }, [draftKey, done, deck, idx, meaningFirst, star, history]);
 

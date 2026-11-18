@@ -1313,6 +1313,44 @@ export default function VocabLearn() {
   const wordMap = useMemo(() => new Map(words.map((w) => [w.id, w])), [words]);
   const folderMap = useMemo(() => new Map(folders.map((f) => [f.id, f])), [folders]);
   const activeFolder = activeFolderId ? folderMap.get(activeFolderId) ?? null : null;
+
+  const deepLinkAppliedRef = useRef(false);
+  useEffect(() => {
+    if (deepLinkAppliedRef.current || loading || studySets.length === 0) return;
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const qSetId = params.get("setId");
+    if (!qSetId) {
+      deepLinkAppliedRef.current = true;
+      return;
+    }
+    const targetSet = studySets.find((s) => s.id === qSetId);
+    if (!targetSet) return;
+
+    deepLinkAppliedRef.current = true;
+    const setWords = targetSet.wordIds
+      .map((id) => wordMap.get(id))
+      .filter((w): w is Word => !!w);
+    const qMode = params.get("mode");
+    const rafId = requestAnimationFrame(() => {
+      setSelectedSetId(targetSet.id);
+      if (
+        (qMode === "flashcards" ||
+          qMode === "learn" ||
+          qMode === "test" ||
+          qMode === "match") &&
+        setWords.length > 0
+      ) {
+        setActiveSession({
+          mode: qMode,
+          id: targetSet.id,
+          title: targetSet.title,
+          words: setWords,
+        });
+      }
+    });
+    return () => cancelAnimationFrame(rafId);
+  }, [loading, studySets, wordMap]);
   const selectedSet = useMemo(
     () => (selectedSetId ? studySets.find((s) => s.id === selectedSetId) ?? null : null),
     [selectedSetId, studySets]
