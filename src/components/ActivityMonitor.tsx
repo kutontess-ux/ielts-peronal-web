@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { CheckCircle2, Loader2, X, XCircle } from "lucide-react";
 import { consumeActivityLabel } from "@/lib/activity";
+import { useMe } from "@/lib/use-me";
 
 const AUTO_CLOSE_MS = 3000;
 
@@ -32,11 +33,14 @@ function describeRequest(method: string, path: string): string {
 }
 
 export default function ActivityMonitor() {
+  const { isAdmin, meLoaded } = useMe();
+  const enabled = meLoaded && isAdmin;
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [now, setNow] = useState(0);
   const [isDesktop, setIsDesktop] = useState(false);
 
   useEffect(() => {
+    if (!enabled) return;
     const mq = window.matchMedia("(min-width: 768px)");
     const update = () => {
       setIsDesktop(mq.matches);
@@ -45,16 +49,16 @@ export default function ActivityMonitor() {
     update();
     mq.addEventListener("change", update);
     return () => mq.removeEventListener("change", update);
-  }, []);
+  }, [enabled]);
 
   useEffect(() => {
-    setNow(Date.now());
+    if (!enabled) return;
     const timer = setInterval(() => setNow(Date.now()), 300);
     return () => clearInterval(timer);
-  }, []);
+  }, [enabled]);
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
+    if (!enabled || typeof window === "undefined") return;
     const origFetch = window.fetch.bind(window);
     let seq = 1;
 
@@ -150,9 +154,9 @@ export default function ActivityMonitor() {
     return () => {
       window.fetch = origFetch;
     };
-  }, []);
+  }, [enabled]);
 
-  if (!isDesktop || logs.length === 0) return null;
+  if (!enabled || !isDesktop || logs.length === 0) return null;
 
   return (
     <div className="fixed bottom-3 left-3 z-50 hidden w-60 max-w-[calc(100vw-1.5rem)] flex-col gap-1.5 md:flex">
