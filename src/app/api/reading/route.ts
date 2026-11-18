@@ -80,7 +80,11 @@ export async function POST(req: Request) {
     };
 
     const title = (body.title ?? "").trim();
-    const content = (body.content ?? "").trim();
+    const content = (body.content ?? "")
+      .replace(/^\s*lorem(?:\s+ipsum.*)?\s*$/gim, "")
+      .replace(/\blorem\b/gi, "")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim();
     if (!title || !content) {
       return NextResponse.json({ error: "Vui lòng nhập tiêu đề và nội dung bài đọc" }, { status: 400 });
     }

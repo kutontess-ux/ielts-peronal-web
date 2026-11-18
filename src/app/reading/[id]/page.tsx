@@ -5,7 +5,7 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft, BookMarked, BookmarkCheck, BookOpenCheck, Check, ChevronDown, ChevronUp, Edit3,
-  FolderPlus, HelpCircle, Languages, Loader2, Plus, RefreshCw, Sparkles,
+  FolderPlus, HelpCircle, Highlighter, Languages, Loader2, Plus, RefreshCw, Sparkles,
   SplitSquareVertical, Trash2, Volume2, X, Zap,
 } from "lucide-react";
 import { cleanTerm, normKey, possibleLemmas } from "@/lib/normalize";
@@ -54,6 +54,8 @@ type VocabLookup = {
   synonyms: string[];
   existsInBank: boolean;
   bankSource?: string | null;
+  ai_picked?: boolean;
+  manual_lookup?: boolean;
 };
 
 type SentenceBreakdown = {
@@ -136,6 +138,7 @@ function ReadingDetailInner() {
   const [notes, setNotes] = useState<ReadingNote[]>([]);
   const [passageTranslation, setPassageTranslation] = useState<PassageTranslation | null>(null);
   const [showBilingual, setShowBilingual] = useState(false);
+  const [highlightAiVocab, setHighlightAiVocab] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -156,6 +159,7 @@ function ReadingDetailInner() {
   const [vocabNoteId, setVocabNoteId] = useState<number | null>(null);
   const [vocabCached, setVocabCached] = useState(false);
   const [contextSentenceVi, setContextSentenceVi] = useState("");
+  const [contextBoxExpanded, setContextBoxExpanded] = useState(false);
   const [lastLookupTerm, setLastLookupTerm] = useState<{ term: string; sentence: string; paragraphIdx?: number }>({
     term: "",
     sentence: "",
@@ -257,15 +261,23 @@ function ReadingDetailInner() {
     if (!passage?.content) return [];
     return passage.content
       .split(/\n+/)
-      .map((p) => p.trim())
-      .filter(Boolean);
+      .map((p) => p.replace(/\blorem(?:\s+ipsum)?\b/gi, "").trim())
+      .filter((p) => p.length > 0 && !/^lorem$/i.test(p));
   }, [passage]);
 
   const vocabNotes = useMemo(() => notes.filter((n) => n.kind === "vocab"), [notes]);
+  const aiPickedCount = useMemo(
+    () =>
+      vocabNotes.filter((n) => {
+        const rj = (n.result_json ?? {}) as Record<string, unknown>;
+        return rj.manual_lookup !== true;
+      }).length,
+    [vocabNotes]
+  );
 
   // Tìm bản dịch tiếng Việt của một câu tiếng Anh từ dữ liệu dịch toàn bài đã lưu (0 token)
   const findSentenceTranslationVi = useCallback(
-    (sentenceEn: string, paragraphIdx?: number): string => {
+    (sentenceEn: string, paragraphIdx?: number, paragraphEn?: string): string => {
       if (!passageTranslation) return "";
       const cleanSent = sentenceEn.trim().toLowerCase();
       if (cleanSent && Array.isArray(passageTranslation.sentences)) {
@@ -285,7 +297,16 @@ function ReadingDetailInner() {
         Array.isArray(passageTranslation.paragraphs) &&
         passageTranslation.paragraphs[paragraphIdx]
       ) {
-        return passageTranslation.paragraphs[paragraphIdx];
+        const paraVi = passageTranslation.paragraphs[paragraphIdx];
+        if (paragraphEn && sentenceEn) {
+          const enSentences = paragraphEn.match(/[^.!?]+[.!?]+(?:\s|$)|[^.!?]+$/g)?.map((s) => s.trim()).filter(Boolean) ?? [];
+          const viSentences = paraVi.match(/[^.!?]+[.!?]+(?:\s|$)|[^.!?]+$/g)?.map((s) => s.trim()).filter(Boolean) ?? [];
+          const sIdx = enSentences.findIndex((s) => s.toLowerCase().includes(cleanSent.slice(0, Math.min(30, cleanSent.length))));
+          if (sIdx >= 0 && viSentences.length === enSentences.length && viSentences[sIdx]) {
+            return viSentences[sIdx];
+          }
+        }
+        return paraVi;
       }
       return "";
     },
@@ -314,6 +335,17 @@ function ReadingDetailInner() {
       });
     },
     [vocabNotes]
+  );
+
+  // Kiểm tra từ có nằm trong danh sách từ phổ biến/hay dùng do AI chọn ra hay không
+  const isAiPickedWord = useCallback(
+    (rawTerm: string): boolean => {
+      const matched = findLocalVocabNote(rawTerm);
+      if (!matched) return false;
+      const rj = (matched.result_json ?? {}) as Record<string, unknown>;
+      return rj.manual_lookup !== true;
+    },
+    [findLocalVocabNote]
   );
 
   const handleFullTranslate = useCallback(
@@ -644,15 +676,23 @@ function ReadingDetailInner() {
     }
   }
 
-  function handleWordClick(word: string, paragraph: string, paragraphIdx?: number) {
-    if (activeTool !== "vocab") return;
+  function handleWordClick(
+    word: string,
+    paragraph: string,
+    paragraphIdx?: number,
+    forceVocabTool = false
+  ) {
+    if (activeTool !== "vocab" && !forceVocabTool) return;
     const sel = window.getSelection()?.toString().trim() ?? "";
     if (sel && sel.split(/\s+/).length > 1) return;
 
     const clean = word.replace(/^[^a-zA-Z]+|[^a-zA-Z'-]+$/g, "");
     if (!clean) return;
+    if (activeTool !== "vocab" && forceVocabTool) {
+      setActiveTool("vocab");
+    }
     const sentence = extractSentenceFromParagraph(paragraph, clean);
-    lookupTerm(clean, sentence, false, paragraphIdx);
+    void lookupTerm(clean, sentence, false, paragraphIdx);
   }
 
   async function analyzeSentence(e?: React.FormEvent, forceAi = false) {
@@ -755,22 +795,45 @@ function ReadingDetailInner() {
     const hasQuote = quote.length > 12 && p.toLowerCase().includes(quote.toLowerCase());
     const translatedParagraph = passageTranslation?.paragraphs?.[idx] ?? "";
 
+    // Làm nổi bật tiêu đề chính / tiêu đề phụ đầu bài đọc nếu người dùng dán cả tiêu đề vào nội dung
+    const isTitleLine =
+      idx === 0 &&
+      p.length <= 90 &&
+      !/[.!?]$/.test(p) &&
+      (p.toLowerCase() === passage?.title.trim().toLowerCase() || p.split(/\s+/).length <= 10);
+    const isSubtitleLine =
+      idx === 1 &&
+      p.length <= 140 &&
+      !/[.]$/.test(p) &&
+      !/^[A-Z]\.\s/.test(p) &&
+      p.split(/\s+/).length <= 22;
+
+    const textStyleClass = isTitleLine
+      ? "text-2xl sm:text-3xl font-extrabold tracking-tight text-ink leading-snug"
+      : isSubtitleLine
+      ? "text-base sm:text-lg font-semibold text-muted leading-relaxed"
+      : "text-[15.5px] leading-8 text-ink";
+
     let englishNode: React.ReactNode;
 
-    if (activeTool === "vocab") {
+    if (activeTool === "vocab" || highlightAiVocab) {
       const tokens = p.split(/(\s+)/);
       englishNode = (
-        <p onMouseUp={() => handleParagraphMouseUp(p, idx)} className="text-[15.5px] leading-8 text-ink">
+        <p onMouseUp={() => handleParagraphMouseUp(p, idx)} className={textStyleClass}>
           {tokens.map((tok, i) => {
             if (/^\s+$/.test(tok)) return tok;
-            const isPreCached = !!findLocalVocabNote(tok);
+            const aiHighlighted = highlightAiVocab && isAiPickedWord(tok);
             return (
               <span
                 key={i}
-                onClick={() => handleWordClick(tok, p, idx)}
-                className={`cursor-pointer rounded px-0.5 transition hover:bg-brand/25 hover:text-ink ${
-                  isPreCached
-                    ? "underline decoration-emerald-500/45 decoration-dotted underline-offset-4"
+                onClick={() => handleWordClick(tok, p, idx, aiHighlighted)}
+                className={`rounded px-0.5 transition ${
+                  activeTool === "vocab" || aiHighlighted
+                    ? "cursor-pointer hover:bg-brand/25 hover:text-ink"
+                    : ""
+                } ${
+                  aiHighlighted
+                    ? "bg-amber-400/25 font-medium text-amber-950 ring-1 ring-amber-500/40 dark:bg-amber-400/20 dark:text-amber-200 dark:ring-amber-400/35"
                     : ""
                 }`}
               >
@@ -786,7 +849,7 @@ function ReadingDetailInner() {
       const match = p.slice(pos, pos + quote.length);
       const after = p.slice(pos + quote.length);
       englishNode = (
-        <p onMouseUp={() => handleParagraphMouseUp(p, idx)} className="text-[15.5px] leading-8 text-ink">
+        <p onMouseUp={() => handleParagraphMouseUp(p, idx)} className={textStyleClass}>
           {before}
           <mark className="rounded bg-amber-300/45 px-1 py-0.5 text-amber-950 ring-1 ring-amber-500/50 dark:bg-amber-400/25 dark:text-amber-100 dark:ring-amber-400/50">
             {match}
@@ -796,7 +859,7 @@ function ReadingDetailInner() {
       );
     } else {
       englishNode = (
-        <p onMouseUp={() => handleParagraphMouseUp(p, idx)} className="text-[15.5px] leading-8 text-ink">
+        <p onMouseUp={() => handleParagraphMouseUp(p, idx)} className={textStyleClass}>
           {p}
         </p>
       );
@@ -841,11 +904,11 @@ function ReadingDetailInner() {
     <div className="space-y-5">
       {/* Header */}
       <div className="flex flex-wrap items-start justify-between gap-4 border-b border-line pb-4">
-        <div className="space-y-1.5">
+        <div className="space-y-2">
           <Link href="/reading" className="inline-flex items-center gap-1.5 text-xs font-semibold text-muted hover:text-ink">
             <ArrowLeft size={14} /> Lịch sử bài đọc
           </Link>
-          <h1 className="text-xl font-bold tracking-tight sm:text-2xl">{passage.title}</h1>
+          <h1 className="text-2xl font-extrabold tracking-tight text-ink sm:text-3xl lg:text-4xl">{passage.title}</h1>
           <div className="flex flex-wrap items-center gap-2 text-xs text-muted">
             {passage.source_name && (
               <span className="rounded-lg bg-card px-2.5 py-1 font-medium text-ink">{passage.source_name}</span>
@@ -915,6 +978,21 @@ function ReadingDetailInner() {
             >
               {fullTranslateLoading ? <Loader2 size={15} className="animate-spin" /> : <Sparkles size={15} />}
               {fullTranslateLoading ? "Đang dịch toàn bài..." : "Dịch toàn bài & Soạn từ (1 request)"}
+            </button>
+          )}
+
+          {aiPickedCount > 0 && (
+            <button
+              onClick={() => setHighlightAiVocab((v) => !v)}
+              className={`inline-flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-semibold transition ${
+                highlightAiVocab
+                  ? "bg-amber-500 text-amber-950"
+                  : "border border-amber-500/40 bg-amber-500/10 text-amber-800 hover:bg-amber-500/20 dark:text-amber-300"
+              }`}
+              title="Bật/tắt tô màu những từ vựng IELTS phổ biến, hay dùng được AI chọn trong bài"
+            >
+              <Highlighter size={15} />{" "}
+              {highlightAiVocab ? `Đang tô màu từ AI (${aiPickedCount})` : `Tô màu từ hay dùng (${aiPickedCount})`}
             </button>
           )}
 
@@ -1011,9 +1089,21 @@ function ReadingDetailInner() {
       {activeTool === "vocab" && (
         <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-brand/40 bg-brand/10 px-4 py-2.5 text-xs text-brand-hover">
           <span>
-            <b>Chế độ Tra từ đang bật:</b> Chạm vào bất kỳ từ nào trong bài để xem nghĩa + câu dịch ngữ cảnh. Các từ có gạch chân chấm xanh đã được dịch sẵn (0ms, 0 token).
+            <b>Chế độ Tra từ đang bật:</b> Chạm vào bất kỳ từ nào trong bài để xem nghĩa + câu dịch ngữ cảnh (hệ thống tự động lấy từ bộ nhớ nếu đã có, 0 token).
           </span>
           <div className="flex items-center gap-3">
+            {aiPickedCount > 0 && (
+              <button
+                onClick={() => setHighlightAiVocab((v) => !v)}
+                className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1 font-semibold transition ${
+                  highlightAiVocab
+                    ? "bg-amber-500 text-amber-950"
+                    : "bg-amber-500/20 text-amber-800 hover:bg-amber-500/30 dark:text-amber-200"
+                }`}
+              >
+                <Highlighter size={12} /> {highlightAiVocab ? "Tắt tô màu từ AI" : "Bật tô màu từ hay dùng"}
+              </button>
+            )}
             <button
               onClick={() => setMobileSheetOpen(true)}
               className="rounded-lg bg-brand/20 px-2.5 py-1 font-semibold text-brand-hover lg:hidden"
@@ -1161,14 +1251,34 @@ function ReadingDetailInner() {
                   )}
 
                   {vocabLoading && (
-                    <div className="space-y-2 py-4 text-xs text-muted">
+                    <div className="space-y-2.5 py-3 text-xs text-muted">
                       <div className="flex items-center gap-2 text-sm">
                         <Loader2 size={16} className="animate-spin" /> Đang kiểm tra Kho & tra nghĩa...
                       </div>
                       {contextSentenceVi && (
                         <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-2.5 text-ink">
-                          <span className="font-semibold text-emerald-700 dark:text-emerald-300">Dịch câu ngữ cảnh (0 token): </span>
-                          {contextSentenceVi}
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="font-semibold text-emerald-700 dark:text-emerald-300">
+                              Dịch câu ngữ cảnh (0 token)
+                            </span>
+                            {contextSentenceVi.length > 120 && (
+                              <button
+                                type="button"
+                                onClick={() => setContextBoxExpanded((v) => !v)}
+                                className="inline-flex items-center gap-0.5 text-[11px] font-semibold text-emerald-700 hover:underline dark:text-emerald-300"
+                              >
+                                {contextBoxExpanded ? "Thu gọn" : "Mở rộng"}
+                                {contextBoxExpanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                              </button>
+                            )}
+                          </div>
+                          <p
+                            className={`mt-1 leading-relaxed ${
+                              !contextBoxExpanded && contextSentenceVi.length > 120 ? "line-clamp-2" : ""
+                            }`}
+                          >
+                            {contextSentenceVi}
+                          </p>
                         </div>
                       )}
                     </div>
@@ -1272,18 +1382,37 @@ function ReadingDetailInner() {
                         </div>
                       )}
 
-                      {(vocabResult.example || vocabResult.example_vi || contextSentenceVi) && (
-                        <div className="space-y-1 rounded-xl border border-line/70 bg-card/70 p-2.5 text-xs">
-                          {vocabResult.example && (
-                            <div className="italic text-ink/90">“{vocabResult.example}”</div>
-                          )}
-                          {(vocabResult.example_vi || contextSentenceVi) && (
-                            <div className="text-emerald-700 dark:text-emerald-300">
-                              → {vocabResult.example_vi || contextSentenceVi}
+                      {(vocabResult.example || vocabResult.example_vi || contextSentenceVi) && (() => {
+                        const transText = vocabResult.example_vi || contextSentenceVi || "";
+                        const isLong = (vocabResult.example?.length ?? 0) + transText.length > 180;
+                        return (
+                          <div className="space-y-1 rounded-xl border border-line/70 bg-card/70 p-2.5 text-xs">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-[11px] font-semibold text-muted">Câu ngữ cảnh & Dịch nghĩa</span>
+                              {isLong && (
+                                <button
+                                  type="button"
+                                  onClick={() => setContextBoxExpanded((v) => !v)}
+                                  className="inline-flex items-center gap-0.5 text-[11px] font-semibold text-brand-hover hover:underline"
+                                >
+                                  {contextBoxExpanded ? "Thu gọn" : "Mở rộng"}
+                                  {contextBoxExpanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                                </button>
+                              )}
                             </div>
-                          )}
-                        </div>
-                      )}
+                            {vocabResult.example && (
+                              <div className={`italic text-ink/90 ${!contextBoxExpanded && isLong ? "line-clamp-2" : ""}`}>
+                                “{vocabResult.example}”
+                              </div>
+                            )}
+                            {transText && (
+                              <div className={`text-emerald-700 dark:text-emerald-300 ${!contextBoxExpanded && isLong ? "line-clamp-2" : ""}`}>
+                                → {transText}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
 
                       {vocabResult.collocations?.length > 0 && (
                         <div className="text-xs">

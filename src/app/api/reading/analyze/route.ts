@@ -209,6 +209,8 @@ Phân tích từ/cụm từ tiếng Anh dựa trên câu ngữ cảnh. Trả v�
         example_vi: ai.example_vi ?? "",
         existsInBank: !!existing,
         bankSource: existing?.source ?? null,
+        ai_picked: false,
+        manual_lookup: true,
       };
 
       let savedNote = null;
@@ -292,9 +294,9 @@ Phân tích từ/cụm từ tiếng Anh dựa trên câu ngữ cảnh. Trả v�
         "vocab",
         `Bạn là chuyên gia IELTS Reading và từ điển học thuật cho người Việt (B1 -> 6.5+).
 Nhiệm vụ của bạn trong 1 lần xử lý duy nhất cho bài đọc dưới đây:
-1. "paragraphs": Dịch toàn bộ bài đọc sang tiếng Việt tự nhiên, chuẩn học thuật. Mảng "paragraphs" PHẢI có đúng ${rawParagraphs.length} phần tử tương ứng chính xác với từng đoạn từ [Đoạn 1] đến [Đoạn ${rawParagraphs.length}].
-2. "sentences": Tách các câu quan trọng trong bài kèm bản dịch tiếng Việt tương ứng {"en": "câu gốc tiếng Anh trong bài", "vi": "bản dịch tiếng Việt sát nghĩa"}.
-3. "items": Trích xuất từ 28 đến 40 từ vựng / cụm từ (collocations/phrasal verbs) mức B1-C2 đáng tra cứu nhất trải đều khắp bài đọc để học viên bấm vào từ nào trong bài cũng có sẵn nghĩa mà không tốn thêm request.
+1. "paragraphs": Dịch toàn bộ bài đọc sang tiếng Việt tự nhiên, chuẩn học thuật. Mảng "paragraphs" PHẢI có đúng ${rawParagraphs.length} phần tử tương ứng chính xác với từng đoạn từ [Đoạn 1] đến [Đoạn ${rawParagraphs.length}]. Nếu có đoạn chỉ là ký tự giữ chỗ "lorem", trả về chuỗi rỗng "" cho đoạn đó.
+2. "sentences": Tách từng câu trong bài đọc kèm bản dịch tiếng Việt tương ứng {"en": "câu gốc tiếng Anh trong bài", "vi": "bản dịch tiếng Việt sát nghĩa"} để khi học viên bấm vào từ nào cũng hiện đúng câu dịch đó.
+3. "items": Trích xuất từ 28 đến 40 từ vựng / cụm từ PHỔ BIẾN, HAY DÙNG và hữu ích nhất trong IELTS Academic (mức B1-C2) trải đều khắp bài đọc để học viên bấm tra không tốn thêm request và có thể bật tô màu các từ hay dùng này.
 Với mỗi từ trong "items":
 - "lemma": dạng nguyên mẫu chữ thường (vd: "cultivated" -> "cultivate").
 - "surface": từ/cụm từ đúng như hình thái xuất hiện trong bài (vd: "cultivated").
@@ -315,10 +317,15 @@ Trả về đúng định dạng JSON: {"paragraphs": ["..."], "sentences": [{"e
       );
 
       const translationPayload: PassageTranslationPayload = {
-        paragraphs: Array.isArray(ai.paragraphs) ? ai.paragraphs.map((p) => String(p ?? "").trim()) : [],
+        paragraphs: Array.isArray(ai.paragraphs)
+          ? ai.paragraphs.map((p) => {
+              const s = String(p ?? "").trim();
+              return /^lorem(?:\s+ipsum.*)?$/i.test(s) ? "" : s;
+            })
+          : [],
         sentences: Array.isArray(ai.sentences)
           ? ai.sentences
-              .filter((s) => s && s.en && s.vi)
+              .filter((s) => s && s.en && s.vi && !/^lorem$/i.test(String(s.en).trim()))
               .map((s) => ({ en: String(s.en).trim(), vi: String(s.vi).trim() }))
           : [],
         translated_at: new Date().toISOString(),
@@ -387,6 +394,8 @@ Trả về đúng định dạng JSON: {"paragraphs": ["..."], "sentences": [{"e
           norm_key: nk,
           existsInBank: !!bankSource,
           bankSource,
+          ai_picked: true,
+          manual_lookup: false,
         };
         if (body.passageId && nk && !existingNoteKeys.has(nk)) {
           existingNoteKeys.add(nk);
