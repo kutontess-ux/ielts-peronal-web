@@ -111,14 +111,21 @@ create table if not exists public.study_folders (
 );
 
 create table if not exists public.study_sets (
-  id         text primary key,
-  title      text not null,
-  desc_text  text not null default '',
-  word_ids   bigint[] not null default '{}',
-  folder_id  text references public.study_folders(id) on delete set null,
-  created_at timestamptz not null default now()
+  id              text primary key,
+  title           text not null,
+  desc_text       text not null default '',
+  word_ids        bigint[] not null default '{}',
+  folder_id       text references public.study_folders(id) on delete set null,
+  last_studied_at timestamptz,
+  next_review_at  timestamptz,
+  review_level    smallint not null default 0 check (review_level between 0 and 5),
+  study_count     int not null default 0,
+  last_score      smallint check (last_score is null or (last_score between 0 and 100)),
+  created_at      timestamptz not null default now()
 );
-create index if not exists study_sets_folder_idx on public.study_sets (folder_id);
+create index if not exists study_sets_folder_idx       on public.study_sets (folder_id);
+create index if not exists study_sets_last_studied_idx on public.study_sets (last_studied_at desc);
+create index if not exists study_sets_next_review_idx  on public.study_sets (next_review_at asc);
 
 alter table public.study_folders enable row level security;
 alter table public.study_sets    enable row level security;

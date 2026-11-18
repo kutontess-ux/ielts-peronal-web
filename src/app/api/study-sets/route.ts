@@ -15,7 +15,23 @@ type SetRow = {
   word_ids: number[];
   folder_id: string | null;
   created_at: string;
+  last_studied_at?: string | null;
+  next_review_at?: string | null;
+  review_level?: number | null;
+  study_count?: number | null;
+  last_score?: number | null;
 };
+
+const SET_SELECT_FULL =
+  "id,title,desc_text,word_ids,folder_id,created_at,last_studied_at,next_review_at,review_level,study_count,last_score";
+const SET_SELECT_LEGACY = "id,title,desc_text,word_ids,folder_id,created_at";
+
+function isMissingColumnError(err: { code?: string; message?: string } | null | undefined): boolean {
+  if (!err) return false;
+  if (err.code === "42703" || err.code === "PGRST204") return true;
+  const msg = (err.message ?? "").toLowerCase();
+  return msg.includes("does not exist") || msg.includes("schema cache") || msg.includes("could not find");
+}
 
 function mapFolder(r: FolderRow) {
   return {
@@ -34,6 +50,11 @@ function mapSet(r: SetRow) {
     wordIds: (r.word_ids ?? []).map(Number),
     folderId: r.folder_id ?? null,
     createdAt: r.created_at,
+    lastStudiedAt: r.last_studied_at ?? null,
+    nextReviewAt: r.next_review_at ?? null,
+    reviewLevel: typeof r.review_level === "number" ? r.review_level : 0,
+    studyCount: typeof r.study_count === "number" ? r.study_count : 0,
+    lastScore: typeof r.last_score === "number" ? r.last_score : null,
   };
 }
 
@@ -51,17 +72,30 @@ export async function GET() {
         .order("created_at", { ascending: false }),
       ctx.db
         .from("study_sets")
-        .select("id,title,desc_text,word_ids,folder_id,created_at")
+        .select(SET_SELECT_FULL)
         .eq("user_id", ctx.user.id)
         .order("created_at", { ascending: false }),
     ]);
 
     if (foldersRes.error) throw new Error(foldersRes.error.message);
-    if (setsRes.error) throw new Error(setsRes.error.message);
+
+    let setRows = setsRes.data as SetRow[] | null;
+    if (setsRes.error) {
+      if (!isMissingColumnError(setsRes.error)) {
+        throw new Error(setsRes.error.message);
+      }
+      const fallbackRes = await ctx.db
+        .from("study_sets")
+        .select(SET_SELECT_LEGACY)
+        .eq("user_id", ctx.user.id)
+        .order("created_at", { ascending: false });
+      if (fallbackRes.error) throw new Error(fallbackRes.error.message);
+      setRows = fallbackRes.data as SetRow[] | null;
+    }
 
     return NextResponse.json({
       folders: (foldersRes.data as FolderRow[] ?? []).map(mapFolder),
-      sets: (setsRes.data as SetRow[] ?? []).map(mapSet),
+      sets: (setRows ?? []).map(mapSet),
     });
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message }, { status: 500 });
@@ -97,7 +131,7 @@ export async function POST(req: Request) {
       }
 
       if (sets.length > 0) {
-        const setRows = sets.map((s: Record<string, unknown>) => ({
+        const setRowsLegacy = sets.map((s: Record<string, unknown>) => ({
           id: `${userId.slice(0, 8)}_${String(s.id)}`,
           user_id: userId,
           title: String(s.title ?? "").trim(),
@@ -106,10 +140,24 @@ export async function POST(req: Request) {
           folder_id: s.folderId ? `${userId.slice(0, 8)}_${String(s.folderId)}` : null,
           created_at: String(s.createdAt ?? new Date().toISOString()),
         }));
+        const setRowsFull = sets.map((s: Record<string, unknown>, idx: number) => ({
+          ...setRowsLegacy[idx],
+          last_studied_at: s.lastStudiedAt ? String(s.lastStudiedAt) : null,
+          next_review_at: s.nextReviewAt ? String(s.nextReviewAt) : null,
+          review_level: typeof s.reviewLevel === "number" ? s.reviewLevel : 0,
+          study_count: typeof s.studyCount === "number" ? s.studyCount : 0,
+          last_score: typeof s.lastScore === "number" ? s.lastScore : null,
+        }));
         const { error } = await ctx.db
           .from("study_sets")
-          .upsert(setRows, { onConflict: "id", ignoreDuplicates: true });
-        if (error) throw new Error(error.message);
+          .upsert(setRowsFull, { onConflict: "id", ignoreDuplicates: true });
+        if (error) {
+          if (!isMissingColumnError(error)) throw new Error(error.message);
+          const { error: legacyErr } = await ctx.db
+            .from("study_sets")
+            .upsert(setRowsLegacy, { onConflict: "id", ignoreDuplicates: true });
+          if (legacyErr) throw new Error(legacyErr.message);
+        }
       }
 
       return NextResponse.json({ ok: true });
@@ -117,19 +165,67 @@ export async function POST(req: Request) {
 
     if (action === "create_set") {
       const s = body.set as Record<string, unknown>;
+      const baseRow = {
+        id: String(s.id),
+        user_id: userId,
+        title: String(s.title ?? "").trim(),
+        desc_text: String(s.desc ?? "").trim(),
+        word_ids: Array.isArray(s.wordIds) ? s.wordIds.map(Number) : [],
+        folder_id: s.folderId ? String(s.folderId) : null,
+        created_at: String(s.createdAt ?? new Date().toISOString()),
+      };
       const { error } = await ctx.db.from("study_sets").upsert(
         {
-          id: String(s.id),
-          user_id: userId,
-          title: String(s.title ?? "").trim(),
-          desc_text: String(s.desc ?? "").trim(),
-          word_ids: Array.isArray(s.wordIds) ? s.wordIds.map(Number) : [],
-          folder_id: s.folderId ? String(s.folderId) : null,
-          created_at: String(s.createdAt ?? new Date().toISOString()),
+          ...baseRow,
+          last_studied_at: s.lastStudiedAt ? String(s.lastStudiedAt) : null,
+          next_review_at: s.nextReviewAt ? String(s.nextReviewAt) : null,
+          review_level: typeof s.reviewLevel === "number" ? s.reviewLevel : 0,
+          study_count: typeof s.studyCount === "number" ? s.studyCount : 0,
+          last_score: typeof s.lastScore === "number" ? s.lastScore : null,
         },
         { onConflict: "id" }
       );
-      if (error) throw new Error(error.message);
+      if (error) {
+        if (!isMissingColumnError(error)) throw new Error(error.message);
+        const { error: legacyErr } = await ctx.db.from("study_sets").upsert(baseRow, { onConflict: "id" });
+        if (legacyErr) throw new Error(legacyErr.message);
+      }
+      return NextResponse.json({ ok: true });
+    }
+
+    if (action === "record_review") {
+      const id = String(body.id ?? "").trim();
+      if (!id) {
+        return NextResponse.json({ error: "Thiếu id học phần" }, { status: 400 });
+      }
+      const lastStudiedAt = String(body.lastStudiedAt ?? new Date().toISOString());
+      const nextReviewAt = body.nextReviewAt ? String(body.nextReviewAt) : null;
+      const reviewLevel = Math.max(0, Math.min(5, Math.round(Number(body.reviewLevel ?? 1))));
+      const studyCount = Math.max(1, Math.round(Number(body.studyCount ?? 1)));
+      const lastScore =
+        typeof body.lastScore === "number" && Number.isFinite(body.lastScore)
+          ? Math.max(0, Math.min(100, Math.round(body.lastScore)))
+          : null;
+
+      const { error } = await ctx.db
+        .from("study_sets")
+        .update({
+          last_studied_at: lastStudiedAt,
+          next_review_at: nextReviewAt,
+          review_level: reviewLevel,
+          study_count: studyCount,
+          last_score: lastScore,
+        })
+        .eq("id", id)
+        .eq("user_id", userId);
+
+      if (error) {
+        if (isMissingColumnError(error)) {
+          // DB chưa chạy migration mới -> giữ ok để client vẫn hoạt động với localStorage
+          return NextResponse.json({ ok: true, localOnly: true });
+        }
+        throw new Error(error.message);
+      }
       return NextResponse.json({ ok: true });
     }
 

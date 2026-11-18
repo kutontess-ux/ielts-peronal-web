@@ -11,6 +11,7 @@ export type Word = {
   topic: string;
   awl?: boolean;
   source?: string;
+  synonyms?: string[];
 };
 
 const w = (

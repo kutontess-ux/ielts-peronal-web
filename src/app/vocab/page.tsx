@@ -3,27 +3,33 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  ArrowLeft, BarChart3, Bell, Bot, Check, CheckCircle2, ChevronRight, Folder, FolderInput, FolderOpen, FolderPlus, Layers, ListChecks, Loader2, Pencil, Plus, Repeat, Search, Sparkles, Trash2, X,
+  ArrowLeft, BarChart3, Bell, Bot, CalendarClock, Check, CheckCircle2, Clock, Folder, FolderInput, FolderOpen, FolderPlus, Layers, ListChecks, Loader2, Pencil, Plus, Repeat, Search, Settings2, Sparkles, Trash2, X,
 } from "lucide-react";
 import { levelColor, type Word } from "@/lib/mock";
 import { enrollWordsInSrs } from "@/lib/srs";
 import { notifyDueUpdated } from "@/lib/due-events";
 import { setActivityLabel } from "@/lib/activity";
 import {
+  completeStudySetReview,
   createStudyFolder,
   createStudySet,
   deleteStudyFolder,
   deleteStudySet,
+  getRecentReviewQueue,
+  getStudySetReviewStatus,
   moveStudySetToFolder,
+  saveStudySetReviewConfig,
   setFolderStudySets,
   updateStudyFolder,
   updateStudySet,
   useStudyFolders,
+  useStudySetReviewConfig,
   useStudySets,
   type StudyFolder,
   type StudySet,
 } from "@/lib/study-sets";
 import Flashcards from "./Flashcards";
+import StudySetLearn from "./StudySetLearn";
 
 const LEVELS = ["A2", "B1", "B2", "C1", "C2"] as const;
 
@@ -937,7 +943,12 @@ export default function VocabLearn() {
   const [words, setWords] = useState<Word[]>([]);
   const [stats, setStats] = useState({ dueCount: 0, totalWords: 0, masteredCount: 0 });
   const [loading, setLoading] = useState(true);
-  const [activeSet, setActiveSet] = useState<{ id?: string; title: string; words: Word[] } | null>(null);
+  const [activeSession, setActiveSession] = useState<{
+    mode: "flashcards" | "learn";
+    id: string;
+    title: string;
+    words: Word[];
+  } | null>(null);
   const [modalState, setModalState] = useState<{ open: boolean; editing: StudySet | null }>({
     open: false,
     editing: null,
@@ -952,9 +963,12 @@ export default function VocabLearn() {
   const [setFilter, setSetFilter] = useState<"all" | "unfoldered">("all");
   const [enrollingId, setEnrollingId] = useState<string | null>(null);
   const [srsBanner, setSrsBanner] = useState<{ text: string; isErr?: boolean } | null>(null);
+  const [reviewCfgOpen, setReviewCfgOpen] = useState(false);
+  const [nowMs, setNowMs] = useState(0);
 
   const studySets = useStudySets();
   const folders = useStudyFolders();
+  const reviewConfig = useStudySetReviewConfig();
 
   const reloadWords = useCallback(async (): Promise<Word[]> => {
     const [wJson, rJson] = await Promise.all([
@@ -972,6 +986,9 @@ export default function VocabLearn() {
   }, []);
 
   useEffect(() => {
+    const rafId = requestAnimationFrame(() => {
+      setNowMs(Date.now());
+    });
     Promise.all([
       fetch("/api/words", { cache: "no-store" }).then((r) => r.json()),
       fetch("/api/reviews", { cache: "no-store" }).then((r) => r.json()),
@@ -986,11 +1003,29 @@ export default function VocabLearn() {
         });
       })
       .finally(() => setLoading(false));
+    return () => cancelAnimationFrame(rafId);
   }, []);
 
   const wordMap = useMemo(() => new Map(words.map((w) => [w.id, w])), [words]);
   const folderMap = useMemo(() => new Map(folders.map((f) => [f.id, f])), [folders]);
   const activeFolder = activeFolderId ? folderMap.get(activeFolderId) ?? null : null;
+
+  const recentQueue = useMemo(() => {
+    if (!nowMs) return [];
+    return getRecentReviewQueue(studySets, nowMs);
+  }, [studySets, nowMs]);
+
+  const recentSetIds = useMemo(
+    () => new Set(recentQueue.map((s) => s.id)),
+    [recentQueue]
+  );
+
+  const dueSetCount = useMemo(() => {
+    if (!nowMs) return 0;
+    return recentQueue.filter(
+      (s) => s.nextReviewAt && new Date(s.nextReviewAt).getTime() <= nowMs
+    ).length;
+  }, [recentQueue, nowMs]);
 
   const folderSetCounts = useMemo(() => {
     const counts = new Map<string, number>();
@@ -1040,14 +1075,42 @@ export default function VocabLearn() {
     }
   };
 
-  if (activeSet) {
+  const handleSessionCompleted = useCallback(
+    (setId: string, scorePct: number) => {
+      const result = completeStudySetReview(setId, scorePct);
+      setNowMs(Date.now());
+      void reloadWords();
+      return result;
+    },
+    [reloadWords]
+  );
+
+  if (activeSession) {
+    if (activeSession.mode === "learn") {
+      return (
+        <StudySetLearn
+          setId={activeSession.id}
+          title={activeSession.title}
+          words={activeSession.words}
+          wordPool={words}
+          onBack={() => setActiveSession(null)}
+          onSwitchToFlashcards={() =>
+            setActiveSession((prev) => (prev ? { ...prev, mode: "flashcards" } : null))
+          }
+          onCompleted={(res) => handleSessionCompleted(activeSession.id, res.scorePct)}
+        />
+      );
+    }
     return (
       <Flashcards
-        setId={activeSet.id}
-        title={activeSet.title}
-        words={activeSet.words}
-        onBack={() => setActiveSet(null)}
-        onCompleted={() => void reloadWords()}
+        setId={activeSession.id}
+        title={activeSession.title}
+        words={activeSession.words}
+        onBack={() => setActiveSession(null)}
+        onSwitchToLearn={() =>
+          setActiveSession((prev) => (prev ? { ...prev, mode: "learn" } : null))
+        }
+        onCompleted={(res) => handleSessionCompleted(activeSession.id, res.scorePct)}
       />
     );
   }
@@ -1087,6 +1150,200 @@ export default function VocabLearn() {
           </div>
         ))}
       </section>
+
+      {/* Mục tự ôn lại tối đa 5 học phần học gần nhất (ưu tiên học lâu nhất trước) */}
+      {!activeFolder && studySets.length > 0 && (
+        <section className="rounded-3xl border border-line bg-card p-5 sm:p-6">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <h2 className="flex items-center gap-2 text-lg font-bold">
+                  <CalendarClock size={20} className="text-brand-hover" />
+                  Học phần cần ôn hôm nay
+                </h2>
+                {dueSetCount > 0 && (
+                  <span className="rounded-full bg-rose-500/15 px-2.5 py-0.5 text-xs font-bold text-rose-700 dark:text-rose-300">
+                    {dueSetCount} đến hạn
+                  </span>
+                )}
+              </div>
+              <p className="mt-0.5 text-xs text-muted">
+                Theo dõi tối đa 5 học phần học gần nhất · Ưu tiên nhắc học phần đã học lâu nhất trước.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setReviewCfgOpen((v) => !v)}
+              className="inline-flex items-center gap-1.5 rounded-full border border-line bg-bg px-3.5 py-1.5 text-xs font-bold text-muted transition hover:border-brand-hover hover:text-ink"
+            >
+              <Settings2 size={14} />
+              {reviewConfig.mode === "srs"
+                ? "Chu kỳ: 1→3→7→14→30 ngày"
+                : `Cố định: ${reviewConfig.fixedDays} ngày`}
+            </button>
+          </div>
+
+          {reviewCfgOpen && (
+            <div className="mt-4 rounded-2xl border border-line bg-bg p-4 text-xs">
+              <div className="font-bold text-ink">Cài đặt lịch tự ôn lại học phần</div>
+              <div className="mt-2.5 flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() =>
+                    saveStudySetReviewConfig({ ...reviewConfig, mode: "srs" })
+                  }
+                  className={`rounded-full px-3.5 py-1.5 font-bold transition ${
+                    reviewConfig.mode === "srs"
+                      ? "bg-brand text-white"
+                      : "bg-card text-muted hover:text-ink"
+                  }`}
+                >
+                  Tự động giãn cách (1 → 3 → 7 → 14 → 30 ngày)
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    saveStudySetReviewConfig({ ...reviewConfig, mode: "fixed" })
+                  }
+                  className={`rounded-full px-3.5 py-1.5 font-bold transition ${
+                    reviewConfig.mode === "fixed"
+                      ? "bg-brand text-white"
+                      : "bg-card text-muted hover:text-ink"
+                  }`}
+                >
+                  Cố định số ngày
+                </button>
+              </div>
+              {reviewConfig.mode === "fixed" && (
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <span className="text-muted">Nhắc lại sau:</span>
+                  {[1, 2, 3, 5, 7, 14].map((d) => (
+                    <button
+                      key={d}
+                      type="button"
+                      onClick={() =>
+                        saveStudySetReviewConfig({ mode: "fixed", fixedDays: d })
+                      }
+                      className={`rounded-full px-3 py-1 font-bold transition ${
+                        reviewConfig.fixedDays === d
+                          ? "bg-ink text-bg"
+                          : "bg-card text-muted hover:text-ink"
+                      }`}
+                    >
+                      {d} ngày
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {recentQueue.length === 0 ? (
+            <div className="mt-4 rounded-2xl bg-bg/70 px-4 py-4 text-xs text-muted">
+              Chưa có học phần nào được học gần đây. Hãy bấm <b>Lật thẻ</b> hoặc <b>Luyện tập</b> ở một học phần bên dưới — sau khi học xong hệ thống sẽ tự xếp lịch ôn lại tại đây.
+            </div>
+          ) : (
+            <div className="mt-4 space-y-2.5">
+              {recentQueue.map((s, index) => {
+                const setWords = s.wordIds
+                  .map((id) => wordMap.get(id))
+                  .filter((w): w is Word => !!w);
+                const status = getStudySetReviewStatus(s, recentSetIds, nowMs);
+                const setFolder = s.folderId ? folderMap.get(s.folderId) : null;
+                return (
+                  <div
+                    key={s.id}
+                    className={`flex flex-wrap items-center justify-between gap-3 rounded-2xl border px-4 py-3 transition ${
+                      status.isDue
+                        ? "border-brand/50 bg-brand/5"
+                        : "border-line/70 bg-bg/60"
+                    }`}
+                  >
+                    <div className="flex min-w-0 flex-1 items-start gap-3">
+                      <span
+                        className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-xl text-xs font-bold ${
+                          status.isDue
+                            ? "bg-brand text-white"
+                            : "bg-card text-muted"
+                        }`}
+                      >
+                        #{index + 1}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="truncate font-bold text-ink">{s.title}</span>
+                          <span
+                            className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-bold ${
+                              status.isDue
+                                ? "bg-rose-500/15 text-rose-700 dark:text-rose-300"
+                                : "bg-sky-500/15 text-sky-700 dark:text-sky-300"
+                            }`}
+                          >
+                            <Clock size={11} /> {status.badgeText}
+                          </span>
+                          {setFolder && (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-card px-2 py-0.5 text-[10px] font-semibold text-muted">
+                              <Folder size={10} /> {setFolder.name}
+                            </span>
+                          )}
+                        </div>
+                        <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted">
+                          <span>{setWords.length} thẻ</span>
+                          {status.lastStudiedLabel && <span>{status.lastStudiedLabel}</span>}
+                          {typeof s.lastScore === "number" && (
+                            <span>Lần trước: {s.lastScore}%</span>
+                          )}
+                          {(s.reviewLevel ?? 0) > 0 && (
+                            <span>Mức {s.reviewLevel}/5</span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex shrink-0 items-center gap-2">
+                      <button
+                        type="button"
+                        disabled={setWords.length === 0}
+                        onClick={() =>
+                          setActiveSession({
+                            mode: "learn",
+                            id: s.id,
+                            title: s.title,
+                            words: setWords,
+                          })
+                        }
+                        className={`inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-xs font-bold transition disabled:opacity-40 ${
+                          status.isDue
+                            ? "bg-brand text-white hover:bg-brand-hover hover:text-bg"
+                            : "bg-card text-ink hover:bg-brand hover:text-white"
+                        }`}
+                      >
+                        <Sparkles size={13} /> Luyện tập
+                      </button>
+                      <button
+                        type="button"
+                        disabled={setWords.length === 0}
+                        onClick={() =>
+                          setActiveSession({
+                            mode: "flashcards",
+                            id: s.id,
+                            title: s.title,
+                            words: setWords,
+                          })
+                        }
+                        className="inline-flex items-center gap-1.5 rounded-full border border-line bg-card px-3.5 py-2 text-xs font-bold text-muted transition hover:border-brand-hover hover:text-ink disabled:opacity-40"
+                      >
+                        <Layers size={13} /> Lật thẻ
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </section>
+      )}
 
       <section>
         {activeFolder ? (
@@ -1391,10 +1648,15 @@ export default function VocabLearn() {
                 .filter((w): w is Word => !!w);
               const busy = enrollingId === s.id;
               const setFolder = s.folderId ? folderMap.get(s.folderId) : null;
+              const reviewStatus = nowMs
+                ? getStudySetReviewStatus(s, recentSetIds, nowMs)
+                : null;
               return (
                 <div
                   key={s.id}
-                  className="group flex flex-col justify-between rounded-2xl border-2 border-transparent bg-card p-5 transition hover:border-brand-hover"
+                  className={`group flex flex-col justify-between rounded-2xl border-2 bg-card p-5 transition hover:border-brand-hover ${
+                    reviewStatus?.isDue ? "border-brand/50" : "border-transparent"
+                  }`}
                 >
                   <div>
                     <div className="flex items-start gap-3">
@@ -1430,6 +1692,29 @@ export default function VocabLearn() {
                         </button>
                       </div>
                     </div>
+
+                    {reviewStatus && (
+                      <div className="mt-3 flex flex-wrap items-center gap-1.5">
+                        <span
+                          className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-bold ${
+                            reviewStatus.kind === "due"
+                              ? "bg-rose-500/15 text-rose-700 dark:text-rose-300"
+                              : reviewStatus.kind === "upcoming"
+                                ? "bg-sky-500/15 text-sky-700 dark:text-sky-300"
+                                : reviewStatus.kind === "archived-studied"
+                                  ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300"
+                                  : "bg-bg text-muted"
+                          }`}
+                        >
+                          <Clock size={11} /> {reviewStatus.badgeText}
+                        </span>
+                        {reviewStatus.inRecentQueue && reviewStatus.lastStudiedLabel && (
+                          <span className="text-[11px] text-muted">
+                            {reviewStatus.lastStudiedLabel}
+                          </span>
+                        )}
+                      </div>
+                    )}
 
                     {folders.length > 0 && (
                       <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -1470,15 +1755,40 @@ export default function VocabLearn() {
                   </div>
 
                   <div className="mt-4 space-y-2">
-                    <button
-                      type="button"
-                      disabled={setWords.length === 0}
-                      onClick={() => setActiveSet({ id: s.id, title: s.title, words: setWords })}
-                      className="flex w-full items-center justify-between rounded-xl bg-bg px-4 py-2.5 text-sm font-bold text-ink transition hover:bg-brand hover:text-white disabled:opacity-40"
-                    >
-                      <span>{setWords.length > 0 ? "Học thẻ ngay" : "Chưa có thẻ hợp lệ"}</span>
-                      <ChevronRight size={16} />
-                    </button>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        disabled={setWords.length === 0}
+                        onClick={() =>
+                          setActiveSession({
+                            mode: "flashcards",
+                            id: s.id,
+                            title: s.title,
+                            words: setWords,
+                          })
+                        }
+                        className="flex items-center justify-center gap-1.5 rounded-xl bg-bg px-3 py-2.5 text-xs font-bold text-ink transition hover:bg-brand hover:text-white disabled:opacity-40 sm:text-sm"
+                      >
+                        <Layers size={14} />
+                        <span>{setWords.length > 0 ? "Lật thẻ" : "Trống"}</span>
+                      </button>
+                      <button
+                        type="button"
+                        disabled={setWords.length === 0}
+                        onClick={() =>
+                          setActiveSession({
+                            mode: "learn",
+                            id: s.id,
+                            title: s.title,
+                            words: setWords,
+                          })
+                        }
+                        className="flex items-center justify-center gap-1.5 rounded-xl bg-brand/15 px-3 py-2.5 text-xs font-bold text-brand-hover transition hover:bg-brand hover:text-white disabled:opacity-40 sm:text-sm"
+                      >
+                        <Sparkles size={14} />
+                        <span>Luyện tập</span>
+                      </button>
+                    </div>
                     {setWords.length > 0 && (
                       <button
                         type="button"

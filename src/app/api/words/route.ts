@@ -14,6 +14,7 @@ function mapWord(r: {
   topic: string | null;
   is_awl: boolean;
   source: string | null;
+  synonyms?: string[] | null;
 }): Word {
   return {
     id: r.id,
@@ -27,6 +28,7 @@ function mapWord(r: {
     topic: r.topic ?? "Other",
     awl: r.is_awl,
     source: r.source ?? "import",
+    synonyms: Array.isArray(r.synonyms) ? r.synonyms : [],
   };
 }
 
@@ -51,7 +53,7 @@ export async function GET(req: Request) {
 
       let query = ctx.db
         .from("words")
-        .select("id,lemma,ipa,pos,meaning_vi,definition_en,example,cefr_level,topic,is_awl,source", {
+        .select("id,lemma,ipa,pos,meaning_vi,definition_en,example,cefr_level,topic,is_awl,source,synonyms", {
           count: "exact",
         })
         .eq("status", "approved");
@@ -81,7 +83,7 @@ export async function GET(req: Request) {
     for (let from = 0; from < 20000; from += CHUNK) {
       const { data, error } = await ctx.db
         .from("words")
-        .select("id,lemma,ipa,pos,meaning_vi,definition_en,example,cefr_level,topic,is_awl,source")
+        .select("id,lemma,ipa,pos,meaning_vi,definition_en,example,cefr_level,topic,is_awl,source,synonyms")
         .eq("status", "approved")
         .order("created_at", { ascending: false })
         .range(from, from + CHUNK - 1);

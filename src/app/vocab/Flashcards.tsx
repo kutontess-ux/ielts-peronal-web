@@ -3,17 +3,26 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import {
-  ArrowLeft, ArrowLeftRight, Check, Home, PartyPopper,
-  Pause, Play, Repeat, RotateCcw, Shuffle, Star, Undo2, Volume2, X,
+  ArrowLeft, ArrowLeftRight, ArrowRight, CalendarClock, Check, Home, PartyPopper,
+  Pause, Play, Repeat, RotateCcw, Shuffle, Sparkles, Star, Undo2, Volume2, X,
 } from "lucide-react";
 import { levelColor, type Word } from "@/lib/mock";
 import { enrollWordsInSrs } from "@/lib/srs";
 import { notifyDueUpdated } from "@/lib/due-events";
-import { recordStudySetSession } from "@/lib/study-sets";
+import { recordStudySetSession, type StudySetReviewResult } from "@/lib/study-sets";
+
+type HistoryStatus = "known" | "unknown" | "viewed";
 
 type HistoryEntry = {
   word: Word;
-  known: boolean;
+  status: HistoryStatus;
+};
+
+export type FlashcardCompletionPayload = {
+  knownCount: number;
+  unknownCount: number;
+  totalCount: number;
+  scorePct: number;
 };
 
 export default function Flashcards({
@@ -21,13 +30,15 @@ export default function Flashcards({
   title,
   words,
   onBack,
+  onSwitchToLearn,
   onCompleted,
 }: {
   setId?: string;
   title: string;
   words: Word[];
   onBack: () => void;
-  onCompleted?: () => void;
+  onSwitchToLearn?: () => void;
+  onCompleted?: (result: FlashcardCompletionPayload) => StudySetReviewResult | null | void;
 }) {
   const [deck, setDeck] = useState<Word[]>(words);
   const [idx, setIdx] = useState(0);
@@ -37,12 +48,14 @@ export default function Flashcards({
   const [star, setStar] = useState<Record<number, boolean>>({});
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [srsMsg, setSrsMsg] = useState("");
+  const [reviewSchedule, setReviewSchedule] = useState<StudySetReviewResult | null>(null);
 
   const done = idx >= deck.length;
   const card = deck[idx];
 
-  const knownList = history.filter((h) => h.known).map((h) => h.word);
-  const unknownList = history.filter((h) => !h.known).map((h) => h.word);
+  const knownList = history.filter((h) => h.status === "known").map((h) => h.word);
+  const unknownList = history.filter((h) => h.status === "unknown").map((h) => h.word);
+  const classifiedCount = knownList.length + unknownList.length;
 
   const speak = useCallback((text: string) => {
     if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
@@ -52,40 +65,55 @@ export default function Flashcards({
     speechSynthesis.speak(u);
   }, []);
 
-  const syncDeckToSrs = useCallback(
-    async (wordList: Word[]) => {
-      try {
-        const ids = wordList.map((w) => w.id);
-        const res = await enrollWordsInSrs(ids);
-        notifyDueUpdated();
-        onCompleted?.();
-        setSrsMsg(
-          res.enrolled > 0
-            ? res.deferred > 0
-              ? `Đã chuyển ${res.enrolled} từ vào Ôn tập (${res.deferred} từ mới được dời sang từ ${res.scheduledFromDay ?? "ngày sau"} vì hôm nay đã đủ chỉ tiêu — nên ôn hết từ cũ trước)`
-              : `Đã chuyển ${res.enrolled} từ mới vào Ôn tập ngắt quãng`
-            : "Các từ trong học phần này đã nằm sẵn trong Ôn tập ngắt quãng"
-        );
-      } catch {
-        // bỏ qua nếu chưa kết nối DB
-      }
-    },
-    [onCompleted]
-  );
+  const syncDeckToSrs = useCallback(async (wordList: Word[]) => {
+    try {
+      const ids = wordList.map((w) => w.id);
+      const res = await enrollWordsInSrs(ids);
+      notifyDueUpdated();
+      setSrsMsg(
+        res.enrolled > 0
+          ? res.deferred > 0
+            ? `Đã chuyển ${res.enrolled} từ vào Ôn tập (${res.deferred} từ mới được dời sang từ ${res.scheduledFromDay ?? "ngày sau"} vì hôm nay đã đủ chỉ tiêu — nên ôn hết từ cũ trước)`
+            : `Đã chuyển ${res.enrolled} từ mới vào Ôn tập ngắt quãng`
+          : "Các từ trong học phần này đã nằm sẵn trong Ôn tập ngắt quãng"
+      );
+    } catch {
+      // bỏ qua nếu chưa kết nối DB
+    }
+  }, []);
 
   const mark = useCallback(
-    (known: boolean) => {
+    (status: HistoryStatus) => {
       if (!card) return;
+      const nextHistory = [...history, { word: card, status }];
       const nextIdx = idx + 1;
-      setHistory((h) => [...h, { word: card, known }]);
+      setHistory(nextHistory);
       setFlipped(false);
       setIdx(nextIdx);
       if (nextIdx >= deck.length) {
+        const knownCount = nextHistory.filter((h) => h.status === "known").length;
+        const unknownCount = nextHistory.filter((h) => h.status === "unknown").length;
+        const totalClassified = knownCount + unknownCount;
+        // Nếu người dùng chỉ lật xem thẻ mà không bấm phân loại Đã biết/Chưa biết -> coi như hoàn thành hợp lệ (100%)
+        const scorePct =
+          totalClassified === 0
+            ? 100
+            : Math.round((knownCount / totalClassified) * 100);
+
         recordStudySetSession({ setId, title, wordCount: deck.length });
+        const schedule = onCompleted?.({
+          knownCount,
+          unknownCount,
+          totalCount: deck.length,
+          scorePct,
+        });
+        if (schedule) {
+          setReviewSchedule(schedule);
+        }
         void syncDeckToSrs(deck);
       }
     },
-    [card, idx, deck, setId, title, syncDeckToSrs]
+    [card, history, idx, deck, setId, title, onCompleted, syncDeckToSrs]
   );
 
   const undo = useCallback(() => {
@@ -107,6 +135,7 @@ export default function Flashcards({
     setFlipped(false);
     setAutoplay(false);
     setSrsMsg("");
+    setReviewSchedule(null);
   };
 
   const restart = (subset?: Word[]) => {
@@ -116,6 +145,7 @@ export default function Flashcards({
     setFlipped(false);
     setAutoplay(false);
     setSrsMsg("");
+    setReviewSchedule(null);
   };
 
   // Phím tắt giống Quizlet
@@ -127,10 +157,13 @@ export default function Flashcards({
         setFlipped((f) => !f);
       } else if (e.code === "ArrowRight" || e.key === "2") {
         e.preventDefault();
-        mark(true);
+        mark("known");
       } else if (e.code === "ArrowLeft" || e.key === "1") {
         e.preventDefault();
-        mark(false);
+        mark("unknown");
+      } else if (e.key === "Enter") {
+        e.preventDefault();
+        mark("viewed");
       } else if (e.key.toLowerCase() === "a" && card) {
         speak(card.word);
       } else if (e.key.toLowerCase() === "s" && card) {
@@ -149,7 +182,7 @@ export default function Flashcards({
       if (!flipped) {
         setFlipped(true);
       } else {
-        mark(true);
+        mark("viewed");
       }
     }, flipped ? 2600 : 2200);
     return () => clearTimeout(t);
@@ -157,7 +190,10 @@ export default function Flashcards({
 
   // Màn hình chúc mừng khi học xong
   if (done) {
-    const pct = deck.length ? Math.round((knownList.length / deck.length) * 100) : 100;
+    const pct =
+      classifiedCount === 0
+        ? 100
+        : Math.round((knownList.length / classifiedCount) * 100);
     const starredWords = deck.filter((w) => star[w.id]);
 
     return (
@@ -166,8 +202,15 @@ export default function Flashcards({
         <h1 className="mt-4 text-2xl font-bold sm:text-3xl">Chúc mừng! Bạn đã học xong bộ thẻ</h1>
         <p className="mt-2 text-muted">{title} · {deck.length} thẻ</p>
 
+        {reviewSchedule && (
+          <div className="mx-auto mt-4 inline-flex flex-wrap items-center justify-center gap-2 rounded-2xl bg-brand/15 px-4 py-2 text-xs font-bold text-brand-hover">
+            <CalendarClock size={15} />
+            Đã hẹn tự ôn lại học phần sau {reviewSchedule.intervalDays} ngày (Mức {reviewSchedule.nextLevel}/5)
+          </div>
+        )}
+
         {srsMsg && (
-          <div className="mx-auto mt-4 inline-flex items-center gap-2 rounded-full bg-emerald-500/15 px-4 py-1.5 text-xs font-semibold text-emerald-700 dark:bg-emerald-400/15 dark:text-emerald-300">
+          <div className="mx-auto mt-2.5 inline-flex items-center gap-2 rounded-full bg-emerald-500/15 px-4 py-1.5 text-xs font-semibold text-emerald-700 dark:bg-emerald-400/15 dark:text-emerald-300">
             <Repeat size={14} /> {srsMsg}
           </div>
         )}
@@ -175,11 +218,17 @@ export default function Flashcards({
         <div className="mt-6 grid grid-cols-3 gap-2.5 sm:gap-4">
           <div className="rounded-2xl bg-bg p-3 sm:p-4">
             <div className="text-xl font-bold text-brand-hover sm:text-2xl">{pct}%</div>
-            <div className="mt-1 text-xs text-muted">Hoàn thành</div>
+            <div className="mt-1 text-xs text-muted">
+              {classifiedCount === 0 ? "Đã xem hết" : "Hoàn thành"}
+            </div>
           </div>
           <div className="rounded-2xl bg-emerald-500/15 p-3 sm:p-4 dark:bg-emerald-400/10">
-            <div className="text-xl font-bold text-emerald-700 sm:text-2xl dark:text-emerald-300">{knownList.length}</div>
-            <div className="mt-1 text-xs text-emerald-700/80 dark:text-emerald-300/80">Đã biết</div>
+            <div className="text-xl font-bold text-emerald-700 sm:text-2xl dark:text-emerald-300">
+              {classifiedCount === 0 ? deck.length : knownList.length}
+            </div>
+            <div className="mt-1 text-xs text-emerald-700/80 dark:text-emerald-300/80">
+              {classifiedCount === 0 ? "Đã lật thẻ" : "Đã biết"}
+            </div>
           </div>
           <div className="rounded-2xl bg-orange-500/15 p-3 sm:p-4 dark:bg-orange-400/10">
             <div className="text-xl font-bold text-orange-700 sm:text-2xl dark:text-orange-300">{unknownList.length}</div>
@@ -194,6 +243,15 @@ export default function Flashcards({
               className="inline-flex items-center gap-2 rounded-full bg-brand px-6 py-3 text-sm font-bold text-white hover:bg-brand-hover hover:text-bg"
             >
               <RotateCcw size={16} /> Chỉ học lại {unknownList.length} từ chưa biết
+            </button>
+          )}
+          {onSwitchToLearn && (
+            <button
+              type="button"
+              onClick={onSwitchToLearn}
+              className="inline-flex items-center gap-2 rounded-full bg-brand/15 px-6 py-3 text-sm font-bold text-brand-hover hover:bg-brand hover:text-white"
+            >
+              <Sparkles size={16} /> Luyện tập (Trắc nghiệm / Gõ từ)
             </button>
           )}
           <Link
@@ -279,7 +337,16 @@ export default function Flashcards({
         <div className="font-bold">
           {idx + 1} / {deck.length}
         </div>
-        <div className="flex items-center gap-2 text-xs font-bold sm:gap-3">
+        <div className="flex flex-wrap items-center gap-2 text-xs font-bold sm:gap-2.5">
+          {onSwitchToLearn && (
+            <button
+              type="button"
+              onClick={onSwitchToLearn}
+              className="inline-flex items-center gap-1 rounded-full border border-line bg-card px-3 py-1 font-semibold text-muted hover:border-brand-hover hover:text-ink"
+            >
+              <Sparkles size={13} /> Luyện tập
+            </button>
+          )}
           <span className="rounded-full bg-orange-500/15 px-3 py-1 text-orange-700 dark:bg-orange-400/15 dark:text-orange-300">Chưa biết: {unknownList.length}</span>
           <span className="rounded-full bg-emerald-500/15 px-3 py-1 text-emerald-700 dark:bg-emerald-400/15 dark:text-emerald-300">Đã biết: {knownList.length}</span>
         </div>
@@ -361,16 +428,24 @@ export default function Flashcards({
           </button>
         </div>
 
-        <div className="order-first flex w-full items-center justify-center gap-2.5 sm:order-none sm:w-auto sm:gap-3">
+        <div className="order-first flex w-full items-center justify-center gap-2 sm:order-none sm:w-auto sm:gap-2.5">
           <button
-            onClick={() => mark(false)}
-            className="inline-flex flex-1 items-center justify-center gap-2 rounded-full border-2 border-orange-500/50 px-4 py-2.5 text-sm font-bold text-orange-700 hover:bg-orange-500/10 dark:border-orange-400/60 dark:text-orange-300 dark:hover:bg-orange-400/10 sm:flex-initial sm:px-6 sm:text-base"
+            onClick={() => mark("unknown")}
+            className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-full border-2 border-orange-500/50 px-3.5 py-2.5 text-sm font-bold text-orange-700 hover:bg-orange-500/10 dark:border-orange-400/60 dark:text-orange-300 dark:hover:bg-orange-400/10 sm:flex-initial sm:px-5 sm:text-base"
           >
             <X size={18} strokeWidth={2} /> Chưa biết
           </button>
           <button
-            onClick={() => mark(true)}
-            className="inline-flex flex-1 items-center justify-center gap-2 rounded-full border-2 border-emerald-500/50 px-4 py-2.5 text-sm font-bold text-emerald-700 hover:bg-emerald-500/10 dark:border-emerald-400/60 dark:text-emerald-300 dark:hover:bg-emerald-400/10 sm:flex-initial sm:px-6 sm:text-base"
+            type="button"
+            title="Qua thẻ tiếp theo không cần phân loại (Enter)"
+            onClick={() => mark("viewed")}
+            className="inline-flex items-center justify-center gap-1 rounded-full border border-line bg-card px-3.5 py-2.5 text-sm font-semibold text-muted hover:border-brand-hover hover:text-ink"
+          >
+            Tiếp <ArrowRight size={15} />
+          </button>
+          <button
+            onClick={() => mark("known")}
+            className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-full border-2 border-emerald-500/50 px-3.5 py-2.5 text-sm font-bold text-emerald-700 hover:bg-emerald-500/10 dark:border-emerald-400/60 dark:text-emerald-300 dark:hover:bg-emerald-400/10 sm:flex-initial sm:px-5 sm:text-base"
           >
             <Check size={18} strokeWidth={2} /> Đã biết
           </button>
@@ -397,7 +472,7 @@ export default function Flashcards({
       </div>
 
       <p className="mt-4 text-center text-xs text-muted">
-        Phím tắt: Space lật thẻ · ← Chưa biết · → Đã biết · A nghe phát âm · S gắn sao
+        Phím tắt: Space lật thẻ · ← Chưa biết · → Đã biết · Enter xem tiếp · A phát âm · S gắn sao
       </p>
     </div>
   );
