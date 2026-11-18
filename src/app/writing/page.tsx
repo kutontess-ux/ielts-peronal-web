@@ -9,6 +9,8 @@ import {
   Calendar,
   Check,
   CheckCircle2,
+  ChevronDown,
+  ChevronUp,
   ClipboardPaste,
   Clock,
   Copy,
@@ -251,8 +253,19 @@ export default function WritingHubPage() {
     "all" | "grammar" | "lexical" | "coherence" | "task_response"
   >("all");
 
-  // Lightbox xem ảnh biểu đồ
+  // Lightbox xem ảnh biểu đồ & trạng thái đóng/mở nội dung đề
   const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
+  const [showMissionPromptText, setShowMissionPromptText] = useState(false);
+  const [expandedPromptIds, setExpandedPromptIds] = useState<Set<number>>(() => new Set());
+
+  function togglePromptExpand(id: number) {
+    setExpandedPromptIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
 
   // Modal thêm đề / bắt đầu viết ngay
   const [modalOpen, setModalOpen] = useState(false);
@@ -893,7 +906,18 @@ export default function WritingHubPage() {
           {activeMissionPrompt ? (
             <div className="space-y-4">
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="flex flex-wrap items-center gap-2">
+                <div
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => setShowMissionPromptText((v) => !v)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      setShowMissionPromptText((v) => !v);
+                    }
+                  }}
+                  className="flex flex-1 cursor-pointer flex-wrap items-center gap-2"
+                >
                   <span
                     className={`rounded-lg px-2.5 py-0.5 text-xs font-bold ${
                       activeMissionPrompt.task_type === "task1"
@@ -906,17 +930,28 @@ export default function WritingHubPage() {
                   </span>
                   {activeMissionPrompt.source_name && (
                     <span className="rounded-lg bg-card px-2.5 py-0.5 text-xs font-semibold text-ink">
-                      Nguồn: {activeMissionPrompt.source_name}
+                      {activeMissionPrompt.source_name}
                     </span>
                   )}
                   <span className="rounded-lg bg-card px-2.5 py-0.5 text-xs text-muted">
-                    Chủ đề: {activeMissionPrompt.topic}
+                    {activeMissionPrompt.topic}
                   </span>
                   {activeMissionPrompt.has_ai_guide && (
                     <span className="rounded-lg bg-emerald-500/15 px-2.5 py-0.5 text-xs font-semibold text-emerald-700 dark:text-emerald-300">
-                      ⚡ Đã lưu sẵn dàn ý AI (0 token)
+                      ⚡ Đã có dàn ý AI
                     </span>
                   )}
+                  <span className="inline-flex items-center gap-1 rounded-lg border border-line bg-card px-2.5 py-0.5 text-xs font-semibold text-brand-hover hover:border-brand-hover">
+                    {showMissionPromptText ? (
+                      <>
+                        Ẩn đề <ChevronUp size={13} />
+                      </>
+                    ) : (
+                      <>
+                        Xem đề <ChevronDown size={13} />
+                      </>
+                    )}
+                  </span>
                 </div>
 
                 {matchingMissionPrompts.length > 1 && (
@@ -927,44 +962,47 @@ export default function WritingHubPage() {
                   >
                     {matchingMissionPrompts.map((p) => (
                       <option key={p.id} value={p.id}>
-                        Đổi đề trong kho: {p.source_name ? `[${p.source_name}] ` : ""}
-                        {p.title.slice(0, 55)}
+                        Đổi đề: {p.source_name ? `[${p.source_name}] ` : ""}
+                        {p.task_type === "task1" ? "Task 1" : "Task 2"} ·{" "}
+                        {getSubTypeMeta(p.sub_type, p.task_type).shortLabel} ({p.topic})
                       </option>
                     ))}
                   </select>
                 )}
               </div>
 
-              <div className="flex flex-col gap-4 md:flex-row">
-                <div className="flex-1">
-                  <p className="whitespace-pre-line text-sm leading-relaxed text-ink">
-                    {activeMissionPrompt.prompt_text}
-                  </p>
-                  {activeMissionPrompt.chart_notes && (
-                    <p className="mt-2 text-xs text-muted">
-                      Ghi chú số liệu: {activeMissionPrompt.chart_notes}
+              {showMissionPromptText && (
+                <div className="flex flex-col gap-4 rounded-xl border border-line bg-card p-3.5 md:flex-row">
+                  <div className="flex-1">
+                    <p className="whitespace-pre-line text-sm leading-relaxed text-ink">
+                      {activeMissionPrompt.prompt_text}
                     </p>
+                    {activeMissionPrompt.chart_notes && (
+                      <p className="mt-2 text-xs text-muted">
+                        Ghi chú số liệu: {activeMissionPrompt.chart_notes}
+                      </p>
+                    )}
+                  </div>
+                  {activeMissionPrompt.image_data_url && (
+                    <div className="shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => setPreviewImageUrl(activeMissionPrompt.image_data_url)}
+                        className="group relative overflow-hidden rounded-xl border border-line bg-white p-1"
+                      >
+                        <img
+                          src={activeMissionPrompt.image_data_url}
+                          alt="Task 1 Chart"
+                          className="h-28 w-44 object-contain"
+                        />
+                        <span className="absolute inset-x-0 bottom-0 bg-black/65 py-1 text-center text-[10px] font-semibold text-white opacity-90 group-hover:opacity-100">
+                          Bấm phóng to biểu đồ
+                        </span>
+                      </button>
+                    </div>
                   )}
                 </div>
-                {activeMissionPrompt.image_data_url && (
-                  <div className="shrink-0">
-                    <button
-                      type="button"
-                      onClick={() => setPreviewImageUrl(activeMissionPrompt.image_data_url)}
-                      className="group relative overflow-hidden rounded-xl border border-line bg-white p-1"
-                    >
-                      <img
-                        src={activeMissionPrompt.image_data_url}
-                        alt="Task 1 Chart"
-                        className="h-28 w-44 object-contain"
-                      />
-                      <span className="absolute inset-x-0 bottom-0 bg-black/65 py-1 text-center text-[10px] font-semibold text-white opacity-90 group-hover:opacity-100">
-                        Bấm phóng to biểu đồ
-                      </span>
-                    </button>
-                  </div>
-                )}
-              </div>
+              )}
 
               <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line pt-3">
                 <div className="flex flex-wrap items-center gap-4 text-xs text-muted">
@@ -1136,21 +1174,34 @@ export default function WritingHubPage() {
                 </p>
               </div>
             ) : (
-              <div className="grid gap-4 md:grid-cols-2">
+              <div className="grid gap-3 md:grid-cols-2">
                 {filteredPrompts.map((p) => {
                   const subMeta = getSubTypeMeta(p.sub_type, p.task_type);
                   const defaultMicroFocus: DrillFocus =
                     p.task_type === "task1" ? "task1_overview" : "body_peel_1";
+                  const isExpanded = expandedPromptIds.has(p.id);
                   return (
                     <div
                       key={p.id}
-                      className="flex flex-col justify-between rounded-2xl border border-line bg-card p-5 transition hover:border-brand-hover/60"
+                      className="flex flex-col justify-between rounded-2xl border border-line bg-card p-4 transition hover:border-brand-hover/60"
                     >
                       <div>
-                        <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div
+                          role="button"
+                          tabIndex={0}
+                          onClick={() => togglePromptExpand(p.id)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" || e.key === " ") {
+                              e.preventDefault();
+                              togglePromptExpand(p.id);
+                            }
+                          }}
+                          className="flex cursor-pointer flex-wrap items-center justify-between gap-2"
+                          title="Bấm để xem hoặc ẩn nội dung đề bài"
+                        >
                           <div className="flex flex-wrap items-center gap-1.5">
                             <span
-                              className={`rounded-lg px-2 py-0.5 text-[11px] font-bold ${
+                              className={`rounded-lg px-2.5 py-1 text-xs font-bold ${
                                 p.task_type === "task1"
                                   ? "bg-sky-500/15 text-sky-700 dark:text-sky-300"
                                   : "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300"
@@ -1159,16 +1210,16 @@ export default function WritingHubPage() {
                               {p.task_type === "task1" ? "Task 1" : "Task 2"} · {subMeta.shortLabel}
                             </span>
                             {p.source_name && (
-                              <span className="rounded-lg bg-bg px-2 py-0.5 text-[11px] font-semibold text-ink">
+                              <span className="rounded-lg bg-bg px-2.5 py-1 text-xs font-semibold text-ink">
                                 {p.source_name}
                               </span>
                             )}
-                            <span className="rounded-lg bg-bg px-2 py-0.5 text-[11px] text-muted">
+                            <span className="rounded-lg bg-bg px-2.5 py-1 text-xs text-muted">
                               {p.topic}
                             </span>
-                            {p.has_ai_guide && (
-                              <span className="rounded-lg bg-emerald-500/15 px-2 py-0.5 text-[11px] font-semibold text-emerald-700 dark:text-emerald-300">
-                                ⚡ Có dàn ý AI
+                            {p.image_data_url && (
+                              <span className="inline-flex items-center gap-1 rounded-lg bg-bg px-2 py-1 text-[11px] font-semibold text-brand-hover">
+                                <ImageIcon size={12} /> Có biểu đồ
                               </span>
                             )}
                           </div>
@@ -1188,9 +1239,15 @@ export default function WritingHubPage() {
                                 ? `Đã luyện (${p.times_practiced})`
                                 : "Chờ luyện"}
                             </span>
+                            <span className="inline-flex items-center gap-0.5 rounded-lg bg-bg px-2 py-1 text-[11px] font-semibold text-muted hover:text-ink">
+                              {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                            </span>
                             <button
                               type="button"
-                              onClick={() => handleDeletePrompt(p.id)}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDeletePrompt(p.id);
+                              }}
                               className="rounded-lg p-1 text-muted hover:bg-rose-500/10 hover:text-rose-500"
                               title="Xoá đề"
                             >
@@ -1199,34 +1256,49 @@ export default function WritingHubPage() {
                           </div>
                         </div>
 
-                        <p className="mt-3 line-clamp-4 whitespace-pre-line text-sm leading-relaxed text-ink">
-                          {p.prompt_text}
-                        </p>
-
-                        {p.image_data_url && (
-                          <div className="mt-3">
-                            <button
-                              type="button"
-                              onClick={() => setPreviewImageUrl(p.image_data_url)}
-                              className="inline-flex items-center gap-2 rounded-xl border border-line bg-bg p-1.5 text-xs font-semibold text-brand-hover hover:border-brand-hover"
-                            >
-                              <img
-                                src={p.image_data_url}
-                                alt="Biểu đồ Task 1"
-                                className="h-12 w-20 rounded-lg bg-white object-contain"
-                              />
-                              <span className="inline-flex items-center gap-1 pr-2">
-                                <Eye size={13} /> Xem ảnh biểu đồ
-                              </span>
-                            </button>
+                        {isExpanded && (
+                          <div className="mt-3 rounded-xl border border-line bg-bg p-3.5">
+                            <p className="whitespace-pre-line text-sm leading-relaxed text-ink">
+                              {p.prompt_text}
+                            </p>
+                            {p.image_data_url && (
+                              <div className="mt-3">
+                                <button
+                                  type="button"
+                                  onClick={() => setPreviewImageUrl(p.image_data_url)}
+                                  className="inline-flex items-center gap-2 rounded-xl border border-line bg-card p-1.5 text-xs font-semibold text-brand-hover hover:border-brand-hover"
+                                >
+                                  <img
+                                    src={p.image_data_url}
+                                    alt="Biểu đồ Task 1"
+                                    className="h-12 w-20 rounded-lg bg-white object-contain"
+                                  />
+                                  <span className="inline-flex items-center gap-1 pr-2">
+                                    <Eye size={13} /> Phóng to ảnh biểu đồ
+                                  </span>
+                                </button>
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>
 
-                      <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-line pt-3">
-                        <span className="text-[11px] text-muted">
-                          Thêm ngày {formatDate(p.created_at)}
-                        </span>
+                      <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-line pt-3">
+                        <button
+                          type="button"
+                          onClick={() => togglePromptExpand(p.id)}
+                          className="inline-flex items-center gap-1 text-xs font-semibold text-muted hover:text-brand-hover"
+                        >
+                          {isExpanded ? (
+                            <>
+                              Ẩn nội dung đề <ChevronUp size={13} />
+                            </>
+                          ) : (
+                            <>
+                              Xem nội dung đề <ChevronDown size={13} />
+                            </>
+                          )}
+                        </button>
                         <div className="flex flex-wrap items-center gap-2">
                           <button
                             type="button"

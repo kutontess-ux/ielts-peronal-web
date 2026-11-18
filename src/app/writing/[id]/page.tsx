@@ -10,11 +10,15 @@ import {
   BookOpen,
   Check,
   CheckCircle2,
+  ChevronDown,
+  ChevronRight,
+  ChevronUp,
   Clock,
   Copy,
   Eye,
   Flame,
   Layers,
+  Lightbulb,
   Pause,
   PenLine,
   Play,
@@ -171,11 +175,18 @@ function WritingStudioInner() {
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [timerRunning, setTimerRunning] = useState(false);
 
-  // Các tab điều hướng cột trái & cột phải
+  // Các tab điều hướng cột trái & cột phải + đóng/mở gọn gàng
   const [leftTab, setLeftTab] = useState<"blueprint" | "ai_coach">("blueprint");
   const [rightTab, setRightTab] = useState<"write" | "feedback" | "rewrite" | "model">(
     "write"
   );
+  const [vocabOpen, setVocabOpen] = useState(false);
+  const [guidePanelOpen, setGuidePanelOpen] = useState(false);
+
+  // Quản lý tuần tự từng bước & đóng/mở gợi ý ở chế độ Step-by-step
+  const [unlockedStepCount, setUnlockedStepCount] = useState(1);
+  const [openStepKeys, setOpenStepKeys] = useState<Set<string>>(() => new Set());
+  const [openHintStepKeys, setOpenHintStepKeys] = useState<Set<string>>(() => new Set());
 
   // Trạng thái xử lý API
   const [savingDraft, setSavingDraft] = useState(false);
@@ -220,6 +231,7 @@ function WritingStudioInner() {
         const rawDrafts = (sub.step_drafts_json ?? {}) as Record<string, string>;
         const initContent = sub.content ?? "";
 
+        let resolvedDrafts: Record<string, string> = rawDrafts;
         // Nếu bài chưa có stepDrafts nhưng đã có content -> chia đều vào các bước
         if (Object.keys(rawDrafts).length === 0 && initContent.trim()) {
           const paras = initContent.trim().split(/\n\s*\n/);
@@ -231,10 +243,24 @@ function WritingStudioInner() {
               mapped[step.key] = paras.slice(idx).join("\n\n");
             }
           });
-          setStepDrafts(mapped);
-        } else {
-          setStepDrafts(rawDrafts);
+          resolvedDrafts = mapped;
         }
+        setStepDrafts(resolvedDrafts);
+
+        // Xác định bước đang viết để mở khóa tuần tự và chỉ mở rộng bước hiện tại
+        let highestFilledIdx = -1;
+        bp.steps.forEach((step, idx) => {
+          if ((resolvedDrafts[step.key] ?? "").trim()) {
+            highestFilledIdx = idx;
+          }
+        });
+        const initialUnlocked = Math.min(
+          bp.steps.length,
+          Math.max(1, highestFilledIdx + 1)
+        );
+        setUnlockedStepCount(initialUnlocked);
+        const activeStepKey = bp.steps[initialUnlocked - 1]?.key ?? bp.steps[0]?.key;
+        setOpenStepKeys(activeStepKey ? new Set([activeStepKey]) : new Set());
 
         setContent(initContent);
         setElapsedSeconds(Number(sub.duration_seconds ?? 0));
@@ -391,11 +417,54 @@ function WritingStudioInner() {
     setEditorMode(nextMode);
   }
 
+  function toggleStepOpen(stepKey: string) {
+    setOpenStepKeys((prev) => {
+      const next = new Set(prev);
+      if (next.has(stepKey)) next.delete(stepKey);
+      else next.add(stepKey);
+      return next;
+    });
+  }
+
+  function toggleStepHint(stepKey: string) {
+    setOpenHintStepKeys((prev) => {
+      const next = new Set(prev);
+      if (next.has(stepKey)) next.delete(stepKey);
+      else next.add(stepKey);
+      return next;
+    });
+  }
+
+  function completeStepAndUnlockNext(currentIdx: number) {
+    const currentStep = blueprint.steps[currentIdx];
+    const nextStep = blueprint.steps[currentIdx + 1];
+    if (!currentStep) return;
+
+    if (nextStep) {
+      setUnlockedStepCount((prev) => Math.max(prev, currentIdx + 2));
+      setOpenStepKeys((prev) => {
+        const next = new Set(prev);
+        next.delete(currentStep.key);
+        next.add(nextStep.key);
+        return next;
+      });
+    } else {
+      setOpenStepKeys((prev) => {
+        const next = new Set(prev);
+        next.delete(currentStep.key);
+        return next;
+      });
+    }
+  }
+
   function insertSnippetIntoStep(stepKey: string, snippet: string) {
     if (editorMode === "guided") {
-      const cur = stepDrafts[stepKey] ?? "";
+      // Nếu có bước đang mở thì ưu tiên chèn vào bước đó
+      const activeOpenKey =
+        blueprint.steps.find((s) => openStepKeys.has(s.key))?.key ?? stepKey;
+      const cur = stepDrafts[activeOpenKey] ?? "";
       const sep = cur && !cur.endsWith(" ") ? " " : "";
-      handleStepChange(stepKey, `${cur}${sep}${snippet} `);
+      handleStepChange(activeOpenKey, `${cur}${sep}${snippet} `);
     } else {
       const sep = content && !content.endsWith(" ") ? " " : "";
       setContent(`${content}${sep}${snippet} `);
@@ -434,6 +503,7 @@ function WritingStudioInner() {
     if (!submission) return;
     setLoadingGuide(true);
     setError("");
+    setGuidePanelOpen(true);
     setLeftTab("ai_coach");
     try {
       const res = await fetch("/api/writing/coach", {
@@ -586,11 +656,10 @@ function WritingStudioInner() {
   const targetSeconds = blueprint.recommendedMinutes * 60;
   const remainingSeconds = Math.max(0, targetSeconds - elapsedSeconds);
   const step1Done = wordCount >= blueprint.minWords;
-  const step2Done = Boolean(feedback);
-  const step3Done = Boolean(submission.discipline_completed);
+  const visibleSteps = blueprint.steps.slice(0, unlockedStepCount);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       {/* Thanh thông báo nhanh (Toast) */}
       {toast && (
         <div className="fixed bottom-6 right-6 z-50 flex items-center gap-2 rounded-2xl border border-emerald-500/40 bg-card px-4 py-3 text-xs font-bold text-emerald-700 shadow-xl dark:text-emerald-300">
@@ -664,7 +733,7 @@ function WritingStudioInner() {
           >
             <Target size={14} />
             <span>
-              {wordCount} / {blueprint.minWords} từ tối thiểu
+              {wordCount} / {blueprint.minWords} từ
             </span>
             {step1Done && <Check size={13} />}
           </div>
@@ -683,7 +752,7 @@ function WritingStudioInner() {
                   : "text-muted hover:text-ink"
               }`}
             >
-              <Layers size={13} /> Theo khung từng bước
+              <Layers size={13} /> Theo từng bước
             </button>
             <button
               type="button"
@@ -703,67 +772,6 @@ function WritingStudioInner() {
         </div>
       </div>
 
-      {/* THANH TIẾN ĐỘ KỶ LUẬT 3 BƯỚC */}
-      <div className="grid gap-2.5 rounded-2xl border border-line bg-card p-3.5 sm:grid-cols-3">
-        <div
-          className={`flex items-center gap-2.5 rounded-xl px-3 py-2 text-xs font-bold ${
-            step1Done
-              ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300"
-              : "bg-bg text-muted"
-          }`}
-        >
-          <span
-            className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[11px] ${
-              step1Done ? "bg-emerald-500 text-white" : "border border-line bg-card"
-            }`}
-          >
-            {step1Done ? <Check size={12} /> : "1"}
-          </span>
-          <span>Bước 1: Viết đủ ≥ {blueprint.minWords} từ</span>
-        </div>
-
-        <div
-          className={`flex items-center gap-2.5 rounded-xl px-3 py-2 text-xs font-bold ${
-            step2Done
-              ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300"
-              : "bg-bg text-muted"
-          }`}
-        >
-          <span
-            className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[11px] ${
-              step2Done ? "bg-emerald-500 text-white" : "border border-line bg-card"
-            }`}
-          >
-            {step2Done ? <Check size={12} /> : "2"}
-          </span>
-          <span>
-            Bước 2: Chấm AI 4 tiêu chí{" "}
-            {feedback ? `(Overall ${feedback.overall_band.toFixed(1)})` : ""}
-          </span>
-        </div>
-
-        <div
-          className={`flex items-center gap-2.5 rounded-xl px-3 py-2 text-xs font-bold ${
-            step3Done
-              ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300"
-              : "bg-bg text-muted"
-          }`}
-        >
-          <span
-            className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[11px] ${
-              step3Done ? "bg-emerald-500 text-white" : "border border-line bg-card"
-            }`}
-          >
-            {step3Done ? <Flame size={12} /> : "3"}
-          </span>
-          <span>
-            {step3Done
-              ? "Bước 3: Đã hoàn thành Kỷ luật (+1 Streak 🔥)"
-              : "Bước 3: Gõ sửa lại câu sai (Active Rewrite)"}
-          </span>
-        </div>
-      </div>
-
       {error && (
         <div className="flex items-center justify-between rounded-2xl border border-rose-500/40 bg-rose-500/10 px-4 py-3 text-sm text-rose-700 dark:text-rose-200">
           <span>{error}</span>
@@ -775,8 +783,8 @@ function WritingStudioInner() {
 
       {/* BỐ CỤC 2 CỘT CHÍNH */}
       <div className="grid gap-6 lg:grid-cols-12">
-        {/* CỘT TRÁI (5/12): ĐỀ BÀI + TỪ VỰNG SRS + KHUNG HƯỚNG DẪN / AI COACH */}
-        <div className="space-y-5 lg:col-span-5">
+        {/* CỘT TRÁI (5/12): ĐỀ BÀI + TỪ VỰNG SRS (ĐÓNG/MỞ) + KHUNG HƯỚNG DẪN / AI COACH (ĐÓNG/MỞ) */}
+        <div className="space-y-3.5 lg:col-span-5">
           {/* Thẻ Đề bài gốc & Ảnh biểu đồ Task 1 */}
           <div className="rounded-2xl border border-line bg-card p-5">
             <div className="flex items-center justify-between gap-2">
@@ -814,362 +822,418 @@ function WritingStudioInner() {
                     className="mx-auto max-h-60 object-contain"
                   />
                   <span className="mt-1 block text-center text-[11px] font-semibold text-brand-hover group-hover:underline">
-                    🔍 Bấm vào ảnh để phóng to toàn màn hình xem rõ số liệu
+                    🔍 Bấm vào ảnh để phóng to xem rõ số liệu
                   </span>
                 </button>
               </div>
             )}
           </div>
 
-          {/* Thử thách Từ vựng mục tiêu SRS hôm nay */}
+          {/* Thử thách Từ vựng mục tiêu SRS hôm nay (Có nút đóng/mở gọn gàng) */}
           {targetVocab.length > 0 && (
-            <div className="rounded-2xl border border-line bg-card p-5">
-              <div className="flex items-center justify-between gap-2">
-                <div>
-                  <div className="text-xs font-bold uppercase tracking-wider text-brand-hover">
-                    Thử thách Từ vựng SRS Hôm nay
-                  </div>
-                  <p className="text-xs text-muted">
-                    Gõ các từ này vào bài viết để thẻ tự động bật sáng xanh:
-                  </p>
+            <div className="rounded-2xl border border-line bg-card">
+              <button
+                type="button"
+                onClick={() => setVocabOpen((v) => !v)}
+                className="flex w-full items-center justify-between gap-2 px-4 py-3.5 text-left transition hover:bg-bg/50"
+              >
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold uppercase tracking-wider text-brand-hover">
+                    Từ vựng SRS hôm nay
+                  </span>
+                  <span className="rounded-full bg-emerald-500/15 px-2.5 py-0.5 text-[11px] font-bold text-emerald-700 dark:text-emerald-300">
+                    {usedTargetWords.length}/{targetVocab.length} đã dùng
+                  </span>
                 </div>
-                <span className="rounded-full bg-emerald-500/15 px-2.5 py-1 text-xs font-bold text-emerald-700 dark:text-emerald-300">
-                  {usedTargetWords.length}/{targetVocab.length} đã dùng
+                <span className="inline-flex items-center gap-1 text-xs font-semibold text-muted">
+                  {vocabOpen ? (
+                    <>
+                      Thu gọn <ChevronUp size={15} />
+                    </>
+                  ) : (
+                    <>
+                      Mở xem <ChevronDown size={15} />
+                    </>
+                  )}
                 </span>
-              </div>
+              </button>
 
-              <div className="mt-3 space-y-2">
-                {targetVocab.map((v) => {
-                  const isUsed =
-                    usedTargetSet.has(v.lemma.toLowerCase()) ||
-                    usedTargetSet.has(v.word.toLowerCase());
-                  return (
-                    <div
-                      key={v.lemma}
-                      className={`rounded-xl border p-3 transition ${
-                        isUsed
-                          ? "border-emerald-500/50 bg-emerald-500/15"
-                          : "border-line bg-bg"
-                      }`}
-                    >
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="flex flex-wrap items-center gap-1.5">
-                          <span className="font-bold text-ink">{v.lemma}</span>
-                          {v.ipa && <span className="text-xs text-muted">{v.ipa}</span>}
-                          {v.pos && (
-                            <span className="rounded bg-card px-1.5 py-0.5 text-[10px] font-semibold text-muted">
-                              {v.pos}
+              {vocabOpen && (
+                <div className="space-y-2 border-t border-line p-4">
+                  {targetVocab.map((v) => {
+                    const isUsed =
+                      usedTargetSet.has(v.lemma.toLowerCase()) ||
+                      usedTargetSet.has(v.word.toLowerCase());
+                    return (
+                      <div
+                        key={v.lemma}
+                        className={`rounded-xl border p-3 transition ${
+                          isUsed
+                            ? "border-emerald-500/50 bg-emerald-500/15"
+                            : "border-line bg-bg"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <span className="font-bold text-ink">{v.lemma}</span>
+                            {v.ipa && <span className="text-xs text-muted">{v.ipa}</span>}
+                            {v.pos && (
+                              <span className="rounded bg-card px-1.5 py-0.5 text-[10px] font-semibold text-muted">
+                                {v.pos}
+                              </span>
+                            )}
+                            <span
+                              className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${
+                                levelColor[v.cefr_level] ?? levelColor.B2
+                              }`}
+                            >
+                              {v.cefr_level}
                             </span>
-                          )}
-                          <span
-                            className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${
-                              levelColor[v.cefr_level] ?? levelColor.B2
-                            }`}
-                          >
-                            {v.cefr_level}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-1.5">
-                          {isUsed ? (
-                            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500 px-2 py-0.5 text-[10px] font-bold text-white">
-                              <Check size={11} /> Đã áp dụng
-                            </span>
-                          ) : (
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            {isUsed ? (
+                              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500 px-2 py-0.5 text-[10px] font-bold text-white">
+                                <Check size={11} /> Đã dùng
+                              </span>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  insertSnippetIntoStep(
+                                    blueprint.steps[0]?.key ?? "intro",
+                                    v.lemma
+                                  )
+                                }
+                                className="rounded-lg bg-card px-2 py-0.5 text-[10px] font-bold text-brand-hover hover:underline"
+                              >
+                                + Chèn
+                              </button>
+                            )}
                             <button
                               type="button"
-                              onClick={() =>
-                                insertSnippetIntoStep(
-                                  blueprint.steps[0]?.key ?? "intro",
-                                  v.lemma
-                                )
-                              }
-                              className="rounded-lg bg-card px-2 py-0.5 text-[10px] font-bold text-brand-hover hover:underline"
+                              onClick={() => speakEnglish(v.lemma)}
+                              className="rounded-lg p-1 text-muted hover:text-ink"
+                              title="Nghe phát âm"
                             >
-                              + Chèn
+                              <Volume2 size={14} />
                             </button>
-                          )}
-                          <button
-                            type="button"
-                            onClick={() => speakEnglish(v.lemma)}
-                            className="rounded-lg p-1 text-muted hover:text-ink"
-                            title="Nghe phát âm"
-                          >
-                            <Volume2 size={14} />
-                          </button>
-                        </div>
-                      </div>
-                      <div className="mt-1 text-xs text-ink">{v.meaning_vi}</div>
-                      {v.collocations?.length > 0 && (
-                        <div className="mt-1 text-[11px] text-muted">
-                          Cụm đi kèm: <i>{v.collocations.slice(0, 3).join(" · ")}</i>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* 2 TẦNG HƯỚNG DẪN: KHUNG 0 TOKEN & AI GIA SƯ DÀN Ý */}
-          <div className="rounded-2xl border border-line bg-card p-5">
-            <div className="grid grid-cols-2 gap-1.5 rounded-xl bg-bg p-1">
-              <button
-                type="button"
-                onClick={() => setLeftTab("blueprint")}
-                className={`rounded-lg py-2 text-xs font-bold transition ${
-                  leftTab === "blueprint"
-                    ? "bg-card text-ink shadow-xs"
-                    : "text-muted hover:text-ink"
-                }`}
-              >
-                Khung công thức (0 token)
-              </button>
-              <button
-                type="button"
-                onClick={() => setLeftTab("ai_coach")}
-                className={`rounded-lg py-2 text-xs font-bold transition ${
-                  leftTab === "ai_coach"
-                    ? "bg-card text-brand-hover shadow-xs"
-                    : "text-muted hover:text-ink"
-                }`}
-              >
-                AI Phân tích & Dàn ý {aiGuide ? "⚡" : "(1 req)"}
-              </button>
-            </div>
-
-            {leftTab === "blueprint" ? (
-              <div className="mt-4 space-y-3">
-                <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-xs text-emerald-800 dark:text-emerald-200">
-                  <b>Mẹo dạng {subMeta.shortLabel}:</b> {subMeta.keyTip}
-                </div>
-                {blueprint.steps.map((st, idx) => (
-                  <div
-                    key={st.key}
-                    className="space-y-2 rounded-xl border border-line bg-bg p-3.5"
-                  >
-                    <div className="text-xs font-bold text-ink">
-                      Bước {idx + 1}: {st.label}
-                    </div>
-                    <p className="text-xs text-muted">{st.guideVi}</p>
-                    <div className="flex flex-wrap gap-1.5">
-                      {st.connectors.map((c) => (
-                        <button
-                          key={c}
-                          type="button"
-                          onClick={() => insertSnippetIntoStep(st.key, c)}
-                          className="rounded-lg border border-line bg-card px-2 py-1 text-[11px] font-semibold text-brand-hover hover:border-brand-hover"
-                          title="Bấm để chèn vào bài viết"
-                        >
-                          + {c}
-                        </button>
-                      ))}
-                    </div>
-                    {st.templates.length > 0 && (
-                      <div className="space-y-1 border-t border-line pt-2 text-[11px] text-muted">
-                        <div className="font-semibold text-ink">Khung câu mẫu Band 6.5+:</div>
-                        {st.templates.map((tpl, i) => (
-                          <div key={i} className="italic">
-                            &ldquo;{tpl}&rdquo;
                           </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="mt-4 space-y-4">
-                {!aiGuide ? (
-                  <div className="space-y-3 rounded-xl border border-line bg-bg p-5 text-center">
-                    <Sparkles size={26} className="mx-auto text-brand-hover" />
-                    <div className="text-sm font-bold text-ink">
-                      Nhờ AI Gia sư Phân tích đề & Lập dàn ý chi tiết
-                    </div>
-                    <p className="text-xs text-muted">
-                      AI sẽ đọc đề bài thật {chartImageUrl ? "(và đọc trực tiếp số liệu trong ảnh biểu đồ Task 1)" : ""}, cảnh báo bẫy lạc đề, gợi ý luận điểm PEEL và 6–8 collocations sát chủ đề. Kết quả được lưu cache vĩnh viễn theo đề (lần sau mở lại tốn 0 token).
-                    </p>
-                    <button
-                      type="button"
-                      disabled={loadingGuide}
-                      onClick={() => handleRequestAiOutline(false)}
-                      className="inline-flex items-center gap-2 rounded-full bg-brand px-5 py-2.5 text-xs font-bold text-white transition hover:bg-brand-hover hover:text-bg disabled:opacity-50"
-                    >
-                      <Sparkles size={14} />
-                      {loadingGuide
-                        ? "AI đang phân tích đề & ảnh biểu đồ..."
-                        : "Phân tích đề & Gợi ý dàn ý (1 request AI)"}
-                    </button>
-                  </div>
-                ) : (
-                  <div className="space-y-4 text-xs">
-                    <div className="flex items-center justify-between rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-emerald-800 dark:text-emerald-200">
-                      <span className="font-bold">
-                        {guideCached
-                          ? "⚡ Đã tải từ Cache của đề bài (0 token)"
-                          : "✓ Dàn ý AI đã lưu vào đề bài"}
-                      </span>
-                      <button
-                        type="button"
-                        disabled={loadingGuide}
-                        onClick={() => handleRequestAiOutline(true)}
-                        className="inline-flex items-center gap-1 font-semibold underline"
-                      >
-                        <RefreshCw size={11} /> Tạo lại
-                      </button>
-                    </div>
-
-                    {/* Phân tích yêu cầu đề */}
-                    <div className="space-y-2 rounded-xl border border-line bg-bg p-3.5">
-                      <div className="font-bold text-ink">1. Phân tích yêu cầu & Bẫy lạc đề</div>
-                      <p className="text-ink">{aiGuide.task_analysis?.main_topic_vi}</p>
-                      {aiGuide.task_analysis?.required_parts_vi?.length > 0 && (
-                        <div>
-                          <div className="font-semibold text-emerald-700 dark:text-emerald-300">
-                            Các vế bắt buộc phải trả lời:
-                          </div>
-                          <ul className="mt-1 list-disc space-y-0.5 pl-4 text-muted">
-                            {aiGuide.task_analysis.required_parts_vi.map((item, i) => (
-                              <li key={i}>{item}</li>
-                            ))}
-                          </ul>
                         </div>
-                      )}
-                      {aiGuide.task_analysis?.common_pitfalls_vi?.length > 0 && (
-                        <div>
-                          <div className="font-semibold text-rose-600 dark:text-rose-300">
-                            Bẫy dễ mất điểm cần tránh:
-                          </div>
-                          <ul className="mt-1 list-disc space-y-0.5 pl-4 text-muted">
-                            {aiGuide.task_analysis.common_pitfalls_vi.map((item, i) => (
-                              <li key={i}>{item}</li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
-                      {aiGuide.task_analysis?.suggested_stance_vi && (
-                        <div className="rounded-lg bg-card p-2.5 text-ink">
-                          <b>Hướng đi dễ đạt 6.5+ nhất:</b>{" "}
-                          {aiGuide.task_analysis.suggested_stance_vi}
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Gợi ý từng phần */}
-                    <div className="space-y-2 rounded-xl border border-line bg-bg p-3.5">
-                      <div className="font-bold text-ink">2. Dàn ý gợi ý từng bước</div>
-                      <div className="space-y-2">
-                        <div className="rounded-lg bg-card p-2.5">
-                          <b className="text-brand-hover">Mở bài (Paraphrase):</b>{" "}
-                          {aiGuide.step_guides?.intro_paraphrase_hint}
-                        </div>
-                        <div className="rounded-lg bg-card p-2.5">
-                          <b className="text-brand-hover">
-                            {taskType === "task1" ? "Overview:" : "Thesis Statement:"}
-                          </b>{" "}
-                          {aiGuide.step_guides?.thesis_or_overview_hint}
-                        </div>
-                        <div className="rounded-lg bg-card p-2.5">
-                          <b className="text-brand-hover">Body 1:</b>{" "}
-                          {aiGuide.step_guides?.body1_peel_hint}
-                        </div>
-                        <div className="rounded-lg bg-card p-2.5">
-                          <b className="text-brand-hover">Body 2:</b>{" "}
-                          {aiGuide.step_guides?.body2_peel_hint}
-                        </div>
-                        {aiGuide.step_guides?.conclusion_hint && (
-                          <div className="rounded-lg bg-card p-2.5">
-                            <b className="text-brand-hover">Kết bài:</b>{" "}
-                            {aiGuide.step_guides.conclusion_hint}
+                        <div className="mt-1 text-xs text-ink">{v.meaning_vi}</div>
+                        {v.collocations?.length > 0 && (
+                          <div className="mt-1 text-[11px] text-muted">
+                            Cụm đi kèm: <i>{v.collocations.slice(0, 3).join(" · ")}</i>
                           </div>
                         )}
                       </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* 2 TẦNG HƯỚNG DẪN: KHUNG CÔNG THỨC & AI PHÂN TÍCH DÀN Ý (Có đóng/mở gọn gàng) */}
+          <div className="rounded-2xl border border-line bg-card">
+            <button
+              type="button"
+              onClick={() => setGuidePanelOpen((v) => !v)}
+              className="flex w-full items-center justify-between gap-2 px-4 py-3.5 text-left transition hover:bg-bg/50"
+            >
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-xs font-bold uppercase tracking-wider text-ink">
+                  Khung công thức & Phân tích dàn ý AI
+                </span>
+                {aiGuide && (
+                  <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-bold text-emerald-700 dark:text-emerald-300">
+                    ⚡ Đã có dàn ý AI
+                  </span>
+                )}
+              </div>
+              <span className="inline-flex items-center gap-1 text-xs font-semibold text-muted">
+                {guidePanelOpen ? (
+                  <>
+                    Thu gọn <ChevronUp size={15} />
+                  </>
+                ) : (
+                  <>
+                    Mở xem <ChevronDown size={15} />
+                  </>
+                )}
+              </span>
+            </button>
+
+            {guidePanelOpen && (
+              <div className="border-t border-line p-4">
+                <div className="grid grid-cols-2 gap-1.5 rounded-xl bg-bg p-1">
+                  <button
+                    type="button"
+                    onClick={() => setLeftTab("blueprint")}
+                    className={`rounded-lg py-2 text-xs font-bold transition ${
+                      leftTab === "blueprint"
+                        ? "bg-card text-ink shadow-xs"
+                        : "text-muted hover:text-ink"
+                    }`}
+                  >
+                    Khung công thức (0 token)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setLeftTab("ai_coach")}
+                    className={`rounded-lg py-2 text-xs font-bold transition ${
+                      leftTab === "ai_coach"
+                        ? "bg-card text-brand-hover shadow-xs"
+                        : "text-muted hover:text-ink"
+                    }`}
+                  >
+                    AI Phân tích & Dàn ý {aiGuide ? "⚡" : "(1 req)"}
+                  </button>
+                </div>
+
+                {leftTab === "blueprint" ? (
+                  <div className="mt-3 space-y-2.5">
+                    <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-xs text-emerald-800 dark:text-emerald-200">
+                      <b>Mẹo dạng {subMeta.shortLabel}:</b> {subMeta.keyTip}
                     </div>
-
-                    {/* Collocations chủ đề */}
-                    {aiGuide.topic_collocations?.length > 0 && (
-                      <div className="space-y-2 rounded-xl border border-line bg-bg p-3.5">
-                        <div className="font-bold text-ink">
-                          3. Cụm từ học thuật (Collocations) sát đề
-                        </div>
-                        <div className="space-y-2">
-                          {aiGuide.topic_collocations.map((col, idx) => {
-                            const key = `guide-col-${idx}`;
-                            const isSaved =
-                              savedVocabKeys.has(key) ||
-                              savedVocabKeys.has(col.phrase.toLowerCase());
-                            return (
-                              <div key={idx} className="rounded-lg bg-card p-2.5">
-                                <div className="flex items-center justify-between gap-2">
-                                  <span className="font-bold text-brand-hover">
-                                    {col.phrase} ({col.cefr_level})
-                                  </span>
-                                  <div className="flex items-center gap-1.5">
-                                    <button
-                                      type="button"
-                                      onClick={() =>
-                                        insertSnippetIntoStep(
-                                          blueprint.steps[0]?.key ?? "intro",
-                                          col.phrase
-                                        )
-                                      }
-                                      className="rounded bg-bg px-2 py-0.5 text-[10px] font-bold text-ink hover:text-brand-hover"
-                                    >
-                                      + Chèn
-                                    </button>
-                                    <button
-                                      type="button"
-                                      disabled={isSaved || savingVocabKey === key}
-                                      onClick={() =>
-                                        handleSaveVocabToSrs(
-                                          [
-                                            {
-                                              lemma: col.phrase,
-                                              pos: "phr",
-                                              meaning_vi: col.meaning_vi,
-                                              example: col.example_sentence,
-                                              cefr_level: col.cefr_level,
-                                              topic: submission.topic,
-                                            },
-                                          ],
-                                          key
-                                        )
-                                      }
-                                      className="rounded bg-brand/15 px-2 py-0.5 text-[10px] font-bold text-brand-hover disabled:opacity-50"
-                                    >
-                                      {isSaved ? "✓ Đã lưu SRS" : "+ Lưu SRS"}
-                                    </button>
-                                  </div>
-                                </div>
-                                <div className="mt-0.5 text-ink">{col.meaning_vi}</div>
-                                <div className="mt-0.5 italic text-muted">
-                                  VD: {col.example_sentence}
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Cấu trúc ngữ pháp ăn điểm */}
-                    {aiGuide.grammar_structures?.length > 0 && (
-                      <div className="space-y-2 rounded-xl border border-line bg-bg p-3.5">
-                        <div className="font-bold text-ink">
-                          4. Cấu trúc câu Band 6.5+ áp dụng trực tiếp
-                        </div>
-                        {aiGuide.grammar_structures.map((g, idx) => (
-                          <div key={idx} className="rounded-lg bg-card p-2.5">
-                            <div className="font-bold text-ink">{g.pattern_name}</div>
-                            <div className="text-[11px] font-mono text-brand-hover">
-                              Công thức: {g.formula}
-                            </div>
-                            <div className="mt-1 italic text-ink">
-                              &ldquo;{g.applied_example}&rdquo;
-                            </div>
-                            <div className="mt-0.5 text-muted">{g.explanation_vi}</div>
+                    {blueprint.steps.map((st, idx) => (
+                      <details
+                        key={st.key}
+                        className="group rounded-xl border border-line bg-bg p-3"
+                      >
+                        <summary className="cursor-pointer text-xs font-bold text-ink">
+                          Bước {idx + 1}: {st.label}
+                        </summary>
+                        <div className="mt-2 space-y-2">
+                          <p className="text-xs text-muted">{st.guideVi}</p>
+                          <div className="flex flex-wrap gap-1.5">
+                            {st.connectors.map((c) => (
+                              <button
+                                key={c}
+                                type="button"
+                                onClick={() => insertSnippetIntoStep(st.key, c)}
+                                className="rounded-lg border border-line bg-card px-2 py-1 text-[11px] font-semibold text-brand-hover hover:border-brand-hover"
+                                title="Bấm để chèn vào bài viết"
+                              >
+                                + {c}
+                              </button>
+                            ))}
                           </div>
-                        ))}
+                          {st.templates.length > 0 && (
+                            <div className="space-y-1 border-t border-line pt-2 text-[11px] text-muted">
+                              <div className="font-semibold text-ink">Khung câu mẫu Band 6.5+:</div>
+                              {st.templates.map((tpl, i) => (
+                                <div key={i} className="italic">
+                                  &ldquo;{tpl}&rdquo;
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </details>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="mt-3 space-y-3">
+                    {!aiGuide ? (
+                      <div className="space-y-3 rounded-xl border border-line bg-bg p-4 text-center">
+                        <Sparkles size={24} className="mx-auto text-brand-hover" />
+                        <div className="text-sm font-bold text-ink">
+                          Nhờ AI Gia sư Phân tích đề & Lập dàn ý
+                        </div>
+                        <p className="text-xs text-muted">
+                          AI sẽ đọc đề bài {chartImageUrl ? "(và số liệu ảnh biểu đồ)" : ""}, cảnh báo bẫy lạc đề, gợi ý luận điểm PEEL và collocations. Lưu cache vĩnh viễn theo đề.
+                        </p>
+                        <button
+                          type="button"
+                          disabled={loadingGuide}
+                          onClick={() => handleRequestAiOutline(false)}
+                          className="inline-flex items-center gap-2 rounded-full bg-brand px-4 py-2 text-xs font-bold text-white transition hover:bg-brand-hover hover:text-bg disabled:opacity-50"
+                        >
+                          <Sparkles size={14} />
+                          {loadingGuide
+                            ? "AI đang phân tích..."
+                            : "Phân tích đề & Gợi ý dàn ý (1 req)"}
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="space-y-2.5 text-xs">
+                        <div className="flex items-center justify-between rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-emerald-800 dark:text-emerald-200">
+                          <span className="font-bold">
+                            {guideCached
+                              ? "⚡ Đã tải từ Cache (0 token)"
+                              : "✓ Dàn ý AI đã lưu"}
+                          </span>
+                          <button
+                            type="button"
+                            disabled={loadingGuide}
+                            onClick={() => handleRequestAiOutline(true)}
+                            className="inline-flex items-center gap-1 font-semibold underline"
+                          >
+                            <RefreshCw size={11} /> Tạo lại
+                          </button>
+                        </div>
+
+                        {/* 1. Phân tích yêu cầu đề (Đóng/mở) */}
+                        <details open className="rounded-xl border border-line bg-bg p-3">
+                          <summary className="cursor-pointer font-bold text-ink">
+                            1. Phân tích yêu cầu & Bẫy lạc đề
+                          </summary>
+                          <div className="mt-2 space-y-2">
+                            <p className="text-ink">{aiGuide.task_analysis?.main_topic_vi}</p>
+                            {aiGuide.task_analysis?.required_parts_vi?.length > 0 && (
+                              <div>
+                                <div className="font-semibold text-emerald-700 dark:text-emerald-300">
+                                  Các vế bắt buộc phải trả lời:
+                                </div>
+                                <ul className="mt-1 list-disc space-y-0.5 pl-4 text-muted">
+                                  {aiGuide.task_analysis.required_parts_vi.map((item, i) => (
+                                    <li key={i}>{item}</li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
+                            {aiGuide.task_analysis?.common_pitfalls_vi?.length > 0 && (
+                              <div>
+                                <div className="font-semibold text-rose-600 dark:text-rose-300">
+                                  Bẫy dễ mất điểm cần tránh:
+                                </div>
+                                <ul className="mt-1 list-disc space-y-0.5 pl-4 text-muted">
+                                  {aiGuide.task_analysis.common_pitfalls_vi.map((item, i) => (
+                                    <li key={i}>{item}</li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
+                            {aiGuide.task_analysis?.suggested_stance_vi && (
+                              <div className="rounded-lg bg-card p-2 text-ink">
+                                <b>Hướng đi gợi ý:</b>{" "}
+                                {aiGuide.task_analysis.suggested_stance_vi}
+                              </div>
+                            )}
+                          </div>
+                        </details>
+
+                        {/* 2. Dàn ý gợi ý từng phần (Đóng/mở) */}
+                        <details open className="rounded-xl border border-line bg-bg p-3">
+                          <summary className="cursor-pointer font-bold text-ink">
+                            2. Dàn ý gợi ý từng bước
+                          </summary>
+                          <div className="mt-2 space-y-2">
+                            <div className="rounded-lg bg-card p-2">
+                              <b className="text-brand-hover">Mở bài (Paraphrase):</b>{" "}
+                              {aiGuide.step_guides?.intro_paraphrase_hint}
+                            </div>
+                            <div className="rounded-lg bg-card p-2">
+                              <b className="text-brand-hover">
+                                {taskType === "task1" ? "Overview:" : "Thesis Statement:"}
+                              </b>{" "}
+                              {aiGuide.step_guides?.thesis_or_overview_hint}
+                            </div>
+                            <div className="rounded-lg bg-card p-2">
+                              <b className="text-brand-hover">Body 1:</b>{" "}
+                              {aiGuide.step_guides?.body1_peel_hint}
+                            </div>
+                            <div className="rounded-lg bg-card p-2">
+                              <b className="text-brand-hover">Body 2:</b>{" "}
+                              {aiGuide.step_guides?.body2_peel_hint}
+                            </div>
+                            {aiGuide.step_guides?.conclusion_hint && (
+                              <div className="rounded-lg bg-card p-2">
+                                <b className="text-brand-hover">Kết bài:</b>{" "}
+                                {aiGuide.step_guides.conclusion_hint}
+                              </div>
+                            )}
+                          </div>
+                        </details>
+
+                        {/* 3. Collocations chủ đề (Đóng/mở) */}
+                        {aiGuide.topic_collocations?.length > 0 && (
+                          <details className="rounded-xl border border-line bg-bg p-3">
+                            <summary className="cursor-pointer font-bold text-ink">
+                              3. Cụm từ học thuật sát đề ({aiGuide.topic_collocations.length})
+                            </summary>
+                            <div className="mt-2 space-y-2">
+                              {aiGuide.topic_collocations.map((col, idx) => {
+                                const key = `guide-col-${idx}`;
+                                const isSaved =
+                                  savedVocabKeys.has(key) ||
+                                  savedVocabKeys.has(col.phrase.toLowerCase());
+                                return (
+                                  <div key={idx} className="rounded-lg bg-card p-2.5">
+                                    <div className="flex items-center justify-between gap-2">
+                                      <span className="font-bold text-brand-hover">
+                                        {col.phrase} ({col.cefr_level})
+                                      </span>
+                                      <div className="flex items-center gap-1.5">
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            insertSnippetIntoStep(
+                                              blueprint.steps[0]?.key ?? "intro",
+                                              col.phrase
+                                            )
+                                          }
+                                          className="rounded bg-bg px-2 py-0.5 text-[10px] font-bold text-ink hover:text-brand-hover"
+                                        >
+                                          + Chèn
+                                        </button>
+                                        <button
+                                          type="button"
+                                          disabled={isSaved || savingVocabKey === key}
+                                          onClick={() =>
+                                            handleSaveVocabToSrs(
+                                              [
+                                                {
+                                                  lemma: col.phrase,
+                                                  pos: "phr",
+                                                  meaning_vi: col.meaning_vi,
+                                                  example: col.example_sentence,
+                                                  cefr_level: col.cefr_level,
+                                                  topic: submission.topic,
+                                                },
+                                              ],
+                                              key
+                                            )
+                                          }
+                                          className="rounded bg-brand/15 px-2 py-0.5 text-[10px] font-bold text-brand-hover disabled:opacity-50"
+                                        >
+                                          {isSaved ? "✓ Đã lưu SRS" : "+ Lưu SRS"}
+                                        </button>
+                                      </div>
+                                    </div>
+                                    <div className="mt-0.5 text-ink">{col.meaning_vi}</div>
+                                    <div className="mt-0.5 italic text-muted">
+                                      VD: {col.example_sentence}
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </details>
+                        )}
+
+                        {/* 4. Cấu trúc ngữ pháp ăn điểm (Đóng/mở) */}
+                        {aiGuide.grammar_structures?.length > 0 && (
+                          <details className="rounded-xl border border-line bg-bg p-3">
+                            <summary className="cursor-pointer font-bold text-ink">
+                              4. Cấu trúc câu Band 6.5+ áp dụng trực tiếp
+                            </summary>
+                            <div className="mt-2 space-y-2">
+                              {aiGuide.grammar_structures.map((g, idx) => (
+                                <div key={idx} className="rounded-lg bg-card p-2.5">
+                                  <div className="font-bold text-ink">{g.pattern_name}</div>
+                                  <div className="text-[11px] font-mono text-brand-hover">
+                                    Công thức: {g.formula}
+                                  </div>
+                                  <div className="mt-1 italic text-ink">
+                                    &ldquo;{g.applied_example}&rdquo;
+                                  </div>
+                                  <div className="mt-0.5 text-muted">{g.explanation_vi}</div>
+                                </div>
+                              ))}
+                            </div>
+                          </details>
+                        )}
                       </div>
                     )}
                   </div>
@@ -1238,69 +1302,174 @@ function WritingStudioInner() {
 
           {/* VIEW 1: SOẠN THẢO BÀI VIẾT (GUIDED HOẶC EXAM FREEFLOW) */}
           {rightTab === "write" && (
-            <div className="space-y-5 rounded-2xl border border-line bg-card p-5 sm:p-6">
-              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line pb-3">
-                <div>
-                  <h2 className="text-base font-bold text-ink">
-                    {editorMode === "guided"
-                      ? "Chế độ 1: Viết theo khung từng bước (Step-by-step Guided)"
-                      : "Chế độ 2: Viết liền mạch như phòng thi (Exam Freeflow)"}
-                  </h2>
-                  <p className="text-xs text-muted">{blueprint.purposeVi}</p>
-                </div>
-              </div>
-
+            <div className="space-y-4 rounded-2xl border border-line bg-card p-4 sm:p-5">
               {editorMode === "guided" ? (
-                <div className="space-y-4">
-                  {blueprint.steps.map((st, idx) => {
+                <div className="space-y-3">
+                  {/* Thanh trạng thái gọn của chế độ từng bước */}
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="text-xs font-bold text-muted">
+                      Tiến độ các bước: Đã mở {unlockedStepCount}/{blueprint.steps.length} bước
+                    </span>
+                    <div className="flex items-center gap-2 text-xs">
+                      {unlockedStepCount < blueprint.steps.length && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setUnlockedStepCount(blueprint.steps.length);
+                            setOpenStepKeys(new Set(blueprint.steps.map((s) => s.key)));
+                          }}
+                          className="font-semibold text-brand-hover hover:underline"
+                        >
+                          Hiện tất cả các bước
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {visibleSteps.map((st, idx) => {
                     const stepText = stepDrafts[st.key] ?? "";
                     const stepWords = countWords(stepText);
+                    const isOpen = openStepKeys.has(st.key);
+                    const showHint = openHintStepKeys.has(st.key);
+                    const hasNextStep = idx < blueprint.steps.length - 1;
+                    const isDone = stepWords > 0 && !isOpen;
+
                     return (
                       <div
                         key={st.key}
-                        className="space-y-2 rounded-2xl border border-line bg-bg p-4"
+                        className={`rounded-2xl border transition ${
+                          isOpen
+                            ? "border-brand/50 bg-bg"
+                            : "border-line bg-bg/60 hover:border-line"
+                        }`}
                       >
-                        <div className="flex flex-wrap items-center justify-between gap-2">
-                          <label className="text-sm font-bold text-ink">
-                            {idx + 1}. {st.label}
-                          </label>
-                          <span className="text-xs font-semibold text-muted">
-                            {stepWords} từ{" "}
-                            {st.minWordsHint ? `(Gợi ý: ~${st.minWordsHint} từ)` : ""}
-                          </span>
-                        </div>
-                        <p className="text-xs text-muted">{st.sentenceRole}</p>
-
-                        <div className="flex flex-wrap gap-1.5 py-0.5">
-                          {st.connectors.map((conn) => (
-                            <button
-                              key={conn}
-                              type="button"
-                              onClick={() => insertSnippetIntoStep(st.key, conn)}
-                              className="rounded-lg border border-line bg-card px-2 py-0.5 text-[11px] font-semibold text-brand-hover hover:border-brand-hover"
+                        {/* Thanh tiêu đề của bước (Bấm để đóng/mở) */}
+                        <div
+                          role="button"
+                          tabIndex={0}
+                          onClick={() => toggleStepOpen(st.key)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" || e.key === " ") {
+                              e.preventDefault();
+                              toggleStepOpen(st.key);
+                            }
+                          }}
+                          className="flex cursor-pointer flex-wrap items-center justify-between gap-2 px-4 py-3"
+                        >
+                          <div className="flex min-w-0 flex-1 items-center gap-2">
+                            <span
+                              className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[11px] font-bold ${
+                                stepWords > 0
+                                  ? "bg-emerald-500 text-white"
+                                  : "border border-line bg-card text-muted"
+                              }`}
                             >
-                              + {conn}
-                            </button>
-                          ))}
+                              {stepWords > 0 ? <Check size={12} /> : idx + 1}
+                            </span>
+                            <span className="text-sm font-bold text-ink">
+                              {idx + 1}. {st.label}
+                            </span>
+                            {isDone && (
+                              <span className="hidden truncate text-xs text-muted sm:inline">
+                                — {stepText.trim().slice(0, 55)}
+                                {stepText.trim().length > 55 ? "..." : ""}
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-semibold text-muted">
+                              {stepWords} từ
+                            </span>
+                            {isOpen && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  toggleStepHint(st.key);
+                                }}
+                                className={`inline-flex items-center gap-1 rounded-lg border px-2.5 py-1 text-xs font-bold transition ${
+                                  showHint
+                                    ? "border-brand bg-brand/15 text-brand-hover"
+                                    : "border-line bg-card text-muted hover:text-ink"
+                                }`}
+                              >
+                                <Lightbulb size={13} />
+                                {showHint ? "Ẩn gợi ý" : "Gợi ý"}
+                              </button>
+                            )}
+                            <span className="text-muted">
+                              {isOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                            </span>
+                          </div>
                         </div>
 
-                        <textarea
-                          rows={st.minWordsHint && st.minWordsHint >= 40 ? 4 : 3}
-                          value={stepText}
-                          onChange={(e) => handleStepChange(st.key, e.target.value)}
-                          placeholder={st.placeholder}
-                          className="w-full rounded-xl border border-line bg-card p-3 text-sm leading-relaxed text-ink focus:border-brand focus:outline-none"
-                        />
+                        {/* Nội dung chi tiết của bước khi đang mở */}
+                        {isOpen && (
+                          <div className="space-y-3 border-t border-line px-4 pb-4 pt-3">
+                            {/* Khung gợi ý câu nối & hướng dẫn (chỉ hiện khi bấm nút Gợi ý) */}
+                            {showHint && (
+                              <div className="space-y-2 rounded-xl border border-brand/30 bg-card p-3">
+                                <p className="text-xs text-muted">{st.sentenceRole}</p>
+                                <div className="flex flex-wrap gap-1.5">
+                                  {st.connectors.map((conn) => (
+                                    <button
+                                      key={conn}
+                                      type="button"
+                                      onClick={() => insertSnippetIntoStep(st.key, conn)}
+                                      className="rounded-lg border border-line bg-bg px-2.5 py-1 text-xs font-semibold text-brand-hover hover:border-brand-hover"
+                                    >
+                                      + {conn}
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Ô nhập chữ mở rộng thoáng đãng */}
+                            <textarea
+                              rows={8}
+                              value={stepText}
+                              onChange={(e) => handleStepChange(st.key, e.target.value)}
+                              placeholder={st.placeholder}
+                              className="min-h-[190px] w-full rounded-xl border border-line bg-card p-3.5 text-[15px] leading-relaxed text-ink focus:border-brand focus:outline-none"
+                            />
+
+                            {/* Nút chuyển sang bước tiếp theo (tự động thu gọn bước này) */}
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <span className="text-[11px] text-muted">
+                                {st.minWordsHint ? `Gợi ý độ dài bước này: ~${st.minWordsHint} từ` : ""}
+                              </span>
+                              {hasNextStep ? (
+                                <button
+                                  type="button"
+                                  onClick={() => completeStepAndUnlockNext(idx)}
+                                  className="inline-flex items-center gap-1.5 rounded-xl bg-brand px-4 py-2 text-xs font-bold text-white transition hover:bg-brand-hover hover:text-bg"
+                                >
+                                  Xong bước này → Bước {idx + 2} <ChevronRight size={14} />
+                                </button>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => toggleStepOpen(st.key)}
+                                  className="inline-flex items-center gap-1 rounded-xl border border-line bg-card px-3 py-1.5 text-xs font-bold text-muted hover:text-ink"
+                                >
+                                  Thu gọn bước này <ChevronUp size={13} />
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        )}
                       </div>
                     );
                   })}
 
                   {content.trim() && (
-                    <details className="rounded-xl border border-line bg-bg p-3.5 text-xs">
+                    <details className="rounded-xl border border-line bg-bg p-3 text-xs">
                       <summary className="cursor-pointer font-bold text-muted">
-                        Xem trước văn bản ghép hoàn chỉnh ({wordCount} từ)
+                        Xem trước toàn bài đã ghép ({wordCount} từ)
                       </summary>
-                      <div className="mt-2 whitespace-pre-line leading-relaxed text-ink">
+                      <div className="mt-2 whitespace-pre-line text-sm leading-relaxed text-ink">
                         {content}
                       </div>
                     </details>
@@ -1309,11 +1478,11 @@ function WritingStudioInner() {
               ) : (
                 <div className="space-y-3">
                   <textarea
-                    rows={15}
+                    rows={18}
                     value={content}
                     onChange={(e) => setContent(e.target.value)}
                     placeholder="Nhập bài viết hoàn chỉnh của bạn tại đây (chia đoạn bằng 1 dòng trống)..."
-                    className="w-full rounded-2xl border border-line bg-bg p-4 text-[15px] leading-relaxed text-ink focus:border-brand focus:outline-none"
+                    className="min-h-[420px] w-full rounded-2xl border border-line bg-bg p-4 text-[15px] leading-relaxed text-ink focus:border-brand focus:outline-none"
                   />
                 </div>
               )}
