@@ -996,7 +996,9 @@ function ReadingDetailInner() {
     );
   }
 
-  const showPanel = activeTool !== "none";
+  const hasVocabContent = Boolean(vocabLoading || vocabResult || vocabError);
+  const showPanel =
+    activeTool !== "none" && (activeTool !== "vocab" || isAdmin || hasVocabContent);
 
   return (
     <div className="space-y-5">
@@ -1063,19 +1065,36 @@ function ReadingDetailInner() {
                   ? "bg-emerald-600 text-white"
                   : "border border-emerald-500/40 bg-emerald-500/10 text-emerald-700 hover:bg-emerald-500/20 dark:text-emerald-300"
               }`}
-              title="Bật/tắt bản dịch tiếng Việt ngay dưới từng đoạn văn (0 token)"
+              title={
+                isAdmin
+                  ? "Bật/tắt bản dịch tiếng Việt ngay dưới từng đoạn văn (0 token)"
+                  : "Bật/tắt bản dịch tiếng Việt ngay dưới từng đoạn văn"
+              }
             >
-              <BookOpenCheck size={15} /> {showBilingual ? "Đang bật Song ngữ" : "Xem Song ngữ (0 token)"}
+              <BookOpenCheck size={15} />{" "}
+              {isAdmin
+                ? showBilingual
+                  ? "Đang bật Song ngữ"
+                  : "Xem Song ngữ (0 token)"
+                : "Song ngữ"}
             </button>
           ) : (
             <button
               onClick={() => handleFullTranslate(false)}
               disabled={fullTranslateLoading}
               className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-3.5 py-2 text-xs font-semibold text-emerald-700 transition hover:bg-emerald-500/20 disabled:opacity-50 dark:text-emerald-300"
-              title="Dịch toàn bộ bài đọc và trích xuất sẵn bộ từ vựng chỉ trong 1 request AI"
+              title={
+                isAdmin
+                  ? "Dịch toàn bộ bài đọc và trích xuất sẵn bộ từ vựng chỉ trong 1 request AI"
+                  : "Dịch toàn bộ bài đọc sang tiếng Việt"
+              }
             >
               {fullTranslateLoading ? <Loader2 size={15} className="animate-spin" /> : <Sparkles size={15} />}
-              {fullTranslateLoading ? "Đang dịch toàn bài..." : "Dịch toàn bài & Soạn từ (1 request)"}
+              {fullTranslateLoading
+                ? "Đang dịch toàn bài..."
+                : isAdmin
+                ? "Dịch toàn bài & Soạn từ (1 request)"
+                : "Dịch toàn bài"}
             </button>
           )}
 
@@ -1102,6 +1121,10 @@ function ReadingDetailInner() {
               } else {
                 setActiveTool("vocab");
                 setMobileSheetOpen(false);
+                if (!isAdmin) {
+                  setVocabResult(null);
+                  setVocabError("");
+                }
               }
             }}
             className={`inline-flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-semibold transition ${
@@ -1168,14 +1191,20 @@ function ReadingDetailInner() {
 
       {fullTranslateLoading && (
         <div className="flex items-center gap-2.5 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-4 py-3 text-xs text-emerald-800 dark:text-emerald-200">
-          <Loader2 size={16} className=" shrink-0 animate-spin" />
-          <span>
-            <b>Đang dịch toàn bộ bài đọc & trích sẵn bộ từ vựng (1 request AI duy nhất)...</b> Sau khi hoàn tất, bạn có thể xem song ngữ và bấm tra từ thoải mái mà không tốn thêm request.
-          </span>
+          <Loader2 size={16} className="shrink-0 animate-spin" />
+          {isAdmin ? (
+            <span>
+              <b>Đang dịch toàn bộ bài đọc & trích sẵn bộ từ vựng (1 request AI duy nhất)...</b> Sau khi hoàn tất, bạn có thể xem song ngữ và bấm tra từ thoải mái mà không tốn thêm request.
+            </span>
+          ) : (
+            <span>
+              <b>Đang dịch toàn bộ bài đọc...</b>
+            </span>
+          )}
         </div>
       )}
 
-      {!fullTranslateLoading && batchMsg && (
+      {isAdmin && !fullTranslateLoading && batchMsg && (
         <div className="flex items-center justify-between gap-2 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-4 py-2.5 text-xs text-emerald-800 dark:text-emerald-200">
           <span>⚡ {batchMsg}</span>
           <button onClick={() => setBatchMsg("")} className="text-muted hover:text-ink">
@@ -1184,7 +1213,7 @@ function ReadingDetailInner() {
         </div>
       )}
 
-      {activeTool === "vocab" && (
+      {isAdmin && activeTool === "vocab" && (
         <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-brand/40 bg-brand/10 px-4 py-2.5 text-xs text-brand-hover">
           <span>
             <b>Chế độ Tra từ đang bật:</b> Chạm vào bất kỳ từ nào trong bài để xem nghĩa + câu dịch ngữ cảnh (hệ thống tự động lấy từ bộ nhớ nếu đã có, 0 token).
@@ -1251,7 +1280,10 @@ function ReadingDetailInner() {
                 <button
                   onClick={() => {
                     setMobileSheetOpen(false);
-                    if (typeof window !== "undefined" && window.innerWidth >= 1024) {
+                    if (!isAdmin && activeTool === "vocab") {
+                      setVocabResult(null);
+                      setVocabError("");
+                    } else if (typeof window !== "undefined" && window.innerWidth >= 1024) {
                       setActiveTool("none");
                     } else if (activeTool !== "vocab") {
                       setActiveTool("none");
@@ -1266,98 +1298,103 @@ function ReadingDetailInner() {
               {/* TAB 1: TRA TỪ */}
               {activeTool === "vocab" && (
                 <div className="space-y-4">
-                  {/* Thanh tra nhanh + Nút Dịch toàn bài / thêm tay */}
-                  <form
-                    onSubmit={(e) => {
-                      e.preventDefault();
-                      lookupTerm(manualTerm, manualTerm);
-                    }}
-                    className="flex gap-2"
-                  >
-                    <input
-                      value={manualTerm}
-                      onChange={(e) => setManualTerm(e.target.value)}
-                      placeholder="Gõ từ/cụm từ hoặc bấm vào bài..."
-                      className="flex-1 rounded-xl border border-line px-3 py-2 text-xs outline-none focus:border-brand"
-                    />
-                    <button type="submit" className="rounded-xl bg-brand px-3 py-2 text-xs font-semibold text-white hover:bg-brand-hover hover:text-bg">
-                      Tra
-                    </button>
-                  </form>
+                  {/* Thanh tra nhanh + Nút Dịch toàn bài / thêm tay (chỉ Admin) */}
+                  {isAdmin && (
+                    <>
+                      <form
+                        onSubmit={(e) => {
+                          e.preventDefault();
+                          lookupTerm(manualTerm, manualTerm);
+                        }}
+                        className="flex gap-2"
+                      >
+                        <input
+                          value={manualTerm}
+                          onChange={(e) => setManualTerm(e.target.value)}
+                          placeholder="Gõ từ/cụm từ hoặc bấm vào bài..."
+                          className="flex-1 rounded-xl border border-line px-3 py-2 text-xs outline-none focus:border-brand"
+                        />
+                        <button type="submit" className="rounded-xl bg-brand px-3 py-2 text-xs font-semibold text-white hover:bg-brand-hover hover:text-bg">
+                          Tra
+                        </button>
+                      </form>
 
-                  <div className="flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      onClick={() => handleFullTranslate(!!passageTranslation)}
-                      disabled={fullTranslateLoading}
-                      className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-[11px] font-semibold text-emerald-700 hover:bg-emerald-500/20 disabled:opacity-50 dark:text-emerald-300"
-                    >
-                      {fullTranslateLoading ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />}
-                      {passageTranslation
-                        ? "Dịch lại toàn bài & Soạn từ (1 lượt AI)"
-                        : "Dịch toàn bài & Soạn 35 từ (1 lượt AI)"}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setShowManualAdd((v) => !v)}
-                      className="inline-flex items-center gap-1 rounded-xl border border-line bg-bg px-3 py-2 text-[11px] font-semibold text-muted hover:text-ink"
-                    >
-                      <Edit3 size={13} /> Tự thêm tay (0 token)
-                    </button>
-                  </div>
-
-                  {showManualAdd && (
-                    <form onSubmit={saveManualVocab} className="space-y-2 rounded-xl border border-line bg-bg p-3 text-xs">
-                      <div className="font-semibold text-ink">Tự thêm ghi chú từ vựng (không tốn API)</div>
-                      <div className="grid grid-cols-2 gap-2">
-                        <input
-                          required
-                          value={mLemma}
-                          onChange={(e) => setMLemma(e.target.value)}
-                          placeholder="Từ tiếng Anh *"
-                          className="rounded-lg border border-line px-2.5 py-1.5 outline-none focus:border-brand"
-                        />
-                        <input
-                          value={mIpa}
-                          onChange={(e) => setMIpa(e.target.value)}
-                          placeholder="IPA (tuỳ chọn)"
-                          className="rounded-lg border border-line px-2.5 py-1.5 outline-none focus:border-brand"
-                        />
-                      </div>
-                      <div className="flex gap-2">
-                        <input
-                          required
-                          value={mMeaning}
-                          onChange={(e) => setMMeaning(e.target.value)}
-                          placeholder="Nghĩa tiếng Việt *"
-                          className="flex-1 rounded-lg border border-line px-2.5 py-1.5 outline-none focus:border-brand"
-                        />
-                        <select
-                          value={mLevel}
-                          onChange={(e) => setMLevel(e.target.value)}
-                          className="rounded-lg border border-line px-2 py-1.5 outline-none"
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handleFullTranslate(!!passageTranslation)}
+                          disabled={fullTranslateLoading}
+                          className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-[11px] font-semibold text-emerald-700 hover:bg-emerald-500/20 disabled:opacity-50 dark:text-emerald-300"
                         >
-                          {["B1", "B2", "C1", "C2"].map((lv) => (
-                            <option key={lv} value={lv}>{lv}</option>
-                          ))}
-                        </select>
+                          {fullTranslateLoading ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />}
+                          {passageTranslation
+                            ? "Dịch lại toàn bài & Soạn từ (1 lượt AI)"
+                            : "Dịch toàn bài & Soạn 35 từ (1 lượt AI)"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setShowManualAdd((v) => !v)}
+                          className="inline-flex items-center gap-1 rounded-xl border border-line bg-bg px-3 py-2 text-[11px] font-semibold text-muted hover:text-ink"
+                        >
+                          <Edit3 size={13} /> Tự thêm tay (0 token)
+                        </button>
                       </div>
-                      <button type="submit" className="w-full rounded-lg bg-brand py-1.5 font-semibold text-white">
-                        Lưu vào lịch sử bài
-                      </button>
-                    </form>
+
+                      {showManualAdd && (
+                        <form onSubmit={saveManualVocab} className="space-y-2 rounded-xl border border-line bg-bg p-3 text-xs">
+                          <div className="font-semibold text-ink">Tự thêm ghi chú từ vựng (không tốn API)</div>
+                          <div className="grid grid-cols-2 gap-2">
+                            <input
+                              required
+                              value={mLemma}
+                              onChange={(e) => setMLemma(e.target.value)}
+                              placeholder="Từ tiếng Anh *"
+                              className="rounded-lg border border-line px-2.5 py-1.5 outline-none focus:border-brand"
+                            />
+                            <input
+                              value={mIpa}
+                              onChange={(e) => setMIpa(e.target.value)}
+                              placeholder="IPA (tuỳ chọn)"
+                              className="rounded-lg border border-line px-2.5 py-1.5 outline-none focus:border-brand"
+                            />
+                          </div>
+                          <div className="flex gap-2">
+                            <input
+                              required
+                              value={mMeaning}
+                              onChange={(e) => setMMeaning(e.target.value)}
+                              placeholder="Nghĩa tiếng Việt *"
+                              className="flex-1 rounded-lg border border-line px-2.5 py-1.5 outline-none focus:border-brand"
+                            />
+                            <select
+                              value={mLevel}
+                              onChange={(e) => setMLevel(e.target.value)}
+                              className="rounded-lg border border-line px-2 py-1.5 outline-none"
+                            >
+                              {["B1", "B2", "C1", "C2"].map((lv) => (
+                                <option key={lv} value={lv}>{lv}</option>
+                              ))}
+                            </select>
+                          </div>
+                          <button type="submit" className="w-full rounded-lg bg-brand py-1.5 font-semibold text-white">
+                            Lưu vào lịch sử bài
+                          </button>
+                        </form>
+                      )}
+                    </>
                   )}
 
                   {vocabLoading && (
                     <div className="space-y-2.5 py-3 text-xs text-muted">
                       <div className="flex items-center gap-2 text-sm">
-                        <Loader2 size={16} className="animate-spin" /> Đang kiểm tra Kho & tra nghĩa...
+                        <Loader2 size={16} className="animate-spin" />{" "}
+                        {isAdmin ? "Đang kiểm tra Kho & tra nghĩa..." : "Đang tra nghĩa..."}
                       </div>
                       {contextSentenceVi && (
                         <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-2.5 text-ink">
                           <div className="flex items-center justify-between gap-2">
                             <span className="font-semibold text-emerald-700 dark:text-emerald-300">
-                              Dịch câu ngữ cảnh (0 token)
+                              {isAdmin ? "Dịch câu ngữ cảnh (0 token)" : "Dịch câu ngữ cảnh"}
                             </span>
                             {contextSentenceVi.length > 120 && (
                               <button
@@ -1390,7 +1427,7 @@ function ReadingDetailInner() {
 
                   {vocabResult && (
                     <div className="space-y-3 rounded-xl border border-line bg-bg/60 p-3.5">
-                      {vocabCached && (
+                      {isAdmin && vocabCached && (
                         <div className="flex items-center justify-between text-[11px]">
                           <span className="inline-flex items-center gap-1 rounded bg-emerald-500/15 px-2 py-0.5 font-semibold text-emerald-700 dark:text-emerald-300">
                             <Zap size={11} /> Lấy từ bản dịch bài / Kho (0 token)
@@ -1439,16 +1476,18 @@ function ReadingDetailInner() {
                           </div>
                         </div>
 
-                        <button
-                          onClick={() => {
-                            setEditVocabVi(vocabResult.meaning_in_context || vocabResult.meaning_vi);
-                            setEditingVocabMeaning((v) => !v);
-                          }}
-                          className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] text-muted hover:bg-card hover:text-ink"
-                          title="Admin sửa nghĩa"
-                        >
-                          <Edit3 size={12} /> Sửa
-                        </button>
+                        {isAdmin && (
+                          <button
+                            onClick={() => {
+                              setEditVocabVi(vocabResult.meaning_in_context || vocabResult.meaning_vi);
+                              setEditingVocabMeaning((v) => !v);
+                            }}
+                            className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] text-muted hover:bg-card hover:text-ink"
+                            title="Admin sửa nghĩa"
+                          >
+                            <Edit3 size={12} /> Sửa
+                          </button>
+                        )}
                       </div>
 
                       {editingVocabMeaning ? (
@@ -1599,7 +1638,11 @@ function ReadingDetailInner() {
                         onClick={() => setVocabHistoryOpen((v) => !v)}
                         className="flex w-full items-center justify-between text-xs font-semibold text-muted hover:text-ink"
                       >
-                        <span>Từ đã dịch sẵn trong bài ({vocabNotes.length}) — bấm xem 0 token</span>
+                        <span>
+                          {isAdmin
+                            ? `Từ đã dịch sẵn trong bài (${vocabNotes.length}) — bấm xem 0 token`
+                            : `Từ đã dịch sẵn trong bài (${vocabNotes.length})`}
+                        </span>
                         {vocabHistoryOpen ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
                       </button>
 
@@ -1662,7 +1705,8 @@ function ReadingDetailInner() {
                     {sentenceInput.trim() && !sentenceResult && findSentenceTranslationVi(sentenceInput) && (
                       <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-xs">
                         <div className="flex items-center gap-1 font-semibold text-emerald-700 dark:text-emerald-300">
-                          <Zap size={12} /> Bản dịch có sẵn từ bài đọc (0 token):
+                          <Zap size={12} />{" "}
+                          {isAdmin ? "Bản dịch có sẵn từ bài đọc (0 token):" : "Bản dịch có sẵn từ bài đọc:"}
                         </div>
                         <p className="mt-1 leading-relaxed text-ink">
                           {findSentenceTranslationVi(sentenceInput)}
@@ -1694,7 +1738,7 @@ function ReadingDetailInner() {
 
                   {sentenceResult && (
                     <div className="space-y-3 text-xs">
-                      {sentenceCached && (
+                      {isAdmin && sentenceCached && (
                         <div className="flex items-center justify-between">
                           <span className="inline-flex items-center gap-1 rounded bg-emerald-500/15 px-2 py-0.5 text-[11px] font-semibold text-emerald-700 dark:text-emerald-300">
                             <Zap size={11} /> Lấy từ lịch sử (0 token)
@@ -1792,7 +1836,7 @@ function ReadingDetailInner() {
 
                   {questionResult && (
                     <div className="space-y-3 text-xs">
-                      {questionCached && (
+                      {isAdmin && questionCached && (
                         <div className="flex items-center justify-between">
                           <span className="inline-flex items-center gap-1 rounded bg-emerald-500/15 px-2 py-0.5 text-[11px] font-semibold text-emerald-700 dark:text-emerald-300">
                             <Zap size={11} /> Lấy từ lịch sử (0 token)
@@ -1842,7 +1886,9 @@ function ReadingDetailInner() {
                 <div className="max-h-[65vh] space-y-3 overflow-y-auto pr-1">
                   {notes.length === 0 ? (
                     <p className="py-4 text-xs text-muted">
-                      Chưa có ghi chú nào. Mọi từ đã tra, câu phức đã phân tích, hay câu sai đã hỏi đều tự lưu ở đây (xem lại 0 token).
+                      {isAdmin
+                        ? "Chưa có ghi chú nào. Mọi từ đã tra, câu phức đã phân tích, hay câu sai đã hỏi đều tự lưu ở đây (xem lại 0 token)."
+                        : "Chưa có ghi chú nào. Mọi từ đã tra, câu phức đã phân tích, hay câu sai đã hỏi đều tự lưu ở đây."}
                     </p>
                   ) : (
                     notes.map((n) => {
@@ -1878,16 +1924,18 @@ function ReadingDetailInner() {
                                 {isExpanded ? "Thu gọn" : "Mở rộng"}
                                 {isExpanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
                               </button>
-                              <button
-                                onClick={() => {
-                                  setEditingNoteId(editingNoteId === n.id ? null : n.id);
-                                  setEditingNoteText(mainText);
-                                }}
-                                className="text-muted hover:text-ink"
-                                title="Admin sửa ghi chú"
-                              >
-                                <Edit3 size={13} />
-                              </button>
+                              {isAdmin && (
+                                <button
+                                  onClick={() => {
+                                    setEditingNoteId(editingNoteId === n.id ? null : n.id);
+                                    setEditingNoteText(mainText);
+                                  }}
+                                  className="text-muted hover:text-ink"
+                                  title="Admin sửa ghi chú"
+                                >
+                                  <Edit3 size={13} />
+                                </button>
+                              )}
                               <button onClick={() => deleteNote(n.id)} className="text-muted hover:text-red-600 dark:hover:text-red-300" title="Xoá ghi chú">
                                 <Trash2 size={13} />
                               </button>
