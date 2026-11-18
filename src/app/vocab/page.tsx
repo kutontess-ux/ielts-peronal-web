@@ -2125,13 +2125,14 @@ export default function VocabLearn() {
                         </div>
                         <div className="mt-1 flex min-w-0 items-center gap-1.5 text-xs font-medium text-muted">
                           <span className="shrink-0 whitespace-nowrap">{setWords.length} thuật ngữ</span>
+                          <span aria-hidden="true" className="shrink-0 opacity-60">·</span>
                           {setFolder ? (
-                            <span className="inline-flex min-w-0 items-center gap-1 rounded-full bg-brand/10 px-2 py-0.5 text-[11px] font-semibold text-brand-hover">
+                            <span className="inline-flex min-w-0 items-center gap-1 font-semibold text-brand-hover">
                               <Folder size={11} className="shrink-0" />
                               <span className="truncate">{setFolder.name}</span>
                             </span>
                           ) : (
-                            <span className="inline-flex min-w-0 items-center gap-1 rounded-full bg-card px-2 py-0.5 text-[11px] font-medium text-muted transition group-hover:bg-bg">
+                            <span className="inline-flex min-w-0 items-center gap-1 text-muted">
                               <Folder size={11} className="shrink-0" />
                               <span className="truncate">Chưa có thư mục</span>
                             </span>
