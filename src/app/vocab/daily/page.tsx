@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Bell,
   BellOff,
@@ -12,11 +12,20 @@ import {
   History,
   Loader2,
   Newspaper,
+  RefreshCw,
   Sparkles,
   Volume2,
 } from "lucide-react";
 import { levelColor } from "@/lib/mock";
 import { notifyDueUpdated, notifySettingsUpdated } from "@/lib/due-events";
+import {
+  getTodayVNClient,
+  readDailyClientCache,
+  saveDaily7dCache,
+  saveDailyDayCache,
+  upsertDailyCacheMeta,
+} from "@/lib/daily-cache";
+import { useMe } from "@/lib/use-me";
 import ExportButton from "@/components/ExportPanel";
 import { speakWord } from "@/lib/tts";
 import { VoiceSettingsButton } from "@/components/VoiceSettingsModal";
@@ -206,7 +215,58 @@ function WordCards({
   );
 }
 
+type DailyDayApiResponse = {
+  date: string;
+  today: string;
+  yesterday: string;
+  dailyEnabled?: boolean;
+  needsGenerate?: boolean;
+  news?: DailyWord[];
+  ielts?: DailyWord[];
+  history?: string[];
+  error?: string;
+};
+
+type DailyPostApiResponse = {
+  date: string;
+  generated?: boolean;
+  news?: DailyWord[];
+  ielts?: DailyWord[];
+  error?: string;
+};
+
+type Daily7dApiResponse = {
+  today: string;
+  yesterday: string;
+  dailyEnabled?: boolean;
+  groups?: DailyGroup[];
+  history?: string[];
+  error?: string;
+};
+
+// Gộp các request trùng nhau nếu chuyển tab/trang trong lúc đang tải hoặc tạo từ
+const inflightDayMap = new Map<string, Promise<DailyDayApiResponse>>();
+let inflight7dPromise: Promise<Daily7dApiResponse> | null = null;
+let inflightPostPromise: Promise<DailyPostApiResponse> | null = null;
+
+function runPostDaily(): Promise<DailyPostApiResponse> {
+  if (inflightPostPromise) return inflightPostPromise;
+  inflightPostPromise = fetch("/api/daily", { method: "POST" })
+    .then(async (pr) => {
+      const pj = (await pr.json()) as DailyPostApiResponse;
+      if (!pr.ok) throw new Error(pj.error || "Không tạo được từ hằng ngày");
+      return pj;
+    })
+    .finally(() => {
+      inflightPostPromise = null;
+    });
+  return inflightPostPromise;
+}
+
 export default function Daily() {
+  const { me } = useMe();
+  const userId = me?.profile.id ?? null;
+
   const [mode, setMode] = useState<Mode>("today");
   const [date, setDate] = useState<string>("");
   const [today, setToday] = useState<string>("");
@@ -222,87 +282,269 @@ export default function Daily() {
   const [generating, setGenerating] = useState(false);
   const [err, setErr] = useState("");
 
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
+  const applyDayState = useCallback(
+    (
+      day: string,
+      entryNews: DailyWord[],
+      entryIelts: DailyWord[],
+      meta: {
+        today: string;
+        yesterday: string;
+        history: string[];
+        dailyEnabled?: boolean;
+      }
+    ) => {
+      if (!mountedRef.current) return;
+      setDate(day);
+      setToday(meta.today);
+      setYesterday(meta.yesterday);
+      setHistory(meta.history);
+      if (typeof meta.dailyEnabled === "boolean") {
+        setDailyEnabled(meta.dailyEnabled);
+      }
+      setNews(entryNews);
+      setIelts(entryIelts);
+    },
+    []
+  );
+
   const generateToday = useCallback(async () => {
     setLoading(true);
     setGenerating(true);
     setErr("");
     try {
-      const pr = await fetch("/api/daily", { method: "POST" });
-      const pj = await pr.json();
-      if (!pr.ok) throw new Error(pj.error);
-      setNews(pj.news ?? []);
-      setIelts(pj.ielts ?? []);
-      setHistory((h) => (h.includes(pj.date) ? h : [pj.date, ...h]));
+      const pj = await runPostDaily();
+      const nextNews = pj.news ?? [];
+      const nextIelts = pj.ielts ?? [];
+      const cachedBefore = readDailyClientCache(userId);
+      const nextToday = pj.date || cachedBefore?.today || getTodayVNClient();
+      const nextYesterday = cachedBefore?.yesterday || "";
+      const prevHist = cachedBefore?.history ?? [];
+      const nextHistory = prevHist.includes(pj.date) ? prevHist : [pj.date, ...prevHist];
+
+      saveDailyDayCache(
+        { date: pj.date, news: nextNews, ielts: nextIelts },
+        {
+          userId,
+          today: nextToday,
+          yesterday: nextYesterday,
+          history: nextHistory,
+          autoGenTriedToday: true,
+          invalidate7d: true,
+        }
+      );
+
+      if (mountedRef.current) {
+        setDate(pj.date);
+        setToday(nextToday);
+        setNews(nextNews);
+        setIelts(nextIelts);
+        setHistory((h) => (h.includes(pj.date) ? h : [pj.date, ...h]));
+      }
       if (pj.generated) notifyDueUpdated();
     } catch (e) {
-      setErr((e as Error).message);
+      if (mountedRef.current) setErr((e as Error).message);
     } finally {
-      setGenerating(false);
-      setLoading(false);
+      if (mountedRef.current) {
+        setGenerating(false);
+        setLoading(false);
+      }
     }
-  }, []);
+  }, [userId]);
 
-  const loadDay = useCallback(async (targetDate?: string) => {
-    setLoading(true);
-    setErr("");
-    try {
-      const qs = targetDate ? `?date=${encodeURIComponent(targetDate)}` : "";
-      const r = await fetch(`/api/daily${qs}`, { cache: "no-store" });
-      const j = await r.json();
-      if (!r.ok) throw new Error(j.error);
+  const loadDay = useCallback(
+    async (targetDate?: string, force = false) => {
+      const cached = readDailyClientCache(userId);
+      const lookupDay = targetDate || cached?.today || getTodayVNClient();
+      const cachedEntry = cached?.days[lookupDay];
 
-      setDate(j.date);
-      setToday(j.today);
-      setYesterday(j.yesterday);
-      setHistory(j.history ?? []);
-      if (typeof j.dailyEnabled === "boolean") {
-        setDailyEnabled(j.dailyEnabled);
+      if (!force && cached && cachedEntry) {
+        const isPastDay = lookupDay !== cached.today;
+        const isCompleteToday =
+          cachedEntry.news.length >= 5 && cachedEntry.ielts.length >= 5;
+        const shouldSkipFetch =
+          isPastDay || isCompleteToday || !cached.dailyEnabled || Boolean(cached.autoGenTriedToday);
+
+        if (shouldSkipFetch) {
+          applyDayState(cachedEntry.date, cachedEntry.news, cachedEntry.ielts, {
+            today: cached.today,
+            yesterday: cached.yesterday,
+            history: cached.history,
+            dailyEnabled: cached.dailyEnabled,
+          });
+          if (mountedRef.current) {
+            setErr("");
+            setGenerating(false);
+            setLoading(false);
+          }
+          return;
+        }
       }
 
-      // Chỉ tự động gọi POST (đọc RSS + AI) nếu user đang bật nhận từ hằng ngày và hôm nay chưa đủ 10 từ
-      if (j.needsGenerate) {
-        setGenerating(true);
-        const pr = await fetch("/api/daily", { method: "POST" });
-        const pj = await pr.json();
-        if (!pr.ok) throw new Error(pj.error);
-        setNews(pj.news ?? []);
-        setIelts(pj.ielts ?? []);
-        setHistory((h) => (h.includes(pj.date) ? h : [pj.date, ...h]));
-        if (pj.generated) notifyDueUpdated();
-      } else {
-        setNews(j.news ?? []);
-        setIelts(j.ielts ?? []);
+      if (mountedRef.current) {
+        setLoading(true);
+        setErr("");
       }
-    } catch (e) {
-      setErr((e as Error).message);
-    } finally {
-      setGenerating(false);
-      setLoading(false);
-    }
-  }, []);
 
-  const load7Days = useCallback(async () => {
-    setLoading(true);
-    setErr("");
-    try {
-      const r = await fetch("/api/daily?range=7d", { cache: "no-store" });
-      const j = await r.json();
-      if (!r.ok) throw new Error(j.error);
-      const nextGroups = (j.groups ?? []) as DailyGroup[];
-      setToday(j.today);
-      setYesterday(j.yesterday);
-      if (typeof j.dailyEnabled === "boolean") {
-        setDailyEnabled(j.dailyEnabled);
+      try {
+        const qs = targetDate ? `?date=${encodeURIComponent(targetDate)}` : "";
+        const reqKey = `${userId ?? "anon"}:${targetDate || "today"}`;
+        let reqPromise = !force ? inflightDayMap.get(reqKey) : undefined;
+        if (!reqPromise) {
+          reqPromise = fetch(`/api/daily${qs}`, { cache: "no-store" })
+            .then(async (r) => {
+              const j = (await r.json()) as DailyDayApiResponse;
+              if (!r.ok) throw new Error(j.error || "Không tải được từ hằng ngày");
+              return j;
+            })
+            .finally(() => {
+              inflightDayMap.delete(reqKey);
+            });
+          inflightDayMap.set(reqKey, reqPromise);
+        }
+
+        const j = await reqPromise;
+        const dayHistory = j.history ?? [];
+
+        // Chỉ tự động gọi POST (đọc RSS + AI) nếu user đang bật nhận từ hằng ngày,
+        // hôm nay chưa đủ 10 từ và trong phiên này chưa tự chạy tạo trùng.
+        const shouldAutoGenerate =
+          Boolean(j.needsGenerate) && (!cached?.autoGenTriedToday || force);
+
+        if (shouldAutoGenerate) {
+          if (mountedRef.current) setGenerating(true);
+          const pj = await runPostDaily();
+          const nextNews = pj.news ?? [];
+          const nextIelts = pj.ielts ?? [];
+          const nextHistory = dayHistory.includes(pj.date) ? dayHistory : [pj.date, ...dayHistory];
+
+          saveDailyDayCache(
+            { date: pj.date, news: nextNews, ielts: nextIelts },
+            {
+              userId,
+              today: j.today,
+              yesterday: j.yesterday,
+              dailyEnabled: j.dailyEnabled,
+              history: nextHistory,
+              autoGenTriedToday: true,
+              invalidate7d: true,
+            }
+          );
+
+          applyDayState(pj.date, nextNews, nextIelts, {
+            today: j.today,
+            yesterday: j.yesterday,
+            history: nextHistory,
+            dailyEnabled: j.dailyEnabled,
+          });
+          if (pj.generated) notifyDueUpdated();
+        } else {
+          const nextNews = j.news ?? [];
+          const nextIelts = j.ielts ?? [];
+
+          saveDailyDayCache(
+            { date: j.date, news: nextNews, ielts: nextIelts },
+            {
+              userId,
+              today: j.today,
+              yesterday: j.yesterday,
+              dailyEnabled: j.dailyEnabled,
+              history: dayHistory,
+            }
+          );
+
+          applyDayState(j.date, nextNews, nextIelts, {
+            today: j.today,
+            yesterday: j.yesterday,
+            history: dayHistory,
+            dailyEnabled: j.dailyEnabled,
+          });
+        }
+      } catch (e) {
+        if (mountedRef.current) setErr((e as Error).message);
+      } finally {
+        if (mountedRef.current) {
+          setGenerating(false);
+          setLoading(false);
+        }
       }
-      setGroups(nextGroups);
-      setOpenDates(new Set(nextGroups[0] ? [nextGroups[0].date] : []));
-      setHistory(j.history ?? []);
-    } catch (e) {
-      setErr((e as Error).message);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+    },
+    [applyDayState, userId]
+  );
+
+  const load7Days = useCallback(
+    async (force = false) => {
+      const cached = readDailyClientCache(userId);
+      if (!force && cached?.range7d) {
+        if (mountedRef.current) {
+          setToday(cached.today);
+          setYesterday(cached.yesterday);
+          setDailyEnabled(cached.dailyEnabled);
+          setGroups(cached.range7d);
+          setOpenDates(new Set(cached.range7d[0] ? [cached.range7d[0].date] : []));
+          setHistory(cached.history);
+          setErr("");
+          setLoading(false);
+        }
+        return;
+      }
+
+      if (mountedRef.current) {
+        setLoading(true);
+        setErr("");
+      }
+
+      try {
+        if (force || !inflight7dPromise) {
+          inflight7dPromise = fetch("/api/daily?range=7d", { cache: "no-store" })
+            .then(async (r) => {
+              const j = (await r.json()) as Daily7dApiResponse;
+              if (!r.ok) throw new Error(j.error || "Không tải được dữ liệu 7 ngày");
+              return j;
+            })
+            .finally(() => {
+              inflight7dPromise = null;
+            });
+        }
+
+        const j = await inflight7dPromise;
+        const nextGroups = j.groups ?? [];
+        const nextHistory = j.history ?? [];
+
+        saveDaily7dCache(nextGroups, {
+          userId,
+          today: j.today,
+          yesterday: j.yesterday,
+          dailyEnabled: j.dailyEnabled,
+          history: nextHistory,
+        });
+
+        if (mountedRef.current) {
+          setToday(j.today);
+          setYesterday(j.yesterday);
+          if (typeof j.dailyEnabled === "boolean") {
+            setDailyEnabled(j.dailyEnabled);
+          }
+          setGroups(nextGroups);
+          setOpenDates(new Set(nextGroups[0] ? [nextGroups[0].date] : []));
+          setHistory(nextHistory);
+        }
+      } catch (e) {
+        if (mountedRef.current) setErr((e as Error).message);
+      } finally {
+        if (mountedRef.current) setLoading(false);
+      }
+    },
+    [userId]
+  );
 
   const toggleDailySetting = async (nextVal?: boolean) => {
     if (togglingDaily) return;
@@ -318,6 +560,14 @@ export default function Daily() {
       const j = await r.json();
       if (!r.ok) throw new Error(j.error || "Không lưu được cài đặt");
       setDailyEnabled(target);
+      if (today) {
+        upsertDailyCacheMeta({
+          userId,
+          today,
+          yesterday,
+          dailyEnabled: target,
+        });
+      }
       notifySettingsUpdated({ notify_daily_vocab: target });
 
       if (target && mode === "today" && (news.length < 5 || ielts.length < 5)) {
@@ -330,19 +580,33 @@ export default function Daily() {
     }
   };
 
+  const modeRef = useRef<Mode>(mode);
+  useEffect(() => {
+    modeRef.current = mode;
+  }, [mode]);
+
   useEffect(() => {
     const id = requestAnimationFrame(() => {
-      void loadDay();
+      if (modeRef.current === "today") {
+        void loadDay();
+      }
     });
     return () => cancelAnimationFrame(id);
   }, [loadDay]);
 
   const switchMode = (next: Mode, customDate?: string) => {
     setMode(next);
-    if (next === "today") loadDay(today || undefined);
-    else if (next === "yesterday") loadDay(yesterday);
-    else if (next === "7d") load7Days();
-    else if (next === "custom" && customDate) loadDay(customDate);
+    if (next === "today") void loadDay(today || undefined);
+    else if (next === "yesterday") void loadDay(yesterday || undefined);
+    else if (next === "7d") void load7Days();
+    else if (next === "custom" && customDate) void loadDay(customDate);
+  };
+
+  const refreshCurrent = () => {
+    if (mode === "7d") void load7Days(true);
+    else if (mode === "yesterday") void loadDay(yesterday || undefined, true);
+    else if (mode === "custom" && date) void loadDay(date, true);
+    else void loadDay(today || undefined, true);
   };
 
   const speak = (word: string) => {
@@ -445,25 +709,37 @@ export default function Daily() {
           <History size={15} /> 7 ngày qua
         </button>
 
-        {history.length > 0 && (
-          <div className="flex w-full items-center gap-2 rounded-full border border-line bg-card px-4 py-2 text-sm sm:ml-auto sm:w-auto">
-            <Calendar size={15} className="shrink-0 text-muted" />
-            <select
-              value={mode === "7d" ? "" : date}
-              onChange={(e) => e.target.value && switchMode("custom", e.target.value)}
-              className="min-w-0 flex-1 bg-transparent outline-none sm:flex-initial"
-            >
-              <option value="" disabled>
-                Chọn ngày trong lịch sử...
-              </option>
-              {history.map((d) => (
-                <option key={d} value={d}>
-                  {d === today ? `${d} (Hôm nay)` : d === yesterday ? `${d} (Hôm qua)` : d}
+        <div className="flex w-full items-center gap-2 sm:ml-auto sm:w-auto">
+          {history.length > 0 && (
+            <div className="flex min-w-0 flex-1 items-center gap-2 rounded-full border border-line bg-card px-4 py-2 text-sm sm:flex-initial">
+              <Calendar size={15} className="shrink-0 text-muted" />
+              <select
+                value={mode === "7d" ? "" : date}
+                onChange={(e) => e.target.value && switchMode("custom", e.target.value)}
+                className="min-w-0 flex-1 bg-transparent outline-none sm:flex-initial"
+              >
+                <option value="" disabled>
+                  Chọn ngày trong lịch sử...
                 </option>
-              ))}
-            </select>
-          </div>
-        )}
+                {history.map((d) => (
+                  <option key={d} value={d}>
+                    {d === today ? `${d} (Hôm nay)` : d === yesterday ? `${d} (Hôm qua)` : d}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+          <button
+            type="button"
+            onClick={refreshCurrent}
+            disabled={loading}
+            title="Làm mới dữ liệu từ máy chủ"
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-line bg-card px-3.5 py-2 text-xs font-semibold text-muted transition hover:border-brand hover:text-ink disabled:opacity-50"
+          >
+            <RefreshCw size={14} className={loading ? "animate-spin" : ""} />
+            <span className="hidden sm:inline">Làm mới</span>
+          </button>
+        </div>
       </div>
 
       {loading && (

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { clearDailyClientCache } from "@/lib/daily-cache";
 
 export type MeInfo = {
   profile: {
@@ -70,6 +71,7 @@ export function clearCachedMe() {
   cachedLoaded = false;
   inflightPromise = null;
   previewAsUserState = false;
+  clearDailyClientCache();
   try {
     if (typeof window !== "undefined") {
       sessionStorage.removeItem(PREVIEW_USER_KEY);
