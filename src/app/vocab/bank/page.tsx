@@ -11,6 +11,7 @@ import ExportButton from "@/components/ExportPanel";
 import { BadgePickerModal, CardBadge, EditBadgeButton, useCardBadges } from "@/components/CardBadgePicker";
 import { useMe } from "@/lib/use-me";
 import BookSection from "./BookSection";
+import { speakWord } from "@/lib/tts";
 
 type Tab = "all" | "topic" | "level" | "book";
 type Sel = { kind: "topic" | "level"; value: string } | null;
@@ -46,14 +47,6 @@ function getPageNumbers(current: number, total: number): (number | "...")[] {
   if (current < total - 2) pages.push("...");
   pages.push(total);
   return pages;
-}
-
-function speakWord(text: string) {
-  if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
-  speechSynthesis.cancel();
-  const u = new SpeechSynthesisUtterance(text);
-  u.lang = "en-GB";
-  speechSynthesis.speak(u);
 }
 
 function WordCard({

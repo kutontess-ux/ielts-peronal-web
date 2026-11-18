@@ -33,6 +33,7 @@ import {
 import { enrollWordsInSrs } from "@/lib/srs";
 import { notifyDueUpdated } from "@/lib/due-events";
 import { levelColor } from "@/lib/mock";
+import { speakWord } from "@/lib/tts";
 import {
   countWords,
   detectUsedTargetWords,
@@ -139,16 +140,7 @@ function formatTimer(seconds: number): string {
 }
 
 function speakEnglish(text: string) {
-  if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
-  try {
-    window.speechSynthesis.cancel();
-    const u = new SpeechSynthesisUtterance(text);
-    u.lang = "en-GB";
-    u.rate = 0.95;
-    window.speechSynthesis.speak(u);
-  } catch {
-    // ignore speech error
-  }
+  speakWord(text);
 }
 
 function WritingStudioInner() {

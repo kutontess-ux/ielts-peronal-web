@@ -23,6 +23,8 @@ import {
 } from "lucide-react";
 import { levelColor, type Word } from "@/lib/mock";
 import { notifyDueUpdated } from "@/lib/due-events";
+import { speakWord as speakTts } from "@/lib/tts";
+import { VoiceSettingsButton } from "@/components/VoiceSettingsModal";
 import {
   checkRecallSoftMatch,
   checkVietnameseMeaningMatch,
@@ -193,11 +195,7 @@ export default function StudySetLearn({
   const done = queue.length === 0;
 
   const speakWord = useCallback((text: string) => {
-    if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
-    speechSynthesis.cancel();
-    const u = new SpeechSynthesisUtterance(text);
-    u.lang = "en-GB";
-    speechSynthesis.speak(u);
+    speakTts(text);
   }, []);
 
   const resetSession = useCallback((nextWords: Word[], mode: LearnMode) => {
@@ -595,6 +593,7 @@ export default function StudySetLearn({
         </button>
 
         <div className="flex flex-wrap items-center gap-2">
+          <VoiceSettingsButton variant="compact" />
           {onSwitchToFlashcards && (
             <button
               type="button"

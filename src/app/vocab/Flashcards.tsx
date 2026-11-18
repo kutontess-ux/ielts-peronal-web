@@ -10,6 +10,8 @@ import { levelColor, type Word } from "@/lib/mock";
 import { enrollWordsInSrs } from "@/lib/srs";
 import { notifyDueUpdated } from "@/lib/due-events";
 import { recordStudySetSession, type StudySetReviewResult } from "@/lib/study-sets";
+import { speakWord } from "@/lib/tts";
+import { VoiceSettingsButton } from "@/components/VoiceSettingsModal";
 
 type HistoryStatus = "known" | "unknown" | "viewed";
 
@@ -60,11 +62,7 @@ export default function Flashcards({
   const classifiedCount = knownList.length + unknownList.length;
 
   const speak = useCallback((text: string) => {
-    if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
-    speechSynthesis.cancel();
-    const u = new SpeechSynthesisUtterance(text);
-    u.lang = "en-GB";
-    speechSynthesis.speak(u);
+    speakWord(text);
   }, []);
 
   const syncDeckToSrs = useCallback(async (wordList: Word[]) => {
@@ -340,6 +338,7 @@ export default function Flashcards({
           {idx + 1} / {deck.length}
         </div>
         <div className="flex flex-wrap items-center gap-2 text-xs font-bold sm:gap-2.5">
+          <VoiceSettingsButton variant="compact" />
           {onSwitchToLearn && (
             <button
               type="button"

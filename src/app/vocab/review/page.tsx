@@ -23,6 +23,8 @@ import {
 import { levelColor, type Word } from "@/lib/mock";
 import { notifyDueUpdated } from "@/lib/due-events";
 import { useMe } from "@/lib/use-me";
+import { speakWord as speakTts } from "@/lib/tts";
+import { VoiceSettingsButton } from "@/components/VoiceSettingsModal";
 import {
   checkRecallSoftMatch,
   checkVietnameseMeaningMatch,
@@ -261,11 +263,7 @@ export default function Review() {
   }, [card, feedback, answerMode, promptSide, selfGradeMode]);
 
   const speakWord = useCallback((word: string) => {
-    if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
-    speechSynthesis.cancel();
-    const u = new SpeechSynthesisUtterance(word);
-    u.lang = "en-GB";
-    speechSynthesis.speak(u);
+    speakTts(word);
   }, []);
 
   const handleClearAll = async () => {
@@ -805,6 +803,7 @@ export default function Review() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          <VoiceSettingsButton variant="compact" />
           <button
             type="button"
             onClick={() => {

@@ -9,6 +9,7 @@ import {
   SplitSquareVertical, Trash2, Volume2, X, Zap,
 } from "lucide-react";
 import { cleanTerm, normKey, possibleLemmas } from "@/lib/normalize";
+import { speakWord } from "@/lib/tts";
 
 type Passage = {
   id: number;
@@ -117,14 +118,6 @@ function extractSentenceFromParagraph(paragraph: string, target: string): string
   const lower = target.toLowerCase();
   const found = sentences.find((s) => s.toLowerCase().includes(lower));
   return (found ?? paragraph).trim();
-}
-
-function speakWord(text: string) {
-  if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
-  window.speechSynthesis.cancel();
-  const u = new SpeechSynthesisUtterance(text);
-  u.lang = "en-GB";
-  window.speechSynthesis.speak(u);
 }
 
 function ReadingDetailInner() {

@@ -17,6 +17,7 @@ import {
 import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
 import { useMe, type MeInfo } from "@/lib/use-me";
 import ThemeToggle from "@/components/ThemeToggle";
+import { VoiceSettingsButton } from "@/components/VoiceSettingsModal";
 
 type Item = { href: string; label: string; icon: LucideIcon; exact?: boolean; badge?: number; soon?: boolean };
 
@@ -284,6 +285,7 @@ export default function Sidebar() {
             </Link>
           )}
           <ThemeToggle variant="icon" />
+          <VoiceSettingsButton variant="icon" />
           <Link
             href="/notifications"
             className="relative rounded-xl border border-line bg-card p-2 text-muted hover:text-ink"
@@ -336,6 +338,7 @@ export default function Sidebar() {
               <NavLink key={i.href} item={i} path={path} onClick={() => setMobileMenuOpen(false)} />
             ))}
             <div className="mt-auto space-y-2.5 pt-3">
+              <VoiceSettingsButton className="w-full justify-center" />
               <ThemeToggle variant="switch" />
               <UserFooter
                 me={me}
@@ -393,6 +396,7 @@ export default function Sidebar() {
         {SKILLS.map((i) => <NavLink key={i.href} item={i} path={path} />)}
 
         <div className="mt-auto space-y-2.5 pt-3">
+          <VoiceSettingsButton className="w-full justify-center" />
           <ThemeToggle variant="switch" />
           <div className="rounded-xl border border-line/60 bg-card p-3 text-xs text-muted dark:border-transparent">
             <div className="mb-1 flex items-center gap-2 font-bold text-ink">

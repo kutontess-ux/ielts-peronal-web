@@ -18,6 +18,8 @@ import {
 import { levelColor } from "@/lib/mock";
 import { notifyDueUpdated, notifySettingsUpdated } from "@/lib/due-events";
 import ExportButton from "@/components/ExportPanel";
+import { speakWord } from "@/lib/tts";
+import { VoiceSettingsButton } from "@/components/VoiceSettingsModal";
 import type { DailyGroup, DailyWord } from "@/app/api/daily/route";
 
 type Mode = "today" | "yesterday" | "7d" | "custom";
@@ -344,11 +346,7 @@ export default function Daily() {
   };
 
   const speak = (word: string) => {
-    if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
-    speechSynthesis.cancel();
-    const u = new SpeechSynthesisUtterance(word);
-    u.lang = "en-GB";
-    speechSynthesis.speak(u);
+    speakWord(word);
   };
 
   const toggleDayGroup = (d: string) => {
@@ -377,6 +375,8 @@ export default function Daily() {
                 : "Đang tải..."}
           </p>
         </div>
+
+        <VoiceSettingsButton variant="compact" />
 
         <button
           type="button"

@@ -20,6 +20,7 @@ import {
   LEITNER_INTERVAL_DAYS,
   type LeitnerLevel,
 } from "@/lib/srs";
+import { speakWord } from "@/lib/tts";
 import {
   getVnTodayKey,
   useStudyHistory,
@@ -135,11 +136,7 @@ export default function VocabStatsPage() {
   }, [loadStats]);
 
   const speak = (word: string) => {
-    if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
-    speechSynthesis.cancel();
-    const u = new SpeechSynthesisUtterance(word);
-    u.lang = "en-GB";
-    speechSynthesis.speak(u);
+    speakWord(word);
   };
 
   const setStats = useMemo(() => {
