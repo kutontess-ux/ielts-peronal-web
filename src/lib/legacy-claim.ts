@@ -1,5 +1,6 @@
 import "server-only";
 import type { supabaseAdmin } from "@/lib/supabase";
+import { isMissingUserWordsTableError } from "@/lib/user-words";
 
 export async function getLegacyCounts(db: ReturnType<typeof supabaseAdmin>) {
   const [
@@ -137,38 +138,49 @@ export async function claimLegacyDataForUser(
     // Bỏ qua nếu chưa chạy migration daily_words.user_id
   }
 
-  // Gộp các từ cũ chưa gắn created_by (ngoại trừ Bộ sách book-*) vào Kho cá nhân của Admin
-  try {
+  // Gộp các từ cũ chưa gắn created_by (ngoại trừ Bộ sách book-*) về tài khoản Admin
+  let userWordsMissing = false;
+  for (let pass = 0; pass < 50; pass++) {
     const { data: legacyWords, error: lwErr } = await db
       .from("words")
       .select("id,source")
       .is("created_by", null)
-      .not("source", "like", "book-%");
+      .not("source", "like", "book-%")
+      .limit(500);
 
-    if (!lwErr && legacyWords && legacyWords.length > 0) {
-      for (let i = 0; i < legacyWords.length; i += 500) {
-        const slice = legacyWords.slice(i, i + 500);
-        const uwRows = slice.map((w) => ({
-          user_id: adminId,
-          word_id: Number(w.id),
-          source: String(w.source || "import"),
-        }));
-        const { error: uwErr } = await db
-          .from("user_words")
-          .upsert(uwRows, { onConflict: "user_id,word_id", ignoreDuplicates: true });
-        if (uwErr) break;
-        await db
-          .from("words")
-          .update({ created_by: adminId })
-          .is("created_by", null)
-          .in(
-            "id",
-            slice.map((w) => Number(w.id))
-          );
+    if (lwErr) throw new Error(lwErr.message);
+    if (!legacyWords || legacyWords.length === 0) break;
+
+    const sliceIds = legacyWords.map((w) => Number(w.id));
+
+    // Luôn gắn created_by = adminId trước để xử lý dứt điểm dữ liệu cũ
+    // (kể cả khi chưa chạy migration user_words, Backfill 5 sẽ tự kế thừa created_by này)
+    const { error: updErr } = await db
+      .from("words")
+      .update({ created_by: adminId })
+      .is("created_by", null)
+      .in("id", sliceIds);
+    if (updErr) throw new Error(updErr.message);
+
+    if (!userWordsMissing) {
+      const uwRows = legacyWords.map((w) => ({
+        user_id: adminId,
+        word_id: Number(w.id),
+        source: String(w.source || "import"),
+      }));
+      const { error: uwErr } = await db
+        .from("user_words")
+        .upsert(uwRows, { onConflict: "user_id,word_id", ignoreDuplicates: true });
+      if (uwErr) {
+        if (isMissingUserWordsTableError(uwErr)) {
+          userWordsMissing = true;
+        } else {
+          throw new Error(uwErr.message);
+        }
       }
     }
-  } catch {
-    // Bỏ qua nếu chưa chạy migration user_words
+
+    if (legacyWords.length < 500) break;
   }
 }
 

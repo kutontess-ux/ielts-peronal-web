@@ -202,12 +202,15 @@ export default function AdminPage() {
             <AlertTriangle size={20} className="mt-0.5 shrink-0 text-amber-500" />
             <div>
               <div className="font-bold text-amber-800 dark:text-amber-300">
-                Phát hiện {data.totalLegacy} bản ghi cũ chưa gắn tài khoản (`user_id IS NULL`)
+                Phát hiện {data.totalLegacy} bản ghi cũ chưa gắn tài khoản
               </div>
               <p className="mt-0.5 text-xs text-muted">
                 Bao gồm: {data.legacyCounts.reviews} từ đang ôn, {data.legacyCounts.study_sets} học phần,{" "}
                 {data.legacyCounts.study_folders} thư mục, {data.legacyCounts.reading_passages} bài đọc
-                {data.legacyCounts.daily_words ? `, ${data.legacyCounts.daily_words} từ hằng ngày` : ""}.
+                {data.legacyCounts.reading_notes ? `, ${data.legacyCounts.reading_notes} ghi chú đọc` : ""}
+                {data.legacyCounts.daily_words ? `, ${data.legacyCounts.daily_words} từ hằng ngày` : ""}
+                {data.legacyCounts.words ? `, ${data.legacyCounts.words} từ trong kho` : ""}
+                {data.legacyCounts.user_settings ? `, ${data.legacyCounts.user_settings} cài đặt` : ""}.
               </p>
             </div>
           </div>
