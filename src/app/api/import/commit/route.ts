@@ -7,7 +7,11 @@ type Item = {
   is_awl?: boolean; collocations?: string[]; synonyms?: string[];
 };
 
-// Bước 2: người dùng đã duyệt -> ghi vào kho. Trùng khoá chuẩn hoá thì bỏ qua (an toàn tuyệt đối).
+const PERSONAL_SOURCES = new Set(["study-set", "study-set-ai", "reading-personal"]);
+
+// Bước 2: người dùng đã duyệt -> ghi vào kho.
+// Chỉ Admin mới được nạp vào Bộ sách (book-*) hoặc nạp hàng loạt vào Kho chung (import).
+// Thành viên thường chỉ được lưu từ phục vụ Thẻ ghi nhớ cá nhân (study-set / study-set-ai / reading-personal).
 export async function POST(req: Request) {
   try {
     const auth = await requireAuth();
@@ -21,9 +25,20 @@ export async function POST(req: Request) {
     };
     if (!items?.length) return NextResponse.json({ error: "Không có từ nào để lưu" }, { status: 400 });
 
+    const cleanSource = (source ?? "").trim() || "import";
+    if (!ctx.isAdmin && !PERSONAL_SOURCES.has(cleanSource)) {
+      return NextResponse.json(
+        {
+          error:
+            "Chỉ quản trị viên (Admin) mới được tạo bộ sách hoặc nạp từ vào Bộ sách cộng đồng. Bạn hãy lưu từ vào Thẻ ghi nhớ cá nhân.",
+        },
+        { status: 403 }
+      );
+    }
+
     const rows = items.map((i) => ({
       lemma: i.lemma.toLowerCase().trim(),
-      norm_key: i.norm_key,
+      norm_key: i.norm_key || i.lemma.toLowerCase().trim(),
       ipa: i.ipa || null,
       pos: i.pos || null,
       meaning_vi: i.meaning_vi || null,
@@ -35,7 +50,7 @@ export async function POST(req: Request) {
       collocations: i.collocations ?? [],
       synonyms: i.synonyms ?? [],
       status: "approved",
-      source: source || "import",
+      source: cleanSource,
       created_by: ctx.user.id,
     }));
 
@@ -45,6 +60,14 @@ export async function POST(req: Request) {
       .select("id");
     if (error) throw new Error(error.message);
 
+    const normKeys = Array.from(new Set(rows.map((r) => r.norm_key).filter(Boolean)));
+    const { data: resolvedRows } = normKeys.length
+      ? await ctx.db.from("words").select("id").in("norm_key", normKeys)
+      : { data: [] as { id: number }[] };
+    const wordIds = (resolvedRows ?? [])
+      .map((r) => Number(r.id))
+      .filter((n) => Number.isFinite(n) && n > 0);
+
     const added = data?.length ?? 0;
     await ctx.db.from("imports").insert({
       total: stats?.total ?? items.length,
@@ -52,7 +75,7 @@ export async function POST(req: Request) {
       duplicates: (stats?.duplicates ?? 0) + (items.length - added),
       invalid: stats?.invalid ?? 0,
     });
-    return NextResponse.json({ added, skipped: items.length - added });
+    return NextResponse.json({ added, skipped: items.length - added, wordIds });
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message }, { status: 500 });
   }

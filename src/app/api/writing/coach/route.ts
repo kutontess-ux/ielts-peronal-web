@@ -530,7 +530,8 @@ export async function PUT(req: Request) {
           collocations: Array.isArray(i.collocations) ? i.collocations : [],
           synonyms: Array.isArray(i.synonyms) ? i.synonyms : [],
           status: "approved",
-          source: body.source || "writing-coach",
+          source:
+            ctx.isAdmin && body.source ? String(body.source).trim() : "writing-coach",
           created_by: ctx.user.id,
         };
       })

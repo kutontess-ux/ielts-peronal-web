@@ -493,7 +493,7 @@ export default function Bank() {
   const [tab, setTab] = useState<Tab>("all");
   const [sel, setSel] = useState<Sel>(null);
   const [importing, setImporting] = useState(false);
-  const { realIsAdmin: isAdmin } = useMe();
+  const { isAdmin } = useMe();
 
   // Bộ lọc cho tab Tất cả
   const [q, setQ] = useState("");
@@ -675,6 +675,8 @@ export default function Bank() {
   const changeTab = (t: Tab) => {
     setTab(t);
     openSel(null);
+    setSelectMode(false);
+    setSelectedIds(new Set());
   };
 
   return (
@@ -684,12 +686,14 @@ export default function Bank() {
           <Package size={26} strokeWidth={1.5} className="text-brand-hover" />
           Kho từ vựng <span className="text-base font-medium text-muted">({words.length} từ)</span>
         </h1>
-        <button onClick={() => setImporting(!importing)} className="inline-flex items-center gap-2 rounded-full bg-brand px-5 py-2.5 text-sm font-bold text-white hover:bg-brand-hover hover:text-bg">
-          <Upload size={17} strokeWidth={1.75} /> Nạp từ vựng hàng loạt
-        </button>
+        {isAdmin && (
+          <button onClick={() => setImporting(!importing)} className="inline-flex items-center gap-2 rounded-full bg-brand px-5 py-2.5 text-sm font-bold text-white hover:bg-brand-hover hover:text-bg">
+            <Upload size={17} strokeWidth={1.75} /> Nạp từ vựng hàng loạt
+          </button>
+        )}
       </div>
 
-      {importing && <ImportPanel onSaved={load} />}
+      {isAdmin && importing && <ImportPanel onSaved={load} />}
 
       {loading && <div className="flex items-center gap-2 py-10 text-muted"><Loader2 className="animate-spin" size={18} /> Đang tải kho từ vựng...</div>}
       {loadErr && <div className="rounded-xl bg-rose-500/15 p-4 text-sm text-rose-700 dark:bg-rose-400/15 dark:text-rose-300">Không tải được kho: {loadErr}</div>}
@@ -698,7 +702,11 @@ export default function Bank() {
         <div className="rounded-2xl bg-card p-10 text-center">
           <Package size={40} strokeWidth={1.2} className="mx-auto text-brand-hover" />
           <div className="mt-3 text-lg font-bold">Kho đang trống</div>
-          <p className="mt-1 text-sm text-muted">Bấm “Nạp từ vựng hàng loạt” ở trên hoặc chuyển sang tab “Bộ sách” để nạp sách từ vựng chuẩn.</p>
+          <p className="mt-1 text-sm text-muted">
+            {isAdmin
+              ? "Bấm “Nạp từ vựng hàng loạt” ở trên hoặc chuyển sang tab “Bộ sách” để nạp sách từ vựng chuẩn."
+              : "Kho từ vựng cộng đồng hiện chưa có từ nào."}
+          </p>
         </div>
       )}
 
@@ -878,12 +886,14 @@ export default function Bank() {
                     >
                       <div className="flex items-start justify-between">
                         <CardBadge custom={badges[badgeKey]} FallbackIcon={Ic} size={30} />
-                        <EditBadgeButton
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setEditingTopicBadge(t);
-                          }}
-                        />
+                        {isAdmin && (
+                          <EditBadgeButton
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setEditingTopicBadge(t);
+                            }}
+                          />
+                        )}
                       </div>
                       <div className="mt-3 font-bold">{t}</div>
                       <div className="mb-3 text-xs text-muted">{list.length} từ</div>
@@ -892,7 +902,7 @@ export default function Bank() {
                   );
                 })}
               </div>
-              {editingTopicBadge && (
+              {isAdmin && editingTopicBadge && (
                 <BadgePickerModal
                   title={editingTopicBadge}
                   current={badges[`topic:${editingTopicBadge}`]}
@@ -920,7 +930,14 @@ export default function Bank() {
           )}
 
           {tab === "book" && (
-            <BookSection words={words} onReload={load} WordGrid={({ list }) => renderGrid(list)} />
+            <BookSection
+              words={words}
+              onReload={load}
+              isAdmin={isAdmin}
+              WordGrid={({ list }) => (
+                <WordGrid list={list} onDelete={isAdmin ? deleteWord : undefined} />
+              )}
+            />
           )}
         </>
       )}

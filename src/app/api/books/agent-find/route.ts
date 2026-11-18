@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireAuth } from "@/lib/supabase-server";
+import { requireAdmin } from "@/lib/supabase-server";
 import { consumeAiQuota } from "@/lib/ai-quota";
 import { askJson, parseRequestedWordCount, TOPICS, type Enriched } from "@/lib/ai";
 import { normKey } from "@/lib/normalize";
@@ -34,10 +34,10 @@ QUY TẮC BẮT BUỘC:
 Trả về JSON dạng {"items":[...]}.`;
 }
 
-// Agent tìm từ vựng theo yêu cầu tự nhiên của người dùng, chống trùng kho hiện có, trả về danh sách duyệt
+// Agent tìm từ vựng bổ sung vào Bộ sách cộng đồng (chỉ Admin)
 export async function POST(req: Request) {
   try {
-    const auth = await requireAuth();
+    const auth = await requireAdmin();
     if (auth.errorResponse) return auth.errorResponse;
     const { ctx } = auth;
 

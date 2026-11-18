@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireAuth } from "@/lib/supabase-server";
+import { requireAdmin } from "@/lib/supabase-server";
 import { consumeAiQuota } from "@/lib/ai-quota";
 import { enrich } from "@/lib/ai";
 import { normKey } from "@/lib/normalize";
@@ -10,10 +10,10 @@ export const maxDuration = 120;
 type OxEntry = { word: string; level: string };
 const OX_LIST = oxford3000 as OxEntry[];
 
-// Nạp thêm 30 từ chuẩn từ danh sách The Oxford 3000 (bỏ qua từ đã có trong kho)
+// Nạp thêm 30 từ chuẩn từ danh sách The Oxford 3000 (chỉ Admin mới được nạp vào Bộ sách cộng đồng)
 export async function POST(req: Request) {
   try {
-    const auth = await requireAuth();
+    const auth = await requireAdmin();
     if (auth.errorResponse) return auth.errorResponse;
     const { ctx } = auth;
     const db = ctx.db;

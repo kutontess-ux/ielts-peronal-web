@@ -130,3 +130,35 @@ export async function DELETE(req: Request) {
     return NextResponse.json({ error: (e as Error).message }, { status: 500 });
   }
 }
+
+// Chỉ Admin mới được gỡ một Bộ sách tuỳ chỉnh khỏi danh sách Bộ sách cộng đồng (giữ nguyên từ vựng trong kho chung)
+export async function PATCH(req: Request) {
+  try {
+    const auth = await requireAdmin();
+    if (auth.errorResponse) return auth.errorResponse;
+    const { ctx } = auth;
+
+    const body = (await req.json().catch(() => ({}))) as {
+      action?: string;
+      source?: string;
+    };
+
+    if (body.action === "detach_book") {
+      const src = (body.source ?? "").trim();
+      if (!src.startsWith("book-") || src === "book-3000") {
+        return NextResponse.json({ error: "Bộ sách không hợp lệ để gỡ" }, { status: 400 });
+      }
+      const { data, error } = await ctx.db
+        .from("words")
+        .update({ source: "import" })
+        .eq("source", src)
+        .select("id");
+      if (error) throw new Error(error.message);
+      return NextResponse.json({ updated: data?.length ?? 0 });
+    }
+
+    return NextResponse.json({ error: "Hành động không hợp lệ" }, { status: 400 });
+  } catch (e) {
+    return NextResponse.json({ error: (e as Error).message }, { status: 500 });
+  }
+}

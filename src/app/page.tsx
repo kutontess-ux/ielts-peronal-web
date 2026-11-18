@@ -146,7 +146,7 @@ export default function Home() {
   const SHORTCUTS: { title: string; sub: string; tag: string; href: string; icon: LucideIcon }[] = [
     {
       title: "Kho từ vựng",
-      sub: totalWords !== null ? `${totalWords} từ đang lưu trong kho` : "Quản lý, lọc & chia bộ sách",
+      sub: totalWords !== null ? `${totalWords} từ đang lưu trong kho` : "Xem, tra cứu & xuất từ vựng cộng đồng",
       tag: totalWords !== null ? `${totalWords} từ` : "Kho từ",
       href: "/vocab/bank",
       icon: Library,

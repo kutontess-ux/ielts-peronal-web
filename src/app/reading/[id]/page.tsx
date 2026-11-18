@@ -10,6 +10,8 @@ import {
 } from "lucide-react";
 import { cleanTerm, normKey, possibleLemmas } from "@/lib/normalize";
 import { speakWord } from "@/lib/tts";
+import { useMe } from "@/lib/use-me";
+import { createStudySet, updateStudySet, useStudySets } from "@/lib/study-sets";
 
 type Passage = {
   id: number;
@@ -175,14 +177,22 @@ function ReadingDetailInner() {
   const [mMeaning, setMMeaning] = useState("");
   const [mLevel, setMLevel] = useState("B2");
 
-  // Modal chọn / tạo Bộ sách khi thêm vào Kho
+  const { isAdmin } = useMe();
+  const studySets = useStudySets();
+
+  // Modal chọn / tạo Bộ sách cộng đồng (chỉ Admin) hoặc Thẻ ghi nhớ cá nhân (User)
   const [showBookModal, setShowBookModal] = useState(false);
+  const [showSetModal, setShowSetModal] = useState(false);
   const [pendingVocabToAdd, setPendingVocabToAdd] = useState<VocabLookup | null>(null);
   const [books, setBooks] = useState<BookMeta[]>(BASE_BOOKS);
   const [selectedBookId, setSelectedBookId] = useState("book-reading");
   const [creatingBook, setCreatingBook] = useState(false);
   const [newBookTitle, setNewBookTitle] = useState("");
   const [newBookBand, setNewBookBand] = useState("Band 6.5");
+  const [selectedSetId, setSelectedSetId] = useState("");
+  const [creatingSet, setCreatingSet] = useState(false);
+  const [newSetTitle, setNewSetTitle] = useState("");
+  const [savedToSetMap, setSavedToSetMap] = useState<Record<string, string>>({});
   const [bookModalError, setBookModalError] = useState("");
 
   // Đóng/mở danh sách từ đã tra & mở rộng ghi chú
@@ -567,7 +577,27 @@ function ReadingDetailInner() {
     }
   }
 
+  function openPersonalSetPicker(target?: VocabLookup) {
+    const item = target ?? vocabResult;
+    if (!item) return;
+    setPendingVocabToAdd(item);
+    setBookModalError("");
+    if (studySets.length > 0) {
+      const stillValid = studySets.some((s) => s.id === selectedSetId);
+      setSelectedSetId(stillValid ? selectedSetId : studySets[0].id);
+      setCreatingSet(false);
+    } else {
+      setCreatingSet(true);
+      setNewSetTitle(passage?.title ? `Reading: ${passage.title}` : "Từ vựng Reading");
+    }
+    setShowSetModal(true);
+  }
+
   function openBookPicker(target?: VocabLookup) {
+    if (!isAdmin) {
+      openPersonalSetPicker(target);
+      return;
+    }
     const item = target ?? vocabResult;
     if (!item) return;
     loadBooksFromStorage();
@@ -578,7 +608,82 @@ function ReadingDetailInner() {
     setShowBookModal(true);
   }
 
+  async function confirmAddToPersonalSet() {
+    const target = pendingVocabToAdd ?? vocabResult;
+    if (!target || addingWord) return;
+    setAddingWord(true);
+    setBookModalError("");
+    try {
+      const validLevels = new Set(["A2", "B1", "B2", "C1", "C2"]);
+      const cefr = validLevels.has(String(target.cefr_level).toUpperCase())
+        ? String(target.cefr_level).toUpperCase()
+        : "B2";
+      const nk = target.norm_key || target.lemma.toLowerCase().trim();
+
+      const r = await fetch("/api/import/commit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          source: "study-set",
+          items: [
+            {
+              lemma: target.lemma,
+              norm_key: nk,
+              ipa: target.ipa || "",
+              pos: target.pos || "",
+              meaning_vi: target.meaning_in_context || target.meaning_vi || "",
+              definition_en: target.definition_en || "",
+              example: target.example || "",
+              cefr_level: cefr,
+              topic: target.topic || "Other",
+              is_awl: !!target.is_awl,
+              collocations: target.collocations ?? [],
+              synonyms: target.synonyms ?? [],
+            },
+          ],
+        }),
+      });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(j.error || "Không lưu được vào Thẻ ghi nhớ");
+
+      const wordIds: number[] = Array.isArray(j.wordIds) ? j.wordIds : [];
+      if (wordIds.length === 0) {
+        throw new Error("Không xác định được mã từ vựng để thêm vào Thẻ ghi nhớ.");
+      }
+
+      let savedTitle = "";
+      if (creatingSet || studySets.length === 0) {
+        const title = newSetTitle.trim() || (passage?.title ? `Reading: ${passage.title}` : "Từ vựng Reading");
+        const created = createStudySet({
+          title,
+          desc: passage?.title ? `Từ vựng từ bài đọc: ${passage.title}` : "Từ vựng lưu từ Reading",
+          wordIds,
+        });
+        savedTitle = created.title;
+        setSelectedSetId(created.id);
+      } else {
+        const existingSet = studySets.find((s) => s.id === selectedSetId) ?? studySets[0];
+        const mergedIds = Array.from(new Set([...existingSet.wordIds, ...wordIds]));
+        updateStudySet(existingSet.id, {
+          title: existingSet.title,
+          desc: existingSet.desc,
+          folderId: existingSet.folderId,
+          wordIds: mergedIds,
+        });
+        savedTitle = existingSet.title;
+      }
+
+      setSavedToSetMap((prev) => ({ ...prev, [nk]: savedTitle }));
+      setShowSetModal(false);
+    } catch (e) {
+      setBookModalError((e as Error).message);
+    } finally {
+      setAddingWord(false);
+    }
+  }
+
   async function confirmAddToBook() {
+    if (!isAdmin) return;
     const target = pendingVocabToAdd ?? vocabResult;
     if (!target || addingWord) return;
     setAddingWord(true);
@@ -1138,7 +1243,7 @@ function ReadingDetailInner() {
             <div className="max-h-[84vh] w-full max-w-lg space-y-4 overflow-y-auto rounded-2xl border border-line bg-card p-5 shadow-2xl lg:sticky lg:top-6 lg:max-h-[calc(100vh-3rem)] lg:max-w-none lg:shadow-none">
               <div className="flex items-center justify-between border-b border-line pb-3">
                 <h2 className="text-sm font-bold text-ink">
-                  {activeTool === "vocab" && "Tra từ & Lưu vào Bộ sách"}
+                  {activeTool === "vocab" && (isAdmin ? "Tra từ & Lưu vào Bộ sách" : "Tra từ & Lưu Thẻ ghi nhớ")}
                   {activeTool === "sentence" && "Phân tích câu phức"}
                   {activeTool === "question" && "Giải thích câu làm sai"}
                   {activeTool === "notes" && `Ghi chú & Lịch sử (${notes.length})`}
@@ -1203,7 +1308,7 @@ function ReadingDetailInner() {
 
                   {showManualAdd && (
                     <form onSubmit={saveManualVocab} className="space-y-2 rounded-xl border border-line bg-bg p-3 text-xs">
-                      <div className="font-semibold text-ink">Admin tự thêm từ (không tốn API)</div>
+                      <div className="font-semibold text-ink">Tự thêm ghi chú từ vựng (không tốn API)</div>
                       <div className="grid grid-cols-2 gap-2">
                         <input
                           required
@@ -1414,38 +1519,63 @@ function ReadingDetailInner() {
                         </div>
                       )}
 
-                      {/* Trạng thái Kho từ vựng rõ ràng */}
-                      <div className="flex items-center justify-between rounded-lg bg-card px-2.5 py-1.5 text-[11px]">
-                        <span className="text-muted">Trạng thái Kho:</span>
-                        {vocabResult.existsInBank ? (
-                          <span className="font-semibold text-emerald-700 dark:text-emerald-300">
-                            ✓ Đã có trong Kho{vocabResult.bankSource ? ` (${vocabResult.bankSource})` : ""}
-                          </span>
-                        ) : (
-                          <span className="font-semibold text-amber-700 dark:text-amber-300">○ Chưa có trong Kho</span>
-                        )}
-                      </div>
+                      {isAdmin ? (
+                        <>
+                          {/* Trạng thái Kho từ vựng rõ ràng */}
+                          <div className="flex items-center justify-between rounded-lg bg-card px-2.5 py-1.5 text-[11px]">
+                            <span className="text-muted">Trạng thái Kho:</span>
+                            {vocabResult.existsInBank ? (
+                              <span className="font-semibold text-emerald-700 dark:text-emerald-300">
+                                ✓ Đã có trong Kho{vocabResult.bankSource ? ` (${vocabResult.bankSource})` : ""}
+                              </span>
+                            ) : (
+                              <span className="font-semibold text-amber-700 dark:text-amber-300">○ Chưa có trong Kho</span>
+                            )}
+                          </div>
 
-                      <button
-                        onClick={() => openBookPicker(vocabResult)}
-                        disabled={vocabResult.existsInBank}
-                        className={`flex w-full items-center justify-center gap-2 rounded-xl py-2.5 text-xs font-bold transition ${
-                          vocabResult.existsInBank
-                            ? "bg-emerald-500/20 text-emerald-700 dark:text-emerald-300"
-                            : "bg-brand text-white hover:bg-brand-hover hover:text-bg"
-                        }`}
-                      >
-                        {vocabResult.existsInBank ? (
-                          <>
-                            <Check size={15} />{" "}
-                            {addedBookTitle ? `Đã thêm vào "${addedBookTitle}"` : "Đã có trong Kho từ vựng"}
-                          </>
-                        ) : (
-                          <>
-                            <Plus size={15} /> Thêm vào Kho từ vựng
-                          </>
-                        )}
-                      </button>
+                          <button
+                            onClick={() => openBookPicker(vocabResult)}
+                            disabled={vocabResult.existsInBank}
+                            className={`flex w-full items-center justify-center gap-2 rounded-xl py-2.5 text-xs font-bold transition ${
+                              vocabResult.existsInBank
+                                ? "bg-emerald-500/20 text-emerald-700 dark:text-emerald-300"
+                                : "bg-brand text-white hover:bg-brand-hover hover:text-bg"
+                            }`}
+                          >
+                            {vocabResult.existsInBank ? (
+                              <>
+                                <Check size={15} />{" "}
+                                {addedBookTitle ? `Đã thêm vào "${addedBookTitle}"` : "Đã có trong Kho từ vựng"}
+                              </>
+                            ) : (
+                              <>
+                                <Plus size={15} /> Thêm vào Bộ sách / Kho
+                              </>
+                            )}
+                          </button>
+                        </>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => openPersonalSetPicker(vocabResult)}
+                          className={`flex w-full items-center justify-center gap-2 rounded-xl py-2.5 text-xs font-bold transition ${
+                            savedToSetMap[vocabResult.norm_key || vocabResult.lemma.toLowerCase().trim()]
+                              ? "bg-emerald-500/20 text-emerald-700 dark:text-emerald-300"
+                              : "bg-brand text-white hover:bg-brand-hover hover:text-bg"
+                          }`}
+                        >
+                          {savedToSetMap[vocabResult.norm_key || vocabResult.lemma.toLowerCase().trim()] ? (
+                            <>
+                              <Check size={15} /> Đã lưu vào Thẻ ghi nhớ “
+                              {savedToSetMap[vocabResult.norm_key || vocabResult.lemma.toLowerCase().trim()]}”
+                            </>
+                          ) : (
+                            <>
+                              <Plus size={15} /> Lưu vào Thẻ ghi nhớ cá nhân
+                            </>
+                          )}
+                        </button>
+                      )}
                     </div>
                   )}
 
@@ -1820,14 +1950,33 @@ function ReadingDetailInner() {
                                   <div className="italic text-muted">“{vocabObj.example}”</div>
                                 )}
                                 <div className="flex items-center justify-between pt-1">
-                                  {vocabObj.existsInBank ? (
-                                    <span className="font-semibold text-emerald-700 dark:text-emerald-300">✓ Đã có trong Kho</span>
+                                  {isAdmin ? (
+                                    vocabObj.existsInBank ? (
+                                      <span className="font-semibold text-emerald-700 dark:text-emerald-300">✓ Đã có trong Kho</span>
+                                    ) : (
+                                      <button
+                                        onClick={() => openBookPicker(vocabObj)}
+                                        className="inline-flex items-center gap-1 rounded-lg bg-brand px-2.5 py-1 font-semibold text-white hover:bg-brand-hover hover:text-bg"
+                                      >
+                                        <Plus size={12} /> Thêm vào Bộ sách
+                                      </button>
+                                    )
                                   ) : (
                                     <button
-                                      onClick={() => openBookPicker(vocabObj)}
+                                      type="button"
+                                      onClick={() => openPersonalSetPicker(vocabObj)}
                                       className="inline-flex items-center gap-1 rounded-lg bg-brand px-2.5 py-1 font-semibold text-white hover:bg-brand-hover hover:text-bg"
                                     >
-                                      <Plus size={12} /> Thêm vào Kho
+                                      {savedToSetMap[vocabObj.norm_key || vocabObj.lemma.toLowerCase().trim()] ? (
+                                        <>
+                                          <Check size={12} /> Đã lưu “
+                                          {savedToSetMap[vocabObj.norm_key || vocabObj.lemma.toLowerCase().trim()]}”
+                                        </>
+                                      ) : (
+                                        <>
+                                          <Plus size={12} /> Lưu vào Thẻ ghi nhớ
+                                        </>
+                                      )}
                                     </button>
                                   )}
                                 </div>
@@ -1906,8 +2055,120 @@ function ReadingDetailInner() {
         )}
       </div>
 
-      {/* Modal chọn / tạo Bộ sách khi thêm từ vào Kho */}
-      {showBookModal && (pendingVocabToAdd ?? vocabResult) && (
+      {/* Modal lưu từ vào Thẻ ghi nhớ cá nhân (dành cho User) */}
+      {showSetModal && (pendingVocabToAdd ?? vocabResult) && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+          <div className="w-full max-w-md rounded-2xl border border-line bg-card p-6 shadow-2xl">
+            <div className="mb-4 flex items-center justify-between">
+              <div>
+                <h3 className="text-base font-bold text-ink">
+                  Lưu từ “{(pendingVocabToAdd ?? vocabResult)!.lemma}” vào Thẻ ghi nhớ
+                </h3>
+                <p className="mt-0.5 text-xs text-muted">
+                  Thẻ ghi nhớ thuộc cá nhân bạn (không làm thay đổi Bộ sách cộng đồng).
+                </p>
+              </div>
+              <button onClick={() => setShowSetModal(false)} className="rounded-lg p-1 text-muted hover:text-ink">
+                <X size={18} />
+              </button>
+            </div>
+
+            {bookModalError && (
+              <div className="mb-3 rounded-xl border border-red-500/40 bg-red-500/10 px-3 py-2 text-xs text-red-700 dark:text-red-200">
+                {bookModalError}
+              </div>
+            )}
+
+            {studySets.length > 0 && (
+              <div className="max-h-56 space-y-2 overflow-y-auto pr-1">
+                {studySets.map((s) => (
+                  <label
+                    key={s.id}
+                    onClick={() => {
+                      setSelectedSetId(s.id);
+                      setCreatingSet(false);
+                    }}
+                    className={`flex cursor-pointer items-center justify-between rounded-xl border p-3 text-xs transition ${
+                      !creatingSet && selectedSetId === s.id
+                        ? "border-brand bg-brand/15 text-ink"
+                        : "border-line bg-bg text-ink/90 hover:border-brand/50"
+                    }`}
+                  >
+                    <div>
+                      <div className="font-semibold">{s.title}</div>
+                      <div className="mt-0.5 text-[11px] text-muted">{s.wordIds.length} thẻ</div>
+                    </div>
+                    <input
+                      type="radio"
+                      name="studySet"
+                      checked={!creatingSet && selectedSetId === s.id}
+                      onChange={() => {
+                        setSelectedSetId(s.id);
+                        setCreatingSet(false);
+                      }}
+                      className="accent-brand"
+                    />
+                  </label>
+                ))}
+              </div>
+            )}
+
+            <div className={studySets.length > 0 ? "mt-3 border-t border-line pt-3" : ""}>
+              {!creatingSet && studySets.length > 0 ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCreatingSet(true);
+                    if (!newSetTitle.trim()) {
+                      setNewSetTitle(passage?.title ? `Reading: ${passage.title}` : "Từ vựng Reading");
+                    }
+                  }}
+                  className="inline-flex items-center gap-1.5 text-xs font-semibold text-brand-hover hover:underline"
+                >
+                  <FolderPlus size={15} /> + Tạo bộ thẻ ghi nhớ mới
+                </button>
+              ) : (
+                <div className="space-y-2 rounded-xl border border-brand/40 bg-bg p-3 text-xs">
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold text-ink">Tạo bộ thẻ ghi nhớ cá nhân mới</span>
+                    {studySets.length > 0 && (
+                      <button onClick={() => setCreatingSet(false)} className="text-muted hover:text-ink">
+                        Huỷ
+                      </button>
+                    )}
+                  </div>
+                  <input
+                    value={newSetTitle}
+                    onChange={(e) => setNewSetTitle(e.target.value)}
+                    placeholder="Tên học phần (vd: Reading Cam 18 Test 1)"
+                    className="w-full rounded-lg border border-line px-3 py-1.5 outline-none focus:border-brand"
+                  />
+                </div>
+              )}
+            </div>
+
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                onClick={() => setShowSetModal(false)}
+                className="rounded-xl border border-line px-4 py-2 text-xs font-semibold text-muted hover:text-ink"
+              >
+                Huỷ
+              </button>
+              <button
+                onClick={confirmAddToPersonalSet}
+                disabled={addingWord || ((creatingSet || studySets.length === 0) && !newSetTitle.trim())}
+                className="inline-flex items-center gap-1.5 rounded-xl bg-brand px-4 py-2 text-xs font-bold text-white hover:bg-brand-hover hover:text-bg disabled:opacity-50"
+              >
+                {addingWord ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+                Lưu vào Thẻ ghi nhớ
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal chọn / tạo Bộ sách cộng đồng (chỉ Admin) */}
+      {isAdmin && showBookModal && (pendingVocabToAdd ?? vocabResult) && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
           <div className="w-full max-w-md rounded-2xl border border-line bg-card p-6 shadow-2xl">
             <div className="mb-4 flex items-center justify-between">
