@@ -40,6 +40,8 @@ export default function StudySetDetail({
   onOpenFolder,
   onStartFlashcards,
   onStartLearn,
+  onStartTest,
+  onStartMatch,
   onEdit,
   onMoveFolder,
   onEnroll,
@@ -53,6 +55,8 @@ export default function StudySetDetail({
   onOpenFolder?: (folderId: string) => void;
   onStartFlashcards: () => void;
   onStartLearn: () => void;
+  onStartTest: () => void;
+  onStartMatch: () => void;
   onEdit: () => void;
   onMoveFolder: () => void;
   onEnroll: () => void;
@@ -379,41 +383,37 @@ export default function StudySetDetail({
 
         <button
           type="button"
-          onClick={() =>
-            setPreviewNotice(
-              "Chế độ Kiểm tra (Test) đang ở bản xem trước giao diện và sẽ được phát triển ở bước tiếp theo."
-            )
-          }
-          className="group flex items-center gap-3 rounded-2xl border border-line bg-card px-4 py-3.5 text-left transition hover:border-brand-hover hover:bg-card-hover"
+          disabled={words.length === 0}
+          onClick={onStartTest}
+          className="group flex items-center gap-3 rounded-2xl border border-line bg-card px-4 py-3.5 text-left transition hover:border-brand-hover hover:bg-card-hover disabled:opacity-45"
         >
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-bg text-muted group-hover:text-brand-hover">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-brand/15 text-brand-hover">
             <ClipboardCheck size={18} />
           </div>
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-1.5">
               <span className="text-sm font-bold text-ink">Kiểm tra</span>
             </div>
-            <div className="text-[11px] text-muted">Sắp ra mắt</div>
+            <div className="text-[11px] text-muted">Đúng/Sai, Trắc nghiệm, Tự luận</div>
           </div>
         </button>
 
         <button
           type="button"
-          onClick={() =>
-            setPreviewNotice(
-              "Chế độ Ghép thẻ (Match) đang ở bản xem trước giao diện và sẽ được phát triển ở bước tiếp theo."
-            )
-          }
-          className="group flex items-center gap-3 rounded-2xl border border-line bg-card px-4 py-3.5 text-left transition hover:border-brand-hover hover:bg-card-hover"
+          disabled={words.length < 2}
+          onClick={onStartMatch}
+          className="group flex items-center gap-3 rounded-2xl border border-line bg-card px-4 py-3.5 text-left transition hover:border-brand-hover hover:bg-card-hover disabled:opacity-45"
         >
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-bg text-muted group-hover:text-brand-hover">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-brand/15 text-brand-hover">
             <LayoutGrid size={18} />
           </div>
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-1.5">
               <span className="text-sm font-bold text-ink">Ghép thẻ</span>
             </div>
-            <div className="text-[11px] text-muted">Sắp ra mắt</div>
+            <div className="text-[11px] text-muted">
+              {words.length < 2 ? "Cần ít nhất 2 từ" : "Ghép từ với định nghĩa"}
+            </div>
           </div>
         </button>
       </div>

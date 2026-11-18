@@ -32,6 +32,8 @@ import {
 import Flashcards from "./Flashcards";
 import StudySetDetail from "./StudySetDetail";
 import StudySetLearn from "./StudySetLearn";
+import StudySetMatch from "./StudySetMatch";
+import StudySetTest from "./StudySetTest";
 
 const LEVELS = ["A2", "B1", "B2", "C1", "C2"] as const;
 
@@ -1211,7 +1213,7 @@ export default function VocabLearn() {
   const [openMenuSetId, setOpenMenuSetId] = useState<string | null>(null);
   const [moveFolderSet, setMoveFolderSet] = useState<StudySet | null>(null);
   const [activeSession, setActiveSession] = useState<{
-    mode: "flashcards" | "learn";
+    mode: "flashcards" | "learn" | "test" | "match";
     id: string;
     title: string;
     words: Word[];
@@ -1416,6 +1418,29 @@ export default function VocabLearn() {
         />
       );
     }
+    if (activeSession.mode === "test") {
+      return (
+        <StudySetTest
+          setId={activeSession.id}
+          title={activeSession.title}
+          words={activeSession.words}
+          wordPool={words}
+          isAdmin={isAdmin}
+          onBack={() => setActiveSession(null)}
+          onCompleted={(res) => handleSessionCompleted(activeSession.id, res.scorePct)}
+        />
+      );
+    }
+    if (activeSession.mode === "match") {
+      return (
+        <StudySetMatch
+          setId={activeSession.id}
+          title={activeSession.title}
+          words={activeSession.words}
+          onBack={() => setActiveSession(null)}
+        />
+      );
+    }
     return (
       <Flashcards
         setId={activeSession.id}
@@ -1482,6 +1507,22 @@ export default function VocabLearn() {
             onStartLearn={() =>
               setActiveSession({
                 mode: "learn",
+                id: selectedSet.id,
+                title: selectedSet.title,
+                words: selectedSetWords,
+              })
+            }
+            onStartTest={() =>
+              setActiveSession({
+                mode: "test",
+                id: selectedSet.id,
+                title: selectedSet.title,
+                words: selectedSetWords,
+              })
+            }
+            onStartMatch={() =>
+              setActiveSession({
+                mode: "match",
                 id: selectedSet.id,
                 title: selectedSet.title,
                 words: selectedSetWords,
