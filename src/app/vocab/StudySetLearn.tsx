@@ -24,9 +24,12 @@ import { levelColor, type Word } from "@/lib/mock";
 import { notifyDueUpdated } from "@/lib/due-events";
 import {
   checkRecallSoftMatch,
+  checkVietnameseMeaningMatch,
   enrollWordsInSrs,
   getProgressiveWordHint,
+  getVietnameseMeaningHint,
   maskWordInExample,
+  type VietnameseMeaningMatchResult,
 } from "@/lib/srs";
 import {
   recordStudySetSession,
@@ -62,6 +65,8 @@ type FeedbackState = {
   typed: string;
   phase: QuestionPhase;
   wasRetry: boolean;
+  meaningMatch?: VietnameseMeaningMatchResult;
+  missedBeforeTurn?: boolean;
 };
 
 const LEARN_MODE_KEY = "ielts_studyset_learn_mode_v1";
@@ -172,6 +177,7 @@ export default function StudySetLearn({
   const [typed, setTyped] = useState("");
   const [hintLevel, setHintLevel] = useState<0 | 1 | 2 | 3>(0);
   const [softHintMsg, setSoftHintMsg] = useState("");
+  const [selfGradeMode, setSelfGradeMode] = useState(false);
   const [revealedMeaning, setRevealedMeaning] = useState(false);
   const [feedback, setFeedback] = useState<FeedbackState | null>(null);
   const [reviewSchedule, setReviewSchedule] = useState<StudySetReviewResult | null>(null);
@@ -201,6 +207,7 @@ export default function StudySetLearn({
     setTyped("");
     setHintLevel(0);
     setSoftHintMsg("");
+    setSelfGradeMode(false);
     setRevealedMeaning(false);
     setFeedback(null);
     setReviewSchedule(null);
@@ -222,6 +229,7 @@ export default function StudySetLearn({
     setTyped("");
     setHintLevel(0);
     setSoftHintMsg("");
+    setSelfGradeMode(false);
     setRevealedMeaning(false);
     try {
       localStorage.setItem(LEARN_SIDE_KEY, nextSide);
@@ -235,11 +243,11 @@ export default function StudySetLearn({
       currentItem &&
       !feedback &&
       currentItem.phase === "type" &&
-      promptSide === "meaning"
+      (promptSide === "meaning" || !selfGradeMode)
     ) {
       inputRef.current?.focus();
     }
-  }, [currentItem, feedback, promptSide]);
+  }, [currentItem, feedback, promptSide, selfGradeMode]);
 
   const handleFinishSession = useCallback(() => {
     if (completionRecordedRef.current || sessionWords.length === 0) return;
@@ -271,8 +279,13 @@ export default function StudySetLearn({
   }, [sessionWords, missedIds, setId, title, onCompleted]);
 
   const submitDirect = useCallback(
-    (isCorrect: boolean, displayLabel: string) => {
+    (
+      isCorrect: boolean,
+      displayLabel: string,
+      meaningMatch?: VietnameseMeaningMatchResult
+    ) => {
       if (!currentItem || feedback) return;
+      const missedBeforeTurn = missedIds.has(currentItem.word.id);
       setSoftHintMsg("");
       speakWord(currentItem.word.word);
       setFeedback({
@@ -280,6 +293,8 @@ export default function StudySetLearn({
         typed: displayLabel,
         phase: currentItem.phase,
         wasRetry: currentItem.isRetry,
+        meaningMatch,
+        missedBeforeTurn,
       });
 
       if (!isCorrect) {
@@ -290,7 +305,7 @@ export default function StudySetLearn({
         });
       }
     },
-    [currentItem, feedback, speakWord]
+    [currentItem, feedback, missedIds, speakWord]
   );
 
   const submitTypedAnswer = useCallback(
@@ -326,41 +341,132 @@ export default function StudySetLearn({
     [currentItem, feedback, typed, submitDirect]
   );
 
+  const submitTypedMeaning = useCallback(
+    (forceWrong = false) => {
+      if (!currentItem || feedback) return;
+      const trimmed = typed.trim();
+      if (!forceWrong && !trimmed) return;
+
+      if (forceWrong) {
+        const emptyMatch = checkVietnameseMeaningMatch(
+          "",
+          currentItem.word.vi,
+          currentItem.word.en
+        );
+        submitDirect(false, "(Không nhớ)", emptyMatch);
+        return;
+      }
+
+      const result = checkVietnameseMeaningMatch(
+        trimmed,
+        currentItem.word.vi,
+        currentItem.word.en
+      );
+      submitDirect(result.isCorrect, trimmed, result);
+    },
+    [currentItem, feedback, typed, submitDirect]
+  );
+
+  const advanceWithResult = useCallback(
+    (isCorrect: boolean) => {
+      if (!currentItem) return;
+
+      const rest = queue.slice(1);
+      const id = currentItem.word.id;
+
+      if (!isCorrect) {
+        // Đưa thẻ sai về cuối hàng để ôn lại trong vòng
+        setQueue([...rest, { word: currentItem.word, phase: currentItem.phase, isRetry: true }]);
+      } else if (learnMode === "mixed" && currentItem.phase === "choice") {
+        setPhase1PassedIds((prev) => {
+          const next = new Set(prev);
+          next.add(id);
+          return next;
+        });
+        // Đẩy sang giai đoạn 2 (Gõ từ) sau khi qua Trắc nghiệm
+        setQueue([...rest, { word: currentItem.word, phase: "type", isRetry: false }]);
+      } else {
+        setMasteredIds((prev) => {
+          const next = new Set(prev);
+          next.add(id);
+          return next;
+        });
+        setQueue(rest);
+        if (rest.length === 0) {
+          handleFinishSession();
+        }
+      }
+
+      setTyped("");
+      setHintLevel(0);
+      setSoftHintMsg("");
+      setSelfGradeMode(false);
+      setRevealedMeaning(false);
+      setFeedback(null);
+    },
+    [currentItem, queue, learnMode, handleFinishSession]
+  );
+
   const goNext = useCallback(() => {
     if (!currentItem || !feedback) return;
+    advanceWithResult(feedback.isCorrect);
+  }, [currentItem, feedback, advanceWithResult]);
 
-    const rest = queue.slice(1);
-    const id = currentItem.word.id;
-
-    if (!feedback.isCorrect) {
-      // Đưa thẻ sai về cuối hàng để ôn lại trong vòng
-      setQueue([...rest, { word: currentItem.word, phase: currentItem.phase, isRetry: true }]);
-    } else if (learnMode === "mixed" && currentItem.phase === "choice") {
-      setPhase1PassedIds((prev) => {
+  const overrideAsCorrectAndNext = useCallback(() => {
+    if (!currentItem || !feedback) return;
+    if (!feedback.missedBeforeTurn) {
+      setMissedIds((prev) => {
+        if (!prev.has(currentItem.word.id)) return prev;
         const next = new Set(prev);
-        next.add(id);
+        next.delete(currentItem.word.id);
         return next;
       });
-      // Đẩy sang giai đoạn 2 (Gõ từ / Tự chấm) sau khi qua Trắc nghiệm
-      setQueue([...rest, { word: currentItem.word, phase: "type", isRetry: false }]);
-    } else {
-      setMasteredIds((prev) => {
-        const next = new Set(prev);
-        next.add(id);
-        return next;
-      });
-      setQueue(rest);
-      if (rest.length === 0) {
-        handleFinishSession();
-      }
     }
-
-    setTyped("");
-    setHintLevel(0);
-    setSoftHintMsg("");
-    setRevealedMeaning(false);
-    setFeedback(null);
-  }, [currentItem, feedback, queue, learnMode, handleFinishSession]);
+    // Tính handleFinishSession ngay với missedIds đã cập nhật nếu đây là thẻ cuối
+    const rest = queue.slice(1);
+    const willFinish =
+      rest.length === 0 && !(learnMode === "mixed" && currentItem.phase === "choice");
+    if (willFinish && !completionRecordedRef.current && sessionWords.length > 0) {
+      const nextMissedSize =
+        !feedback.missedBeforeTurn && missedIds.has(currentItem.word.id)
+          ? Math.max(0, missedIds.size - 1)
+          : missedIds.size;
+      completionRecordedRef.current = true;
+      const totalCount = sessionWords.length;
+      const knownCount = Math.max(0, totalCount - nextMissedSize);
+      const scorePct = Math.round((knownCount / Math.max(1, totalCount)) * 100);
+      recordStudySetSession({ setId, title, wordCount: totalCount });
+      const result = onCompleted?.({
+        knownCount,
+        unknownCount: nextMissedSize,
+        totalCount,
+        scorePct,
+      });
+      if (result) setReviewSchedule(result);
+      void enrollWordsInSrs(sessionWords.map((w) => w.id))
+        .then((res) => {
+          notifyDueUpdated();
+          setSrsMsg(
+            res.enrolled > 0
+              ? `Đã đồng bộ thêm ${res.enrolled} từ mới vào Ôn tập ngắt quãng`
+              : "Các từ đã được đồng bộ với Ôn tập ngắt quãng"
+          );
+        })
+        .catch(() => {});
+    }
+    advanceWithResult(true);
+  }, [
+    currentItem,
+    feedback,
+    queue,
+    learnMode,
+    sessionWords,
+    missedIds,
+    setId,
+    title,
+    onCompleted,
+    advanceWithResult,
+  ]);
 
   const choiceOptions = useMemo(
     () =>
@@ -372,7 +478,7 @@ export default function StudySetLearn({
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (done) return;
+      if (done || e.isComposing) return;
       if (feedback) {
         if (e.key === "Enter") {
           e.preventDefault();
@@ -391,7 +497,7 @@ export default function StudySetLearn({
         return;
       }
 
-      if (currentItem.phase === "type" && promptSide === "word") {
+      if (currentItem.phase === "type" && promptSide === "word" && selfGradeMode) {
         if (!revealedMeaning && (e.key === " " || e.key === "Enter")) {
           e.preventDefault();
           setRevealedMeaning(true);
@@ -413,6 +519,7 @@ export default function StudySetLearn({
     currentItem,
     choiceOptions,
     promptSide,
+    selfGradeMode,
     revealedMeaning,
     submitDirect,
   ]);
@@ -668,13 +775,31 @@ export default function StudySetLearn({
               <div className="text-xs font-semibold uppercase tracking-wider text-muted">
                 {card.pos
                   ? `Từ loại: ${card.pos}`
-                  : "Hãy nhớ nghĩa tiếng Việt tương ứng"}
+                  : "Gõ nghĩa tiếng Việt tương ứng"}
               </div>
               <div className="break-words text-3xl font-bold text-brand-hover sm:text-4xl">
                 {card.word}
               </div>
               {card.ipa && (
                 <div className="text-sm font-medium text-muted">{card.ipa}</div>
+              )}
+
+              {currentItem.phase === "type" && hintLevel >= 1 && !feedback && (
+                <div className="mx-auto mt-3 max-w-lg space-y-2 rounded-2xl border border-line bg-bg/70 p-3.5 text-center">
+                  <div className="font-mono text-sm font-bold tracking-wider text-ink sm:text-base">
+                    {getVietnameseMeaningHint(card.vi, hintLevel as 1 | 2 | 3, card.en)}
+                  </div>
+                  {hintLevel >= 2 && card.example && (
+                    <div className="text-xs italic text-muted">
+                      “{card.example}”
+                    </div>
+                  )}
+                  {hintLevel >= 3 && card.vi && card.en && (
+                    <div className="text-xs font-medium text-muted">
+                      Định nghĩa EN: {card.en}
+                    </div>
+                  )}
+                </div>
               )}
             </>
           )}
@@ -772,6 +897,65 @@ export default function StudySetLearn({
                 </button>
               </div>
             </form>
+          ) : !selfGradeMode ? (
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                submitTypedMeaning(false);
+              }}
+              className="mx-auto max-w-md space-y-3"
+            >
+              <input
+                ref={inputRef}
+                type="text"
+                value={typed}
+                onChange={(e) => setTyped(e.target.value)}
+                placeholder="Gõ nghĩa tiếng Việt (có dấu hoặc không dấu)..."
+                autoComplete="off"
+                spellCheck={false}
+                className="w-full rounded-2xl border-2 border-line bg-bg px-4 py-3.5 text-center text-lg font-bold outline-none transition focus:border-brand"
+              />
+
+              <div className="flex flex-wrap items-center justify-center gap-2.5">
+                <button
+                  type="submit"
+                  disabled={!typed.trim()}
+                  className="inline-flex items-center gap-2 rounded-full bg-brand px-6 py-2.5 text-sm font-bold text-white hover:bg-brand-hover hover:text-bg disabled:opacity-40"
+                >
+                  Kiểm tra (Enter)
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setHintLevel((h) => (h < 3 ? ((h + 1) as 0 | 1 | 2 | 3) : 0))
+                  }
+                  className="inline-flex items-center gap-1.5 rounded-full bg-bg px-4 py-2.5 text-sm font-semibold text-muted hover:text-ink"
+                >
+                  <Lightbulb size={15} />
+                  {hintLevel === 3 ? "Ẩn gợi ý" : `Gợi ý (${hintLevel}/3)`}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => submitTypedMeaning(true)}
+                  className="inline-flex items-center gap-1.5 rounded-full bg-rose-500/10 px-4 py-2.5 text-sm font-semibold text-rose-700 hover:bg-rose-500/20 dark:text-rose-300"
+                >
+                  <Eye size={15} /> Không nhớ
+                </button>
+              </div>
+
+              <div className="pt-1 text-center">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelfGradeMode(true);
+                    setRevealedMeaning(false);
+                  }}
+                  className="text-xs font-semibold text-muted underline-offset-4 hover:text-ink hover:underline"
+                >
+                  Hoặc tự chấm nhanh (không cần gõ)
+                </button>
+              </div>
+            </form>
           ) : (
             <div className="mx-auto max-w-md space-y-4 text-center">
               {!revealedMeaning ? (
@@ -815,6 +999,18 @@ export default function StudySetLearn({
                   </div>
                 </div>
               )}
+              <div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelfGradeMode(false);
+                    setRevealedMeaning(false);
+                  }}
+                  className="text-xs font-semibold text-muted underline-offset-4 hover:text-ink hover:underline"
+                >
+                  Quay lại ô gõ nghĩa tiếng Việt
+                </button>
+              </div>
             </div>
           )
         ) : (
@@ -823,7 +1019,9 @@ export default function StudySetLearn({
               className={`rounded-2xl border p-4 text-center ${
                 feedback.isCorrect
                   ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
-                  : "border-rose-500/40 bg-rose-500/10 text-rose-700 dark:text-rose-300"
+                  : feedback.meaningMatch?.status === "partial"
+                    ? "border-amber-500/40 bg-amber-500/10 text-amber-800 dark:text-amber-300"
+                    : "border-rose-500/40 bg-rose-500/10 text-rose-700 dark:text-rose-300"
               }`}
             >
               <div className="flex items-center justify-center gap-2 text-lg font-bold">
@@ -832,18 +1030,66 @@ export default function StudySetLearn({
                 ) : (
                   <XCircle size={20} />
                 )}
-                {feedback.isCorrect ? "Chính xác!" : "Chưa chính xác"}
+                {feedback.isCorrect
+                  ? "Chính xác!"
+                  : feedback.meaningMatch?.status === "partial"
+                    ? "Khớp một phần"
+                    : "Chưa chính xác"}
               </div>
-              <div className="mt-2 text-2xl font-bold text-ink">{card.word}</div>
+
+              {feedback.meaningMatch && (
+                <div className="mt-2.5 space-y-2 rounded-xl bg-bg/75 p-3 text-xs text-ink">
+                  <div className="flex flex-wrap items-center justify-center gap-2">
+                    <span className="rounded-full bg-card px-2.5 py-0.5 font-bold">
+                      Trùng {feedback.meaningMatch.matchedCount}/
+                      {feedback.meaningMatch.totalTargetWords} từ (
+                      {feedback.meaningMatch.matchPct}%)
+                    </span>
+                    {feedback.meaningMatch.usedAccentInsensitive && (
+                      <span className="rounded-full bg-sky-500/15 px-2.5 py-0.5 font-semibold text-sky-700 dark:text-sky-300">
+                        Khớp không dấu
+                      </span>
+                    )}
+                  </div>
+
+                  {feedback.meaningMatch.clauseBreakdown.length > 0 && (
+                    <div className="flex flex-wrap items-center justify-center gap-1">
+                      {feedback.meaningMatch.clauseBreakdown.map((item, i) => (
+                        <span
+                          key={`${item.word}-${i}`}
+                          className={`rounded-md px-2 py-0.5 font-semibold ${
+                            item.matched
+                              ? "bg-emerald-500/20 text-emerald-700 dark:text-emerald-300"
+                              : "border border-dashed border-line bg-bg text-muted"
+                          }`}
+                        >
+                          {item.word}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+
+                  <div className="text-muted">
+                    Bạn đã gõ: <b className="text-ink">{feedback.typed}</b>
+                  </div>
+                </div>
+              )}
+
+              <div className="mt-3 text-2xl font-bold text-ink">{card.word}</div>
               {card.ipa && <div className="text-sm text-muted">{card.ipa}</div>}
               {(card.vi || card.en) && (
                 <div className="mt-1 text-sm font-semibold text-ink/90">
                   {card.vi || card.en}
                 </div>
               )}
-              {!feedback.isCorrect && (
+              {!feedback.isCorrect && !feedback.meaningMatch && (
                 <div className="mt-1 text-xs opacity-90">
                   Bạn đã chọn/nhập: {feedback.typed} · Đã đưa thẻ về cuối vòng để ôn lại
+                </div>
+              )}
+              {!feedback.isCorrect && feedback.meaningMatch && (
+                <div className="mt-1 text-xs opacity-90">
+                  Bấm “Tiếp tục” sẽ đưa thẻ về cuối vòng ôn lại, hoặc xác nhận bên dưới nếu nghĩa tương đương.
                 </div>
               )}
               {card.example && (
@@ -853,7 +1099,7 @@ export default function StudySetLearn({
               )}
             </div>
 
-            <div className="flex justify-center">
+            <div className="flex flex-wrap items-center justify-center gap-2.5">
               <button
                 type="button"
                 onClick={goNext}
@@ -861,6 +1107,15 @@ export default function StudySetLearn({
               >
                 Tiếp tục (Enter) <ArrowRight size={16} />
               </button>
+              {!feedback.isCorrect && feedback.meaningMatch && (
+                <button
+                  type="button"
+                  onClick={overrideAsCorrectAndNext}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/40 bg-emerald-500/15 px-5 py-3 text-xs font-bold text-emerald-700 transition hover:bg-emerald-500/25 dark:text-emerald-300 sm:text-sm"
+                >
+                  <Check size={16} /> Nghĩa tương đương, vẫn tính đúng & cho qua
+                </button>
+              )}
             </div>
           </div>
         )}

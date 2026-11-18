@@ -24,13 +24,16 @@ import { levelColor, type Word } from "@/lib/mock";
 import { notifyDueUpdated } from "@/lib/due-events";
 import {
   checkRecallSoftMatch,
+  checkVietnameseMeaningMatch,
   clearAllReviews,
   computeLeitnerReview,
   DEFAULT_USER_SETTINGS,
   getProgressiveWordHint,
+  getVietnameseMeaningHint,
   maskWordInExample,
   type LeitnerLevel,
   type UserSettings,
+  type VietnameseMeaningMatchResult,
 } from "@/lib/srs";
 import type { ReviewWord } from "@/app/api/reviews/route";
 
@@ -54,6 +57,8 @@ type FeedbackState = {
   nextLevel: LeitnerLevel;
   nextLabel: string;
   wasRetry: boolean;
+  meaningMatch?: VietnameseMeaningMatchResult;
+  pendingCommit?: boolean;
 } | null;
 
 const PROMPT_SIDE_KEY = "ielts_review_prompt_side_v1";
@@ -144,6 +149,7 @@ export default function Review() {
   const [typed, setTyped] = useState("");
   const [hintLevel, setHintLevel] = useState<0 | 1 | 2 | 3>(0);
   const [softHintMsg, setSoftHintMsg] = useState("");
+  const [selfGradeMode, setSelfGradeMode] = useState(false);
   const [revealedMeaning, setRevealedMeaning] = useState(false);
   const [feedback, setFeedback] = useState<FeedbackState>(null);
   const [reviewedInSession, setReviewedInSession] = useState(0);
@@ -160,6 +166,7 @@ export default function Review() {
     setPromptSide(next);
     setHintLevel(0);
     setSoftHintMsg("");
+    setSelfGradeMode(false);
     setRevealedMeaning(false);
     setTyped("");
     try {
@@ -173,6 +180,7 @@ export default function Review() {
     setAnswerMode(next);
     setHintLevel(0);
     setSoftHintMsg("");
+    setSelfGradeMode(false);
     setRevealedMeaning(false);
     try {
       localStorage.setItem(ANSWER_MODE_KEY, next);
@@ -207,6 +215,7 @@ export default function Review() {
         setTyped("");
         setHintLevel(0);
         setSoftHintMsg("");
+        setSelfGradeMode(false);
         setRevealedMeaning(false);
         setFeedback(null);
         setReviewedInSession(0);
@@ -239,10 +248,15 @@ export default function Review() {
   const card = queue[0];
 
   useEffect(() => {
-    if (card && !feedback && answerMode === "type" && promptSide === "meaning") {
+    if (
+      card &&
+      !feedback &&
+      answerMode === "type" &&
+      (promptSide === "meaning" || !selfGradeMode)
+    ) {
       inputRef.current?.focus();
     }
-  }, [card, feedback, answerMode, promptSide]);
+  }, [card, feedback, answerMode, promptSide, selfGradeMode]);
 
   const speakWord = useCallback((word: string) => {
     if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
@@ -280,27 +294,9 @@ export default function Review() {
     }
   };
 
-  const submitDirect = useCallback(
-    async (isCorrect: boolean, displayLabel: string) => {
-      if (!card || feedback) return;
-      const isRetry = Boolean(card.isRetryInSession);
-      const computed = computeLeitnerReview(
-        { level: card.level_srs, level5_streak: card.level5_streak },
-        isCorrect,
-        isRetry
-      );
-
-      setErrMsg("");
-      setSoftHintMsg("");
-      speakWord(card.word);
-      setFeedback({
-        isCorrect,
-        typed: displayLabel,
-        nextLevel: computed.level,
-        nextLabel: computed.label,
-        wasRetry: isRetry,
-      });
-
+  const commitReviewToServer = useCallback(
+    (targetCard: SessionItem, isCorrect: boolean) => {
+      const isRetry = Boolean(targetCard.isRetryInSession);
       setReviewedInSession((n) => n + 1);
       if (isCorrect) {
         setCorrectInSession((n) => n + 1);
@@ -319,7 +315,7 @@ export default function Review() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          wordId: card.id,
+          wordId: targetCard.id,
           isCorrect,
           isRetryInSession: isRetry,
         }),
@@ -334,7 +330,44 @@ export default function Review() {
           setErrMsg(e.message);
         });
     },
-    [card, feedback, speakWord, dueCount]
+    [dueCount]
+  );
+
+  const submitDirect = useCallback(
+    async (
+      isCorrect: boolean,
+      displayLabel: string,
+      meaningMatch?: VietnameseMeaningMatchResult
+    ) => {
+      if (!card || feedback) return;
+      const isRetry = Boolean(card.isRetryInSession);
+      const computed = computeLeitnerReview(
+        { level: card.level_srs, level5_streak: card.level5_streak },
+        isCorrect,
+        isRetry
+      );
+
+      // Khi gõ nghĩa tiếng Việt chưa đạt ngưỡng -> chờ user xác nhận xem có cho qua (nghĩa tương đương) trước khi gửi API
+      const pendingCommit = Boolean(!isCorrect && meaningMatch);
+
+      setErrMsg("");
+      setSoftHintMsg("");
+      speakWord(card.word);
+      setFeedback({
+        isCorrect,
+        typed: displayLabel,
+        nextLevel: computed.level,
+        nextLabel: computed.label,
+        wasRetry: isRetry,
+        meaningMatch,
+        pendingCommit,
+      });
+
+      if (!pendingCommit) {
+        commitReviewToServer(card, isCorrect);
+      }
+    },
+    [card, feedback, speakWord, commitReviewToServer]
   );
 
   const submitAnswer = useCallback(
@@ -364,27 +397,62 @@ export default function Review() {
     [card, saving, feedback, typed, submitDirect]
   );
 
+  const submitMeaningAnswer = useCallback(
+    async (forceWrong = false) => {
+      if (!card || saving || feedback) return;
+      const trimmed = typed.trim();
+      if (!forceWrong && !trimmed) return;
+
+      if (forceWrong) {
+        const emptyMatch = checkVietnameseMeaningMatch("", card.vi, card.en);
+        await submitDirect(false, "(Không nhớ)", emptyMatch);
+        return;
+      }
+
+      const result = checkVietnameseMeaningMatch(trimmed, card.vi, card.en);
+      await submitDirect(result.isCorrect, trimmed, result);
+    },
+    [card, saving, feedback, typed, submitDirect]
+  );
+
+  const advanceWithResult = useCallback(
+    (finalCorrect: boolean) => {
+      if (!card || !feedback) return;
+      if (feedback.pendingCommit) {
+        commitReviewToServer(card, finalCorrect);
+      }
+      setQueue((prev) => {
+        const rest = prev.slice(1);
+        if (!finalCorrect) {
+          const retryItem: SessionItem = {
+            ...card,
+            level_srs: 1,
+            level5_streak: 0,
+            isRetryInSession: true,
+          };
+          return [...rest, retryItem];
+        }
+        return rest;
+      });
+      setTyped("");
+      setHintLevel(0);
+      setSoftHintMsg("");
+      setSelfGradeMode(false);
+      setRevealedMeaning(false);
+      setFeedback(null);
+    },
+    [card, feedback, commitReviewToServer]
+  );
+
   const goNext = useCallback(() => {
     if (!card || !feedback) return;
-    setQueue((prev) => {
-      const rest = prev.slice(1);
-      if (!feedback.isCorrect) {
-        const retryItem: SessionItem = {
-          ...card,
-          level_srs: 1,
-          level5_streak: 0,
-          isRetryInSession: true,
-        };
-        return [...rest, retryItem];
-      }
-      return rest;
-    });
-    setTyped("");
-    setHintLevel(0);
-    setSoftHintMsg("");
-    setRevealedMeaning(false);
-    setFeedback(null);
-  }, [card, feedback]);
+    advanceWithResult(feedback.isCorrect);
+  }, [card, feedback, advanceWithResult]);
+
+  const overrideAsCorrectAndNext = useCallback(() => {
+    if (!card || !feedback) return;
+    advanceWithResult(true);
+  }, [card, feedback, advanceWithResult]);
 
   const choiceOptions = useMemo(
     () => (card ? buildChoiceOptions(card, wordPool, queue, promptSide) : []),
@@ -393,7 +461,7 @@ export default function Review() {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (settingsOpen) return;
+      if (settingsOpen || e.isComposing) return;
       if (feedback) {
         if (e.key === "Enter") {
           e.preventDefault();
@@ -413,7 +481,7 @@ export default function Review() {
         return;
       }
 
-      if (answerMode === "type" && promptSide === "word") {
+      if (answerMode === "type" && promptSide === "word" && selfGradeMode) {
         if (!revealedMeaning && (e.key === " " || e.key === "Enter")) {
           e.preventDefault();
           setRevealedMeaning(true);
@@ -436,6 +504,7 @@ export default function Review() {
     saving,
     answerMode,
     promptSide,
+    selfGradeMode,
     choiceOptions,
     revealedMeaning,
     submitDirect,
@@ -820,7 +889,7 @@ export default function Review() {
                   : "text-muted hover:text-ink"
               } disabled:opacity-60`}
             >
-              <Keyboard size={13} /> {promptSide === "meaning" ? "Gõ từ" : "Tự chấm"}
+              <Keyboard size={13} /> Gõ từ
             </button>
             <button
               type="button"
@@ -872,12 +941,26 @@ export default function Review() {
           ) : (
             <>
               <div className="text-xs font-semibold uppercase tracking-wider text-muted">
-                {card.pos ? `Từ loại: ${card.pos}` : "Hãy nhớ nghĩa tiếng Việt tương ứng"}
+                {card.pos ? `Từ loại: ${card.pos}` : "Gõ nghĩa tiếng Việt tương ứng"}
               </div>
               <div className="break-words text-3xl font-bold text-brand-hover sm:text-4xl">
                 {card.word}
               </div>
               {card.ipa && <div className="text-sm font-medium text-muted">{card.ipa}</div>}
+
+              {answerMode === "type" && hintLevel >= 1 && !feedback && (
+                <div className="mx-auto mt-3 max-w-lg space-y-2 rounded-2xl border border-line bg-bg/70 p-3.5 text-center">
+                  <div className="font-mono text-sm font-bold tracking-wider text-ink sm:text-base">
+                    {getVietnameseMeaningHint(card.vi, hintLevel as 1 | 2 | 3, card.en)}
+                  </div>
+                  {hintLevel >= 2 && card.example && (
+                    <div className="text-xs italic text-muted">“{card.example}”</div>
+                  )}
+                  {hintLevel >= 3 && card.vi && card.en && (
+                    <div className="text-xs font-medium text-muted">Định nghĩa EN: {card.en}</div>
+                  )}
+                </div>
+              )}
             </>
           )}
         </div>
@@ -975,6 +1058,66 @@ export default function Review() {
                 </button>
               </div>
             </form>
+          ) : !selfGradeMode ? (
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                void submitMeaningAnswer(false);
+              }}
+              className="mx-auto max-w-md space-y-3"
+            >
+              <input
+                ref={inputRef}
+                type="text"
+                value={typed}
+                onChange={(e) => setTyped(e.target.value)}
+                disabled={saving}
+                placeholder="Gõ nghĩa tiếng Việt (có dấu hoặc không dấu)..."
+                autoComplete="off"
+                spellCheck={false}
+                className="w-full rounded-2xl border-2 border-line bg-bg px-4 py-3.5 text-center text-lg font-bold outline-none transition focus:border-brand"
+              />
+
+              <div className="flex flex-wrap items-center justify-center gap-2.5">
+                <button
+                  type="submit"
+                  disabled={saving || !typed.trim()}
+                  className="inline-flex items-center gap-2 rounded-full bg-brand px-6 py-2.5 text-sm font-bold text-white hover:bg-brand-hover hover:text-bg disabled:opacity-40"
+                >
+                  {saving ? <Loader2 size={16} className="animate-spin" /> : "Kiểm tra (Enter)"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setHintLevel((h) => (h < 3 ? ((h + 1) as 0 | 1 | 2 | 3) : 0))}
+                  disabled={saving}
+                  className="inline-flex items-center gap-1.5 rounded-full bg-bg px-4 py-2.5 text-sm font-semibold text-muted hover:text-ink"
+                >
+                  <Lightbulb size={15} />
+                  {hintLevel === 3 ? "Ẩn gợi ý" : `Gợi ý (${hintLevel}/3)`}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void submitMeaningAnswer(true)}
+                  disabled={saving}
+                  className="inline-flex items-center gap-1.5 rounded-full bg-rose-500/10 px-4 py-2.5 text-sm font-semibold text-rose-700 hover:bg-rose-500/20 dark:text-rose-300"
+                >
+                  <Eye size={15} /> Không nhớ
+                </button>
+              </div>
+
+              <div className="pt-1 text-center">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelfGradeMode(true);
+                    setRevealedMeaning(false);
+                  }}
+                  className="text-xs font-semibold text-muted underline-offset-4 hover:text-ink hover:underline"
+                >
+                  Hoặc tự chấm nhanh (không cần gõ)
+                </button>
+              </div>
+            </form>
           ) : (
             <div className="mx-auto max-w-md space-y-4 text-center">
               {!revealedMeaning ? (
@@ -1017,6 +1160,18 @@ export default function Review() {
                   </div>
                 </div>
               )}
+              <div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelfGradeMode(false);
+                    setRevealedMeaning(false);
+                  }}
+                  className="text-xs font-semibold text-muted underline-offset-4 hover:text-ink hover:underline"
+                >
+                  Quay lại ô gõ nghĩa tiếng Việt
+                </button>
+              </div>
             </div>
           )
         ) : (
@@ -1025,19 +1180,64 @@ export default function Review() {
               className={`rounded-2xl border p-4 text-center ${
                 feedback.isCorrect
                   ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
-                  : "border-rose-500/40 bg-rose-500/10 text-rose-700 dark:text-rose-300"
+                  : feedback.meaningMatch?.status === "partial"
+                    ? "border-amber-500/40 bg-amber-500/10 text-amber-800 dark:text-amber-300"
+                    : "border-rose-500/40 bg-rose-500/10 text-rose-700 dark:text-rose-300"
               }`}
             >
               <div className="flex items-center justify-center gap-2 text-lg font-bold">
                 {feedback.isCorrect ? <CheckCircle2 size={20} /> : <XCircle size={20} />}
-                {feedback.isCorrect ? "Chính xác!" : "Chưa chính xác"}
+                {feedback.isCorrect
+                  ? "Chính xác!"
+                  : feedback.meaningMatch?.status === "partial"
+                    ? "Khớp một phần"
+                    : "Chưa chính xác"}
               </div>
-              <div className="mt-2 text-2xl font-bold text-ink">{card.word}</div>
+
+              {feedback.meaningMatch && (
+                <div className="mt-2.5 space-y-2 rounded-xl bg-bg/75 p-3 text-xs text-ink">
+                  <div className="flex flex-wrap items-center justify-center gap-2">
+                    <span className="rounded-full bg-card px-2.5 py-0.5 font-bold">
+                      Trùng {feedback.meaningMatch.matchedCount}/
+                      {feedback.meaningMatch.totalTargetWords} từ (
+                      {feedback.meaningMatch.matchPct}%)
+                    </span>
+                    {feedback.meaningMatch.usedAccentInsensitive && (
+                      <span className="rounded-full bg-sky-500/15 px-2.5 py-0.5 font-semibold text-sky-700 dark:text-sky-300">
+                        Khớp không dấu
+                      </span>
+                    )}
+                  </div>
+
+                  {feedback.meaningMatch.clauseBreakdown.length > 0 && (
+                    <div className="flex flex-wrap items-center justify-center gap-1">
+                      {feedback.meaningMatch.clauseBreakdown.map((item, i) => (
+                        <span
+                          key={`${item.word}-${i}`}
+                          className={`rounded-md px-2 py-0.5 font-semibold ${
+                            item.matched
+                              ? "bg-emerald-500/20 text-emerald-700 dark:text-emerald-300"
+                              : "border border-dashed border-line bg-bg text-muted"
+                          }`}
+                        >
+                          {item.word}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+
+                  <div className="text-muted">
+                    Bạn đã gõ: <b className="text-ink">{feedback.typed}</b>
+                  </div>
+                </div>
+              )}
+
+              <div className="mt-3 text-2xl font-bold text-ink">{card.word}</div>
               {card.ipa && <div className="text-sm text-muted">{card.ipa}</div>}
               {(card.vi || card.en) && (
                 <div className="mt-1 text-sm font-semibold text-ink/90">{card.vi || card.en}</div>
               )}
-              {!feedback.isCorrect && (
+              {!feedback.isCorrect && !feedback.meaningMatch && (
                 <div className="mt-1 text-xs opacity-90">Bạn đã chọn/nhập: {feedback.typed}</div>
               )}
               {card.example && (
@@ -1054,7 +1254,7 @@ export default function Review() {
               </div>
             </div>
 
-            <div className="flex justify-center">
+            <div className="flex flex-wrap items-center justify-center gap-2.5">
               <button
                 type="button"
                 onClick={goNext}
@@ -1062,6 +1262,15 @@ export default function Review() {
               >
                 Tiếp tục (Enter) <ArrowRight size={16} />
               </button>
+              {!feedback.isCorrect && feedback.pendingCommit && (
+                <button
+                  type="button"
+                  onClick={overrideAsCorrectAndNext}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/40 bg-emerald-500/15 px-5 py-3 text-xs font-bold text-emerald-700 transition hover:bg-emerald-500/25 dark:text-emerald-300 sm:text-sm"
+                >
+                  <Check size={16} /> Nghĩa tương đương, vẫn tính đúng & cho qua
+                </button>
+              )}
             </div>
           </div>
         )}

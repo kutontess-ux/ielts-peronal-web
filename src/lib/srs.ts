@@ -221,6 +221,243 @@ export function checkRecallSoftMatch(
   return "wrong";
 }
 
+export type VietnameseMeaningMatchResult = {
+  status: "exact" | "partial" | "wrong";
+  isCorrect: boolean;
+  matchedCount: number;
+  totalTargetWords: number;
+  matchPct: number;
+  bestClause: string;
+  userWordCount: number;
+  clauseBreakdown: { word: string; matched: boolean }[];
+  usedAccentInsensitive: boolean;
+};
+
+function stripViDiacritics(s: string): string {
+  return s
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/đ/g, "d")
+    .replace(/Đ/g, "D");
+}
+
+function normalizeViText(s: string): string {
+  return s
+    .normalize("NFC")
+    .toLowerCase()
+    .replace(/[“”"'‘’`()\[\]{}<>.,;:!?/\\|—–\-_+*=~@#$%^&]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function tokenizeVi(s: string): string[] {
+  const normalized = normalizeViText(s);
+  return normalized ? normalized.split(" ").filter(Boolean) : [];
+}
+
+function splitVietnameseMeaningClauses(meaningVi: string, definitionEn = ""): string[] {
+  const source = meaningVi.trim() || definitionEn.trim();
+  if (!source) return [];
+
+  const rawParts = source
+    .split(/[,;\n/|]+/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+
+  const candidates: string[] = [];
+  const seen = new Set<string>();
+
+  const pushUnique = (text: string) => {
+    const tokens = tokenizeVi(text);
+    if (tokens.length === 0) return;
+    const key = tokens.join(" ");
+    if (!seen.has(key)) {
+      seen.add(key);
+      candidates.push(text.trim());
+    }
+  };
+
+  for (const part of rawParts) {
+    pushUnique(part);
+    const withoutParens = part.replace(/\([^)]*\)/g, " ").replace(/\s+/g, " ").trim();
+    if (withoutParens && withoutParens !== part) {
+      pushUnique(withoutParens);
+    }
+  }
+
+  return candidates;
+}
+
+/**
+ * Đối chiếu câu trả lời nghĩa tiếng Việt của người dùng với nghĩa trong từ điển:
+ * - Tách nhiều vế nghĩa (ngăn cách bởi dấu phẩy, chấm phẩy, gạch chéo)
+ * - Hỗ trợ cả gõ có dấu đầy đủ lẫn không dấu
+ * - Trả về số từ trùng, % khớp theo vế gần nhất và danh sách từ khớp/thiếu
+ */
+export function checkVietnameseMeaningMatch(
+  userInput: string,
+  meaningVi: string,
+  definitionEn = ""
+): VietnameseMeaningMatchResult {
+  const clauses = splitVietnameseMeaningClauses(meaningVi, definitionEn);
+  const fallbackClause = clauses[0] ?? (meaningVi.trim() || definitionEn.trim());
+  const userTokens = tokenizeVi(userInput);
+
+  if (clauses.length === 0 || userTokens.length === 0) {
+    const fallbackTokens = tokenizeVi(fallbackClause);
+    return {
+      status: "wrong",
+      isCorrect: false,
+      matchedCount: 0,
+      totalTargetWords: fallbackTokens.length,
+      matchPct: 0,
+      bestClause: fallbackClause,
+      userWordCount: userTokens.length,
+      clauseBreakdown: fallbackTokens.map((word) => ({ word, matched: false })),
+      usedAccentInsensitive: false,
+    };
+  }
+
+  const userExactSet = new Set(userTokens);
+  const userNoAccentSet = new Set(userTokens.map(stripViDiacritics));
+
+  type CandidateScore = {
+    clause: string;
+    totalTargetWords: number;
+    matchedCount: number;
+    exactAccentCount: number;
+    matchPct: number;
+    isCorrect: boolean;
+    clauseBreakdown: { word: string; matched: boolean }[];
+  };
+
+  let best: CandidateScore | null = null;
+
+  for (const clause of clauses) {
+    const clauseTokens = tokenizeVi(clause);
+    if (clauseTokens.length === 0) continue;
+
+    let matchedCount = 0;
+    let exactAccentCount = 0;
+    const clauseBreakdown = clauseTokens.map((word) => {
+      const exactHit = userExactSet.has(word);
+      const noAccentHit = exactHit || userNoAccentSet.has(stripViDiacritics(word));
+      if (noAccentHit) matchedCount += 1;
+      if (exactHit) exactAccentCount += 1;
+      return { word, matched: noAccentHit };
+    });
+
+    const totalTargetWords = clauseTokens.length;
+    const matchPct = Math.round((matchedCount / totalTargetWords) * 100);
+    const isFullMatch = matchedCount === totalTargetWords;
+    const isThresholdMatch =
+      totalTargetWords >= 3 && matchedCount >= 2 && matchPct >= 65;
+    const antiSpamOk =
+      userTokens.length <= Math.max(6, totalTargetWords * 2) ||
+      matchedCount / userTokens.length >= 0.35;
+    const isCorrect = (isFullMatch || isThresholdMatch) && antiSpamOk;
+
+    const current: CandidateScore = {
+      clause,
+      totalTargetWords,
+      matchedCount,
+      exactAccentCount,
+      matchPct,
+      isCorrect,
+      clauseBreakdown,
+    };
+
+    if (!best) {
+      best = current;
+      continue;
+    }
+
+    if (current.isCorrect !== best.isCorrect) {
+      if (current.isCorrect) best = current;
+      continue;
+    }
+    if (current.matchPct !== best.matchPct) {
+      if (current.matchPct > best.matchPct) best = current;
+      continue;
+    }
+    if (current.matchedCount !== best.matchedCount) {
+      if (current.matchedCount > best.matchedCount) best = current;
+      continue;
+    }
+    if (current.exactAccentCount > best.exactAccentCount) {
+      best = current;
+    }
+  }
+
+  if (!best) {
+    return {
+      status: "wrong",
+      isCorrect: false,
+      matchedCount: 0,
+      totalTargetWords: 0,
+      matchPct: 0,
+      bestClause: fallbackClause,
+      userWordCount: userTokens.length,
+      clauseBreakdown: [],
+      usedAccentInsensitive: false,
+    };
+  }
+
+  const status: VietnameseMeaningMatchResult["status"] = best.isCorrect
+    ? "exact"
+    : best.matchedCount > 0
+      ? "partial"
+      : "wrong";
+
+  return {
+    status,
+    isCorrect: best.isCorrect,
+    matchedCount: best.matchedCount,
+    totalTargetWords: best.totalTargetWords,
+    matchPct: best.matchPct,
+    bestClause: best.clause,
+    userWordCount: userTokens.length,
+    clauseBreakdown: best.clauseBreakdown,
+    usedAccentInsensitive:
+      best.matchedCount > 0 && best.exactAccentCount < best.matchedCount,
+  };
+}
+
+/**
+ * Tạo gợi ý 3 nấc cho nghĩa tiếng Việt (ví dụ "dao động" -> "d _ _   đ _ _ _ (2 từ)").
+ */
+export function getVietnameseMeaningHint(
+  meaningVi: string,
+  level: 1 | 2 | 3,
+  definitionEn = ""
+): string {
+  const clauses = splitVietnameseMeaningClauses(meaningVi, definitionEn);
+  const firstClause = clauses[0] ?? (meaningVi.trim() || definitionEn.trim());
+  const tokens = tokenizeVi(firstClause);
+  if (tokens.length === 0) return "";
+
+  const masked = tokens
+    .map((part) => {
+      const chars = Array.from(part);
+      if (chars.length <= 1) return part;
+      return chars
+        .map((ch, idx) => {
+          if (idx === 0) return ch;
+          if (level === 1) return "_";
+          if (level === 2) {
+            if (idx === chars.length - 1 && chars.length >= 4) return ch;
+            return idx % 2 === 0 ? ch : "_";
+          }
+          if (idx === chars.length - 1) return ch;
+          return idx % 4 !== 3 ? ch : "_";
+        })
+        .join(" ");
+    })
+    .join("   ");
+
+  return `${masked} (${tokens.length} từ)`;
+}
+
 export type EnrollResult = {
   enrolled: number;
   deferred: number;
