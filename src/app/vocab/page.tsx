@@ -2110,12 +2110,12 @@ export default function VocabLearn() {
                       setSelectedSetId(s.id);
                     }
                   }}
-                  className={`group relative flex cursor-pointer flex-col justify-between rounded-2xl border border-transparent bg-transparent p-5 text-left transition hover:border-line hover:bg-card ${
+                  className={`group relative flex cursor-pointer flex-col justify-between rounded-2xl border border-transparent bg-transparent p-4 text-left transition hover:border-line hover:bg-card ${
                     menuOpen ? "z-20 border-line bg-card" : ""
                   }`}
                 >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex min-w-0 flex-1 items-start gap-3">
+                  <div className="flex items-start justify-between gap-2.5">
+                    <div className="flex min-w-0 flex-1 items-start gap-2.5">
                       <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-card text-brand-hover transition group-hover:bg-bg">
                         <Layers size={20} strokeWidth={1.6} />
                       </div>
@@ -2123,15 +2123,17 @@ export default function VocabLearn() {
                         <div className="break-words text-base font-bold text-ink">
                           {s.title}
                         </div>
-                        <div className="mt-1 flex flex-wrap items-center gap-2 text-xs font-medium text-muted">
-                          <span>{setWords.length} thuật ngữ</span>
+                        <div className="mt-1 flex min-w-0 items-center gap-1.5 text-xs font-medium text-muted">
+                          <span className="shrink-0 whitespace-nowrap">{setWords.length} thuật ngữ</span>
                           {setFolder ? (
-                            <span className="inline-flex items-center gap-1 rounded-full bg-brand/10 px-2 py-0.5 text-[11px] font-semibold text-brand-hover">
-                              <Folder size={11} /> {setFolder.name}
+                            <span className="inline-flex min-w-0 items-center gap-1 rounded-full bg-brand/10 px-2 py-0.5 text-[11px] font-semibold text-brand-hover">
+                              <Folder size={11} className="shrink-0" />
+                              <span className="truncate">{setFolder.name}</span>
                             </span>
                           ) : (
-                            <span className="inline-flex items-center gap-1 rounded-full bg-card px-2 py-0.5 text-[11px] font-medium text-muted transition group-hover:bg-bg">
-                              <Folder size={11} /> Chưa có thư mục
+                            <span className="inline-flex min-w-0 items-center gap-1 rounded-full bg-card px-2 py-0.5 text-[11px] font-medium text-muted transition group-hover:bg-bg">
+                              <Folder size={11} className="shrink-0" />
+                              <span className="truncate">Chưa có thư mục</span>
                             </span>
                           )}
                         </div>
