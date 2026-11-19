@@ -5,14 +5,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CharacterLoader } from "@/components/CharacterLoader";
 import {
   ArrowLeft,
-  ArrowLeftRight,
   ArrowRight,
   Check,
   CheckCircle2,
   Eye,
-  Keyboard,
   Lightbulb,
-  ListChecks,
   Loader2,
   PartyPopper,
   Repeat,
@@ -48,7 +45,7 @@ type SessionItem = ReviewWord & {
 };
 
 type PromptSide = "meaning" | "word";
-type AnswerMode = "type" | "choice";
+type AnswerMode = "type" | "choice" | "mixed";
 
 type ChoiceOption = {
   id: number;
@@ -247,7 +244,9 @@ export default function Review() {
         const savedSide = localStorage.getItem(PROMPT_SIDE_KEY);
         if (savedSide === "word" || savedSide === "meaning") setPromptSide(savedSide);
         const savedMode = localStorage.getItem(ANSWER_MODE_KEY);
-        if (savedMode === "type" || savedMode === "choice") setAnswerMode(savedMode);
+        if (savedMode === "type" || savedMode === "choice" || savedMode === "mixed") {
+          setAnswerMode(savedMode);
+        }
       } catch {
         // bỏ qua
       }
@@ -257,18 +256,24 @@ export default function Review() {
   }, [load]);
 
   const card = queue[0];
+  const effectiveAnswerMode: "type" | "choice" =
+    answerMode === "mixed"
+      ? reviewedInSession % 2 === 0
+        ? "choice"
+        : "type"
+      : answerMode;
 
   useEffect(() => {
     if (
       viewMode === "session" &&
       card &&
       !feedback &&
-      answerMode === "type" &&
+      effectiveAnswerMode === "type" &&
       (promptSide === "meaning" || !selfGradeMode)
     ) {
       inputRef.current?.focus();
     }
-  }, [viewMode, card, feedback, answerMode, promptSide, selfGradeMode]);
+  }, [viewMode, card, feedback, effectiveAnswerMode, promptSide, selfGradeMode]);
 
   const startSession = useCallback(async () => {
     if (startingSession) return;
@@ -512,7 +517,7 @@ export default function Review() {
       }
       if (!card || saving) return;
 
-      if (answerMode === "choice" && ["1", "2", "3", "4"].includes(e.key)) {
+      if (effectiveAnswerMode === "choice" && ["1", "2", "3", "4"].includes(e.key)) {
         const idx = Number(e.key) - 1;
         const opt = choiceOptions[idx];
         if (opt) {
@@ -522,7 +527,7 @@ export default function Review() {
         return;
       }
 
-      if (answerMode === "type" && promptSide === "word" && selfGradeMode) {
+      if (effectiveAnswerMode === "type" && promptSide === "word" && selfGradeMode) {
         if (!revealedMeaning && (e.key === " " || e.key === "Enter")) {
           e.preventDefault();
           setRevealedMeaning(true);
@@ -544,7 +549,7 @@ export default function Review() {
     goNext,
     card,
     saving,
-    answerMode,
+    effectiveAnswerMode,
     promptSide,
     selfGradeMode,
     choiceOptions,
@@ -689,8 +694,8 @@ export default function Review() {
 
           <div>
             <span className="font-semibold">Chế độ trả lời</span>
-            <p className="text-xs text-muted">Gõ phím (có gợi ý 3 mức) hoặc Trắc nghiệm 4 đáp án.</p>
-            <div className="mt-2 grid grid-cols-2 gap-2">
+            <p className="text-xs text-muted">Gõ phím (gợi ý 3 mức), Trắc nghiệm 4 đáp án, hoặc Kết hợp xen kẽ.</p>
+            <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-3">
               <button
                 type="button"
                 onClick={() => updateAnswerMode("type")}
@@ -712,6 +717,17 @@ export default function Review() {
                 }`}
               >
                 Trắc nghiệm (1–4)
+              </button>
+              <button
+                type="button"
+                onClick={() => updateAnswerMode("mixed")}
+                className={`rounded-xl border px-3 py-2 text-xs font-bold transition ${
+                  answerMode === "mixed"
+                    ? "border-brand bg-brand/15 text-brand-hover"
+                    : "border-line bg-bg text-muted hover:text-ink"
+                }`}
+              >
+                Kết hợp
               </button>
             </div>
           </div>
@@ -958,46 +974,6 @@ export default function Review() {
           </button>
         </div>
 
-        {/* Thanh chuyển nhanh mặt thẻ & chế độ trả lời */}
-        <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-b border-line pb-4">
-          <button
-            type="button"
-            disabled={saving || Boolean(feedback)}
-            onClick={() => updatePromptSide(promptSide === "meaning" ? "word" : "meaning")}
-            className="inline-flex items-center gap-1.5 rounded-full border border-line bg-bg px-3 py-1.5 text-xs font-semibold text-ink hover:border-brand disabled:opacity-50"
-          >
-            <ArrowLeftRight size={13} className="text-brand-hover" />
-            {promptSide === "meaning" ? "Nghĩa → Từ" : "Từ → Nghĩa"}
-          </button>
-
-          <div className="inline-flex rounded-full border border-line bg-bg p-0.5 text-xs font-semibold">
-            <button
-              type="button"
-              disabled={saving || Boolean(feedback)}
-              onClick={() => updateAnswerMode("type")}
-              className={`inline-flex items-center gap-1 rounded-full px-3 py-1 transition ${
-                answerMode === "type"
-                  ? "bg-brand text-white"
-                  : "text-muted hover:text-ink"
-              } disabled:opacity-60`}
-            >
-              <Keyboard size={13} /> Gõ từ
-            </button>
-            <button
-              type="button"
-              disabled={saving || Boolean(feedback)}
-              onClick={() => updateAnswerMode("choice")}
-              className={`inline-flex items-center gap-1 rounded-full px-3 py-1 transition ${
-                answerMode === "choice"
-                  ? "bg-brand text-white"
-                  : "text-muted hover:text-ink"
-              } disabled:opacity-60`}
-            >
-              <ListChecks size={13} /> Trắc nghiệm
-            </button>
-          </div>
-        </div>
-
         {/* Khu vực câu hỏi (Prompt) */}
         <div className="my-7 space-y-3 text-center">
           {promptSide === "meaning" ? (
@@ -1014,8 +990,8 @@ export default function Review() {
                 </div>
               )}
 
-              {answerMode === "type" && hintLevel >= 1 && !feedback && (
-                <div className="mx-auto mt-3 max-w-lg space-y-2 rounded-2xl border border-line bg-bg/70 p-3.5 text-center">
+              {effectiveAnswerMode === "type" && hintLevel >= 1 && !feedback && (
+                <div className="mx-auto mt-3 max-w-lg space-y-2 rounded-2xl bg-bg/80 p-3.5 text-center shadow-sm shadow-slate-900/5 dark:shadow-black/20">
                   <div className="font-mono text-sm font-bold tracking-widest text-ink sm:text-base">
                     {getProgressiveWordHint(card.word, hintLevel as 1 | 2 | 3)}
                   </div>
@@ -1040,8 +1016,8 @@ export default function Review() {
               </div>
               {card.ipa && <div className="text-sm font-medium text-muted">{card.ipa}</div>}
 
-              {answerMode === "type" && hintLevel >= 1 && !feedback && (
-                <div className="mx-auto mt-3 max-w-lg space-y-2 rounded-2xl border border-line bg-bg/70 p-3.5 text-center">
+              {effectiveAnswerMode === "type" && hintLevel >= 1 && !feedback && (
+                <div className="mx-auto mt-3 max-w-lg space-y-2 rounded-2xl bg-bg/80 p-3.5 text-center shadow-sm shadow-slate-900/5 dark:shadow-black/20">
                   <div className="font-mono text-sm font-bold tracking-wider text-ink sm:text-base">
                     {getVietnameseMeaningHint(card.vi, hintLevel as 1 | 2 | 3, card.en)}
                   </div>
@@ -1059,18 +1035,18 @@ export default function Review() {
 
         {/* Khu vực trả lời */}
         {!feedback ? (
-          answerMode === "choice" ? (
+          effectiveAnswerMode === "choice" ? (
             <div className="mx-auto max-w-xl space-y-3">
-              <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 {choiceOptions.map((opt, idx) => (
                   <button
                     key={`${opt.id}-${idx}`}
                     type="button"
                     disabled={saving}
                     onClick={() => void submitDirect(opt.isCorrect, opt.label)}
-                    className="group flex items-start gap-3 rounded-2xl border border-line bg-bg px-4 py-3.5 text-left transition hover:border-brand hover:bg-card-hover disabled:opacity-50"
+                    className="group flex items-start gap-3 rounded-2xl bg-bg px-4 py-3.5 text-left shadow-sm shadow-slate-900/5 transition hover:-translate-y-0.5 hover:bg-card-hover hover:shadow-md dark:shadow-black/25 disabled:opacity-50"
                   >
-                    <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-card text-xs font-bold text-muted group-hover:bg-brand group-hover:text-white">
+                    <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-card text-xs font-bold text-muted shadow-xs group-hover:bg-brand group-hover:text-white">
                       {idx + 1}
                     </span>
                     <div className="min-w-0 flex-1">
@@ -1114,11 +1090,11 @@ export default function Review() {
                 autoComplete="off"
                 autoCapitalize="none"
                 spellCheck={false}
-                className="w-full rounded-2xl border-2 border-line bg-bg px-4 py-3.5 text-center text-lg font-bold outline-none transition focus:border-brand"
+                className="w-full rounded-2xl bg-bg px-4 py-3.5 text-center text-lg font-bold shadow-sm shadow-slate-900/5 outline-none ring-2 ring-transparent transition focus:ring-brand/50 dark:shadow-black/25"
               />
 
               {softHintMsg && (
-                <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-3.5 py-2 text-center text-xs font-medium text-amber-800 dark:text-amber-300">
+                <div className="rounded-xl bg-amber-500/10 px-3.5 py-2 text-center text-xs font-medium text-amber-800 shadow-xs dark:text-amber-300">
                   {softHintMsg}
                 </div>
               )}
@@ -1127,7 +1103,7 @@ export default function Review() {
                 <button
                   type="submit"
                   disabled={saving || !typed.trim()}
-                  className="inline-flex items-center gap-2 rounded-full bg-brand px-6 py-2.5 text-sm font-bold text-white hover:bg-brand-hover hover:text-bg disabled:opacity-40"
+                  className="inline-flex items-center gap-2 rounded-full bg-brand px-6 py-2.5 text-sm font-bold text-white shadow-xs hover:bg-brand-hover hover:text-bg disabled:opacity-40"
                 >
                   {saving ? <Loader2 size={16} className="animate-spin" /> : "Kiểm tra (Enter)"}
                 </button>
@@ -1135,7 +1111,7 @@ export default function Review() {
                   type="button"
                   onClick={() => setHintLevel((h) => (h < 3 ? ((h + 1) as 0 | 1 | 2 | 3) : 0))}
                   disabled={saving}
-                  className="inline-flex items-center gap-1.5 rounded-full bg-bg px-4 py-2.5 text-sm font-semibold text-muted hover:text-ink"
+                  className="inline-flex items-center gap-1.5 rounded-full bg-bg px-4 py-2.5 text-sm font-semibold text-muted shadow-xs hover:text-ink"
                 >
                   <Lightbulb size={15} />
                   {hintLevel === 3 ? "Ẩn gợi ý" : `Gợi ý (${hintLevel}/3)`}
@@ -1167,7 +1143,7 @@ export default function Review() {
                 placeholder="Gõ nghĩa tiếng Việt (có dấu hoặc không dấu)..."
                 autoComplete="off"
                 spellCheck={false}
-                className="w-full rounded-2xl border-2 border-line bg-bg px-4 py-3.5 text-center text-lg font-bold outline-none transition focus:border-brand"
+                className="w-full rounded-2xl bg-bg px-4 py-3.5 text-center text-lg font-bold shadow-sm shadow-slate-900/5 outline-none ring-2 ring-transparent transition focus:ring-brand/50 dark:shadow-black/25"
               />
 
               <div className="flex flex-wrap items-center justify-center gap-2.5">
