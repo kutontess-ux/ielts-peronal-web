@@ -15,19 +15,27 @@ import {
   ChevronRight,
   ChevronUp,
   Clock,
+  Compass,
   Copy,
   Eye,
   Flame,
+  GraduationCap,
+  GripVertical,
   Layers,
   Lightbulb,
+  Maximize2,
+  Minimize2,
   Pause,
   PenLine,
   Play,
   Plus,
   RefreshCw,
   Save,
+  Search,
   Sparkles,
+  StickyNote,
   Target,
+  Timer,
   Volume2,
   X,
 } from "lucide-react";
@@ -158,23 +166,52 @@ function WritingStudioInner() {
   const [aiGuide, setAiGuide] = useState<OutlineGuideResult | null>(null);
   const [guideCached, setGuideCached] = useState(false);
 
-  // Chế độ viết: "guided" (theo từng bước) hoặc "exam" (viết liền mạch)
-  const [editorMode, setEditorMode] = useState<"guided" | "exam">("guided");
+  // Chế độ phiên làm bài: "select" (màn hình chọn), "practice" (luyện tập), "exam" (phòng thi)
+  const [sessionMode, setSessionMode] = useState<"select" | "practice" | "exam">("select");
+
+  // Chế độ viết: "exam" (viết tự do 1 khung lớn - mặc định) hoặc "guided" (theo từng bước PEEL)
+  const [editorMode, setEditorMode] = useState<"guided" | "exam">("exam");
   const [stepDrafts, setStepDrafts] = useState<Record<string, string>>({});
   const [content, setContent] = useState("");
 
   // Đồng hồ bấm giờ
-  const [timerMode, setTimerMode] = useState<"countdown" | "countup">("countdown");
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [timerRunning, setTimerRunning] = useState(false);
+  const [examLocked, setExamLocked] = useState(false);
 
-  // Các tab điều hướng cột trái & cột phải + đóng/mở gọn gàng
+  // Split-pane kéo giãn & Toàn màn hình
+  const [leftPanePct, setLeftPanePct] = useState(45);
+  const splitContainerRef = useRef<HTMLDivElement | null>(null);
+  const isDraggingSplitRef = useRef(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
+  // Slide-over Drawer (chế độ Luyện tập) & Ghi chú nháp (cả 2 chế độ)
+  const [drawerTab, setDrawerTab] = useState<null | "guide" | "vocab" | "dict">(null);
+  const [scratchpadOpen, setScratchpadOpen] = useState(false);
+  const [scratchpadText, setScratchpadText] = useState("");
+
+  // Tra từ nhanh trong Drawer
+  type DictWord = {
+    id: number;
+    word: string;
+    ipa: string;
+    pos: string;
+    vi: string;
+    en: string;
+    level: string;
+    example: string;
+    topic: string;
+  };
+  const [dictQuery, setDictQuery] = useState("");
+  const [dictResults, setDictResults] = useState<DictWord[]>([]);
+  const [dictLoading, setDictLoading] = useState(false);
+  const dictBookCacheRef = useRef<DictWord[] | null>(null);
+
+  // Các tab điều hướng cột trái & cột phải
   const [leftTab, setLeftTab] = useState<"blueprint" | "ai_coach">("blueprint");
   const [rightTab, setRightTab] = useState<"write" | "feedback" | "rewrite" | "model">(
     "write"
   );
-  const [vocabOpen, setVocabOpen] = useState(false);
-  const [guidePanelOpen, setGuidePanelOpen] = useState(false);
 
   // Quản lý tuần tự từng bước & đóng/mở gợi ý ở chế độ Step-by-step
   const [unlockedStepCount, setUnlockedStepCount] = useState(1);
@@ -192,11 +229,64 @@ function WritingStudioInner() {
   const [lightboxOpen, setLightboxOpen] = useState(false);
 
   const autoCompletedRef = useRef(false);
+  const autoSubmittedExamRef = useRef(false);
 
   function showToast(msg: string) {
     setToast(msg);
     setTimeout(() => setToast(""), 3200);
   }
+
+  // Khôi phục & lưu nháp Ghi chú (Scratchpad) theo từng bài
+  useEffect(() => {
+    if (!Number.isFinite(submissionId) || submissionId <= 0) return;
+    try {
+      const saved = localStorage.getItem(`writing_scratchpad_${submissionId}`);
+      if (saved) setScratchpadText(saved);
+    } catch {
+      // ignore
+    }
+  }, [submissionId]);
+
+  useEffect(() => {
+    if (!Number.isFinite(submissionId) || submissionId <= 0) return;
+    try {
+      localStorage.setItem(`writing_scratchpad_${submissionId}`, scratchpadText);
+    } catch {
+      // ignore
+    }
+  }, [submissionId, scratchpadText]);
+
+  // Theo dõi trạng thái toàn màn hình
+  useEffect(() => {
+    function onFsChange() {
+      setIsFullscreen(Boolean(document.fullscreenElement));
+    }
+    document.addEventListener("fullscreenchange", onFsChange);
+    return () => document.removeEventListener("fullscreenchange", onFsChange);
+  }, []);
+
+  // Kéo giãn 2 cột (Resizable Split Pane)
+  useEffect(() => {
+    function onPointerMove(e: PointerEvent) {
+      if (!isDraggingSplitRef.current || !splitContainerRef.current) return;
+      const rect = splitContainerRef.current.getBoundingClientRect();
+      if (rect.width <= 0) return;
+      const pct = ((e.clientX - rect.left) / rect.width) * 100;
+      setLeftPanePct(Math.min(70, Math.max(25, Math.round(pct * 10) / 10)));
+    }
+    function onPointerUp() {
+      if (isDraggingSplitRef.current) {
+        isDraggingSplitRef.current = false;
+        document.body.style.userSelect = "";
+      }
+    }
+    window.addEventListener("pointermove", onPointerMove);
+    window.addEventListener("pointerup", onPointerUp);
+    return () => {
+      window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("pointerup", onPointerUp);
+    };
+  }, []);
 
   // Tải chi tiết phiên luyện viết
   useEffect(() => {
@@ -225,7 +315,6 @@ function WritingStudioInner() {
         const initContent = sub.content ?? "";
 
         let resolvedDrafts: Record<string, string> = rawDrafts;
-        // Nếu bài chưa có stepDrafts nhưng đã có content -> chia đều vào các bước
         if (Object.keys(rawDrafts).length === 0 && initContent.trim()) {
           const paras = initContent.trim().split(/\n\s*\n/);
           const mapped: Record<string, string> = {};
@@ -240,7 +329,6 @@ function WritingStudioInner() {
         }
         setStepDrafts(resolvedDrafts);
 
-        // Xác định bước đang viết để mở khóa tuần tự và chỉ mở rộng bước hiện tại
         let highestFilledIdx = -1;
         bp.steps.forEach((step, idx) => {
           if ((resolvedDrafts[step.key] ?? "").trim()) {
@@ -260,10 +348,12 @@ function WritingStudioInner() {
         setRewrittenMap((sub.rewritten_sentences_json ?? {}) as Record<string, string>);
 
         if (sub.overall_band !== null && sub.overall_band !== undefined) {
+          setSessionMode("practice");
           setRightTab(sub.discipline_completed ? "feedback" : "rewrite");
           setTimerRunning(false);
         } else {
-          setTimerRunning(true);
+          setSessionMode("select");
+          setTimerRunning(false);
         }
       } catch (e) {
         if (active) setError((e as Error).message);
@@ -496,7 +586,7 @@ function WritingStudioInner() {
     if (!submission) return;
     setLoadingGuide(true);
     setError("");
-    setGuidePanelOpen(true);
+    setDrawerTab("guide");
     setLeftTab("ai_coach");
     try {
       const res = await fetch("/api/writing/coach", {
@@ -525,14 +615,19 @@ function WritingStudioInner() {
     }
   }
 
-  async function handleSubmitForGrading() {
+  async function handleSubmitForGrading(isAutoExamSubmit = false) {
     if (!submission) return;
     if (wordCount < 15) {
-      setError("Hãy viết ít nhất 15 từ trước khi gửi chấm chữa AI.");
+      setError(
+        isAutoExamSubmit
+          ? "Hết giờ làm bài! Bài viết chưa đủ 15 từ để gửi chấm AI."
+          : "Hãy viết ít nhất 15 từ trước khi gửi chấm chữa AI."
+      );
       return;
     }
     setGrading(true);
     setTimerRunning(false);
+    setDrawerTab(null);
     setError("");
     try {
       const res = await fetch("/api/writing/coach", {
@@ -558,6 +653,98 @@ function WritingStudioInner() {
       setGrading(false);
     }
   }
+
+  function startPracticeMode() {
+    setSessionMode("practice");
+    setEditorMode("exam");
+    setExamLocked(false);
+    setTimerRunning(true);
+  }
+
+  function startExamMode() {
+    setSessionMode("exam");
+    setEditorMode("exam");
+    setDrawerTab(null);
+    setElapsedSeconds(0);
+    setExamLocked(false);
+    autoSubmittedExamRef.current = false;
+    setTimerRunning(true);
+  }
+
+  async function toggleFullscreen() {
+    try {
+      if (!document.fullscreenElement) {
+        await document.documentElement.requestFullscreen();
+      } else {
+        await document.exitFullscreen();
+      }
+    } catch {
+      showToast("Trình duyệt không hỗ trợ toàn màn hình ở chế độ này.");
+    }
+  }
+
+  async function handleDictSearch(rawQuery: string) {
+    const q = rawQuery.trim().toLowerCase();
+    if (!q) {
+      setDictResults([]);
+      return;
+    }
+    setDictLoading(true);
+    try {
+      const res = await fetch(`/api/words?page=1&pageSize=20&q=${encodeURIComponent(q)}`);
+      const j = await res.json().catch(() => ({}));
+      const personal: DictWord[] = Array.isArray(j.words) ? j.words : [];
+
+      let bookMatches: DictWord[] = [];
+      if (personal.length < 10) {
+        if (!dictBookCacheRef.current) {
+          const bRes = await fetch("/api/words?scope=books");
+          const bJson = await bRes.json().catch(() => ({}));
+          dictBookCacheRef.current = Array.isArray(bJson.words) ? bJson.words : [];
+        }
+        bookMatches = dictBookCacheRef.current
+          .filter((w) => (w.word + " " + w.vi + " " + w.en).toLowerCase().includes(q))
+          .slice(0, 20);
+      }
+
+      const seen = new Set<string>();
+      const merged: DictWord[] = [];
+      for (const item of [...personal, ...bookMatches]) {
+        const k = item.word.toLowerCase();
+        if (!seen.has(k)) {
+          seen.add(k);
+          merged.push(item);
+        }
+        if (merged.length >= 25) break;
+      }
+      setDictResults(merged);
+    } catch {
+      setDictResults([]);
+    } finally {
+      setDictLoading(false);
+    }
+  }
+
+  // Tự động khóa và nộp bài khi hết giờ trong chế độ Phòng thi
+  const examTargetSeconds = blueprint.recommendedMinutes * 60;
+  useEffect(() => {
+    if (
+      sessionMode !== "exam" ||
+      !timerRunning ||
+      Boolean(feedback) ||
+      autoSubmittedExamRef.current
+    ) {
+      return;
+    }
+    if (elapsedSeconds >= examTargetSeconds) {
+      autoSubmittedExamRef.current = true;
+      setTimerRunning(false);
+      setExamLocked(true);
+      showToast("⏰ Hết giờ làm bài! Hệ thống đang tự động khóa và nộp bài...");
+      void handleSubmitForGrading(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionMode, timerRunning, elapsedSeconds, examTargetSeconds, feedback]);
 
   async function handleSaveRewriteProgress(markCompleted = false) {
     if (!submission) return;
@@ -651,24 +838,155 @@ function WritingStudioInner() {
   const step1Done = wordCount >= blueprint.minWords;
   const visibleSteps = blueprint.steps.slice(0, unlockedStepCount);
 
+  if (sessionMode === "select" && !feedback) {
+    return (
+      <div className="mx-auto max-w-4xl space-y-6 py-4">
+        {toast && (
+          <div className="fixed bottom-6 right-6 z-50 flex items-center gap-2 rounded-2xl border border-emerald-500/40 bg-card px-4 py-3 text-xs font-bold text-emerald-700 shadow-xl dark:text-emerald-300">
+            <CheckCircle2 size={16} />
+            <span>{toast}</span>
+          </div>
+        )}
+
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <Link
+            href="/writing"
+            className="inline-flex items-center gap-1.5 rounded-xl border border-line bg-card px-3.5 py-2 text-xs font-bold text-muted transition hover:text-ink"
+          >
+            <ArrowLeft size={14} /> Quay lại Trung tâm Writing
+          </Link>
+          <div className="flex flex-wrap items-center gap-2">
+            <span
+              className={`rounded-lg px-2.5 py-1 text-xs font-bold ${
+                taskType === "task1"
+                  ? "bg-sky-500/15 text-sky-700 dark:text-sky-300"
+                  : "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300"
+              }`}
+            >
+              {taskType === "task1" ? "Task 1" : "Task 2"} · {subMeta.shortLabel}
+            </span>
+            {prompt?.source_name && (
+              <span className="rounded-lg bg-card px-2.5 py-1 text-xs font-semibold text-ink border border-line">
+                {prompt.source_name}
+              </span>
+            )}
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-line bg-card p-5 space-y-2">
+          <div className="text-xs font-bold uppercase tracking-wider text-muted">
+            Đề bài ({submission.topic})
+          </div>
+          <p className="whitespace-pre-line text-sm leading-relaxed text-ink">
+            {submission.prompt_snapshot}
+          </p>
+          {chartImageUrl && (
+            <div className="pt-2">
+              <img
+                src={chartImageUrl}
+                alt="Task 1 Chart Preview"
+                className="max-h-44 rounded-xl border border-line bg-white p-2 object-contain"
+              />
+            </div>
+          )}
+        </div>
+
+        <div className="space-y-2 text-center">
+          <h1 className="text-xl font-extrabold text-ink">
+            Chọn chế độ làm bài phù hợp với bạn
+          </h1>
+          <p className="text-xs text-muted">
+            Bạn có thể luyện viết có trợ lý AI & từ vựng SRS, hoặc mô phỏng phòng thi thật bấm giờ nghiêm ngặt.
+          </p>
+        </div>
+
+        <div className="grid gap-5 md:grid-cols-2">
+          <button
+            type="button"
+            onClick={startPracticeMode}
+            className="group flex flex-col justify-between rounded-2xl border-2 border-line bg-card p-6 text-left transition hover:border-brand hover:shadow-lg"
+          >
+            <div className="space-y-3">
+              <div className="inline-flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-500/15 text-emerald-700 dark:text-emerald-300">
+                <Compass size={22} />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h2 className="text-lg font-extrabold text-ink">Chế độ Luyện tập</h2>
+                  <span className="rounded-full bg-emerald-500/15 px-2.5 py-0.5 text-[10px] font-bold text-emerald-700 dark:text-emerald-300">
+                    Khuyên dùng
+                  </span>
+                </div>
+                <p className="mt-1 text-xs leading-relaxed text-muted">
+                  Tập trung viết tự do hoặc bật từng bước PEEL. Có ngăn kéo trượt chứa Gợi ý AI, Khung công thức, Từ vựng SRS & Tra từ nhanh.
+                </p>
+              </div>
+              <ul className="space-y-1.5 text-xs text-ink">
+                <li>✓ Không giới hạn thời gian (đồng hồ đếm xuôi)</li>
+                <li>✓ Chuyển linh hoạt Viết tự do ↔ Theo từng bước</li>
+                <li>✓ Tra từ nhanh & lưu thẳng vào SRS</li>
+                <li>✓ Lưu nháp bài viết bất cứ lúc nào</li>
+              </ul>
+            </div>
+            <div className="mt-5 inline-flex items-center gap-1.5 text-sm font-bold text-brand-hover group-hover:underline">
+              Bắt đầu Luyện tập →
+            </div>
+          </button>
+
+          <button
+            type="button"
+            onClick={startExamMode}
+            className="group flex flex-col justify-between rounded-2xl border-2 border-line bg-card p-6 text-left transition hover:border-rose-500 hover:shadow-lg"
+          >
+            <div className="space-y-3">
+              <div className="inline-flex h-11 w-11 items-center justify-center rounded-xl bg-rose-500/15 text-rose-700 dark:text-rose-300">
+                <GraduationCap size={22} />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h2 className="text-lg font-extrabold text-ink">Chế độ Phòng thi</h2>
+                  <span className="rounded-full bg-rose-500/15 px-2.5 py-0.5 text-[10px] font-bold text-rose-700 dark:text-rose-300">
+                    {blueprint.recommendedMinutes}:00
+                  </span>
+                </div>
+                <p className="mt-1 text-xs leading-relaxed text-muted">
+                  Mô phỏng thi IELTS trên máy tính: ẩn toàn bộ gợi ý, từ vựng và từ điển để rèn phản xạ thật dưới áp lực thời gian.
+                </p>
+              </div>
+              <ul className="space-y-1.5 text-xs text-ink">
+                <li>⏳ Đếm ngược {blueprint.recommendedMinutes} phút chuẩn phòng thi</li>
+                <li>🔒 Tự động khóa bài & nộp chấm AI khi hết giờ</li>
+                <li>🚫 Ẩn toàn bộ gợi ý AI, SRS & tra từ</li>
+                <li>✏️ Giữ lại giấy nháp Ghi chú để lập dàn ý nhanh</li>
+              </ul>
+            </div>
+            <div className="mt-5 inline-flex items-center gap-1.5 text-sm font-bold text-rose-600 dark:text-rose-300 group-hover:underline">
+              Vào Phòng thi ngay →
+            </div>
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="space-y-5">
+    <div className="space-y-4 pb-24">
       {/* Thanh thông báo nhanh (Toast) */}
       {toast && (
-        <div className="fixed bottom-6 right-6 z-50 flex items-center gap-2 rounded-2xl border border-emerald-500/40 bg-card px-4 py-3 text-xs font-bold text-emerald-700 shadow-xl dark:text-emerald-300">
+        <div className="fixed bottom-20 right-6 z-50 flex items-center gap-2 rounded-2xl border border-emerald-500/40 bg-card px-4 py-3 text-xs font-bold text-emerald-700 shadow-xl dark:text-emerald-300">
           <CheckCircle2 size={16} />
           <span>{toast}</span>
         </div>
       )}
 
-      {/* TOP TOOLBAR */}
-      <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-line bg-card p-4">
-        <div className="flex flex-wrap items-center gap-2.5">
+      {/* THANH TRÊN TỐI GIẢN */}
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-line bg-card px-4 py-3">
+        <div className="flex flex-wrap items-center gap-2">
           <Link
             href="/writing"
             className="inline-flex items-center gap-1.5 rounded-xl border border-line bg-bg px-3 py-1.5 text-xs font-bold text-muted transition hover:text-ink"
           >
-            <ArrowLeft size={14} /> Trung tâm Writing
+            <ArrowLeft size={14} /> Thoát
           </Link>
           <span
             className={`rounded-lg px-2.5 py-1 text-xs font-bold ${
@@ -680,43 +998,64 @@ function WritingStudioInner() {
             {taskType === "task1" ? "Task 1" : "Task 2"} · {subMeta.shortLabel}
           </span>
           {prompt?.source_name && (
-            <span className="rounded-lg bg-bg px-2.5 py-1 text-xs font-semibold text-ink">
+            <span className="hidden sm:inline rounded-lg bg-bg px-2.5 py-1 text-xs font-semibold text-ink">
               {prompt.source_name}
             </span>
           )}
-          <span className="rounded-lg bg-brand/15 px-2.5 py-1 text-xs font-bold text-brand-hover">
-            {blueprint.title}
+          <span
+            className={`rounded-lg px-2.5 py-1 text-xs font-bold ${
+              sessionMode === "exam"
+                ? "bg-rose-500/15 text-rose-700 dark:text-rose-300"
+                : "bg-brand/15 text-brand-hover"
+            }`}
+          >
+            {sessionMode === "exam" ? "🎓 Phòng thi" : "🧭 Luyện tập"}
           </span>
+          {!feedback && (
+            <button
+              type="button"
+              onClick={() => {
+                setTimerRunning(false);
+                setDrawerTab(null);
+                setSessionMode("select");
+              }}
+              className="rounded-lg border border-line bg-bg px-2 py-1 text-[11px] font-semibold text-muted hover:text-ink"
+            >
+              Đổi chế độ
+            </button>
+          )}
         </div>
 
-        {/* Đồng hồ + Bộ đếm từ + Chuyển chế độ */}
-        <div className="flex flex-wrap items-center gap-2.5">
-          {/* Đồng hồ bấm giờ */}
-          <div className="flex items-center gap-1.5 rounded-xl border border-line bg-bg px-3 py-1.5 text-xs">
-            <Clock size={14} className="text-brand-hover" />
-            <button
-              type="button"
-              onClick={() =>
-                setTimerMode((m) => (m === "countdown" ? "countup" : "countdown"))
-              }
-              className="font-mono text-sm font-extrabold text-ink"
-              title="Bấm để đổi Đếm ngược / Đếm xuôi"
-            >
-              {timerMode === "countdown"
-                ? formatTimer(remainingSeconds)
-                : formatTimer(elapsedSeconds)}
-            </button>
-            <button
-              type="button"
-              onClick={() => setTimerRunning((r) => !r)}
-              className="ml-1 rounded-lg bg-card p-1 text-muted hover:text-ink"
-              title={timerRunning ? "Tạm dừng" : "Tiếp tục bấm giờ"}
-            >
-              {timerRunning ? <Pause size={13} /> : <Play size={13} />}
-            </button>
-          </div>
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Chuyển Viết tự do <-> Theo từng bước (Chỉ ở chế độ Luyện tập) */}
+          {sessionMode === "practice" && rightTab === "write" && (
+            <div className="inline-flex rounded-xl border border-line bg-bg p-0.5">
+              <button
+                type="button"
+                onClick={() => handleSwitchEditorMode("exam")}
+                className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-bold transition ${
+                  editorMode === "exam"
+                    ? "bg-brand text-white"
+                    : "text-muted hover:text-ink"
+                }`}
+              >
+                <PenLine size={12} /> Viết tự do
+              </button>
+              <button
+                type="button"
+                onClick={() => handleSwitchEditorMode("guided")}
+                className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-bold transition ${
+                  editorMode === "guided"
+                    ? "bg-brand text-white"
+                    : "text-muted hover:text-ink"
+                }`}
+              >
+                <Layers size={12} /> Theo từng bước
+              </button>
+            </div>
+          )}
 
-          {/* Bộ đếm từ thời gian thực */}
+          {/* Bộ đếm từ nhanh */}
           <div
             className={`flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-bold ${
               step1Done
@@ -724,44 +1063,24 @@ function WritingStudioInner() {
                 : "border-amber-500/40 bg-amber-500/10 text-amber-800 dark:text-amber-300"
             }`}
           >
-            <Target size={14} />
+            <Target size={13} />
             <span>
               {wordCount} / {blueprint.minWords} từ
             </span>
-            {step1Done && <Check size={13} />}
           </div>
 
-          {/* Nút chuyển chế độ Guided <-> Exam */}
-          <div className="inline-flex rounded-xl border border-line bg-bg p-1">
-            <button
-              type="button"
-              onClick={() => {
-                handleSwitchEditorMode("guided");
-                setRightTab("write");
-              }}
-              className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-bold transition ${
-                editorMode === "guided"
-                  ? "bg-brand text-white"
-                  : "text-muted hover:text-ink"
-              }`}
-            >
-              <Layers size={13} /> Theo từng bước
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                handleSwitchEditorMode("exam");
-                setRightTab("write");
-              }}
-              className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-bold transition ${
-                editorMode === "exam"
-                  ? "bg-brand text-white"
-                  : "text-muted hover:text-ink"
-              }`}
-            >
-              <PenLine size={13} /> Như phòng thi
-            </button>
-          </div>
+          {/* Nút Toàn màn hình */}
+          <button
+            type="button"
+            onClick={toggleFullscreen}
+            className="inline-flex items-center gap-1.5 rounded-xl border border-line bg-bg px-3 py-1.5 text-xs font-bold text-muted transition hover:text-ink"
+            title={isFullscreen ? "Thoát toàn màn hình" : "Chế độ toàn màn hình"}
+          >
+            {isFullscreen ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
+            <span className="hidden sm:inline">
+              {isFullscreen ? "Thu nhỏ" : "Toàn màn hình"}
+            </span>
+          </button>
         </div>
       </div>
 
@@ -774,15 +1093,20 @@ function WritingStudioInner() {
         </div>
       )}
 
-      {/* BỐ CỤC 2 CỘT CHÍNH */}
-      <div className="grid gap-6 lg:grid-cols-12">
-        {/* CỘT TRÁI (5/12): ĐỀ BÀI + TỪ VỰNG SRS (ĐÓNG/MỞ) + KHUNG HƯỚNG DẪN / AI COACH (ĐÓNG/MỞ) */}
-        <div className="space-y-3.5 lg:col-span-5">
-          {/* Thẻ Đề bài gốc & Ảnh biểu đồ Task 1 */}
+      {/* BỐ CỤC 2 CỘT CÓ THANH KÉO GIÃN */}
+      <div
+        ref={splitContainerRef}
+        className="flex flex-col gap-4 lg:flex-row lg:items-start lg:gap-0"
+      >
+        {/* CỘT TRÁI: ĐỀ BÀI & ẢNH BIỂU ĐỒ CỐ ĐỊNH, THOÁNG MẮT */}
+        <div
+          style={{ ["--left-pane" as string]: `${leftPanePct}%` }}
+          className="w-full space-y-3.5 lg:w-[var(--left-pane)] lg:shrink-0 lg:sticky lg:top-4"
+        >
           <div className="rounded-2xl border border-line bg-card p-5">
             <div className="flex items-center justify-between gap-2">
               <span className="text-xs font-bold uppercase tracking-wider text-muted">
-                Đề thi thật ({submission.topic})
+                Đề bài ({submission.topic})
               </span>
               {chartImageUrl && (
                 <button
@@ -794,11 +1118,11 @@ function WritingStudioInner() {
                 </button>
               )}
             </div>
-            <p className="mt-2.5 whitespace-pre-line text-[15px] leading-relaxed font-medium text-ink">
+            <p className="mt-3 whitespace-pre-line text-[15px] leading-relaxed font-medium text-ink">
               {submission.prompt_snapshot}
             </p>
             {prompt?.chart_notes && (
-              <p className="mt-2 rounded-xl bg-bg p-2.5 text-xs text-muted">
+              <p className="mt-3 rounded-xl bg-bg p-2.5 text-xs text-muted">
                 <b>Ghi chú biểu đồ:</b> {prompt.chart_notes}
               </p>
             )}
@@ -812,7 +1136,7 @@ function WritingStudioInner() {
                   <img
                     src={chartImageUrl}
                     alt="Task 1 Chart"
-                    className="mx-auto max-h-60 object-contain"
+                    className="mx-auto max-h-72 object-contain"
                   />
                   <span className="mt-1 block text-center text-[11px] font-semibold text-brand-hover group-hover:underline">
                     🔍 Bấm vào ảnh để phóng to xem rõ số liệu
@@ -821,423 +1145,26 @@ function WritingStudioInner() {
               </div>
             )}
           </div>
+        </div>
 
-          {/* Thử thách Từ vựng mục tiêu SRS hôm nay (Có nút đóng/mở gọn gàng) */}
-          {targetVocab.length > 0 && (
-            <div className="rounded-2xl border border-line bg-card">
-              <button
-                type="button"
-                onClick={() => setVocabOpen((v) => !v)}
-                className="flex w-full items-center justify-between gap-2 px-4 py-3.5 text-left transition hover:bg-bg/50"
-              >
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-bold uppercase tracking-wider text-brand-hover">
-                    Từ vựng SRS hôm nay
-                  </span>
-                  <span className="rounded-full bg-emerald-500/15 px-2.5 py-0.5 text-[11px] font-bold text-emerald-700 dark:text-emerald-300">
-                    {usedTargetWords.length}/{targetVocab.length} đã dùng
-                  </span>
-                </div>
-                <span className="inline-flex items-center gap-1 text-xs font-semibold text-muted">
-                  {vocabOpen ? (
-                    <>
-                      Thu gọn <ChevronUp size={15} />
-                    </>
-                  ) : (
-                    <>
-                      Mở xem <ChevronDown size={15} />
-                    </>
-                  )}
-                </span>
-              </button>
-
-              {vocabOpen && (
-                <div className="space-y-2 border-t border-line p-4">
-                  {targetVocab.map((v) => {
-                    const isUsed =
-                      usedTargetSet.has(v.lemma.toLowerCase()) ||
-                      usedTargetSet.has(v.word.toLowerCase());
-                    return (
-                      <div
-                        key={v.lemma}
-                        className={`rounded-xl border p-3 transition ${
-                          isUsed
-                            ? "border-emerald-500/50 bg-emerald-500/15"
-                            : "border-line bg-bg"
-                        }`}
-                      >
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="flex flex-wrap items-center gap-1.5">
-                            <span className="font-bold text-ink">{v.lemma}</span>
-                            {v.ipa && <span className="text-xs text-muted">{v.ipa}</span>}
-                            {v.pos && (
-                              <span className="rounded bg-card px-1.5 py-0.5 text-[10px] font-semibold text-muted">
-                                {v.pos}
-                              </span>
-                            )}
-                            <span
-                              className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${
-                                levelColor[v.cefr_level] ?? levelColor.B2
-                              }`}
-                            >
-                              {v.cefr_level}
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-1.5">
-                            {isUsed ? (
-                              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500 px-2 py-0.5 text-[10px] font-bold text-white">
-                                <Check size={11} /> Đã dùng
-                              </span>
-                            ) : (
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  insertSnippetIntoStep(
-                                    blueprint.steps[0]?.key ?? "intro",
-                                    v.lemma
-                                  )
-                                }
-                                className="rounded-lg bg-card px-2 py-0.5 text-[10px] font-bold text-brand-hover hover:underline"
-                              >
-                                + Chèn
-                              </button>
-                            )}
-                            <button
-                              type="button"
-                              onClick={() => speakEnglish(v.lemma)}
-                              className="rounded-lg p-1 text-muted hover:text-ink"
-                              title="Nghe phát âm"
-                            >
-                              <Volume2 size={14} />
-                            </button>
-                          </div>
-                        </div>
-                        <div className="mt-1 text-xs text-ink">{v.meaning_vi}</div>
-                        {v.collocations?.length > 0 && (
-                          <div className="mt-1 text-[11px] text-muted">
-                            Cụm đi kèm: <i>{v.collocations.slice(0, 3).join(" · ")}</i>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* 2 TẦNG HƯỚNG DẪN: KHUNG CÔNG THỨC & AI PHÂN TÍCH DÀN Ý (Có đóng/mở gọn gàng) */}
-          <div className="rounded-2xl border border-line bg-card">
-            <button
-              type="button"
-              onClick={() => setGuidePanelOpen((v) => !v)}
-              className="flex w-full items-center justify-between gap-2 px-4 py-3.5 text-left transition hover:bg-bg/50"
-            >
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="text-xs font-bold uppercase tracking-wider text-ink">
-                  Khung công thức & Phân tích dàn ý AI
-                </span>
-                {aiGuide && (
-                  <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-bold text-emerald-700 dark:text-emerald-300">
-                    ⚡ Đã có dàn ý AI
-                  </span>
-                )}
-              </div>
-              <span className="inline-flex items-center gap-1 text-xs font-semibold text-muted">
-                {guidePanelOpen ? (
-                  <>
-                    Thu gọn <ChevronUp size={15} />
-                  </>
-                ) : (
-                  <>
-                    Mở xem <ChevronDown size={15} />
-                  </>
-                )}
-              </span>
-            </button>
-
-            {guidePanelOpen && (
-              <div className="border-t border-line p-4">
-                <div className="grid grid-cols-2 gap-1.5 rounded-xl bg-bg p-1">
-                  <button
-                    type="button"
-                    onClick={() => setLeftTab("blueprint")}
-                    className={`rounded-lg py-2 text-xs font-bold transition ${
-                      leftTab === "blueprint"
-                        ? "bg-card text-ink shadow-xs"
-                        : "text-muted hover:text-ink"
-                    }`}
-                  >
-                    Khung công thức (0 token)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setLeftTab("ai_coach")}
-                    className={`rounded-lg py-2 text-xs font-bold transition ${
-                      leftTab === "ai_coach"
-                        ? "bg-card text-brand-hover shadow-xs"
-                        : "text-muted hover:text-ink"
-                    }`}
-                  >
-                    AI Phân tích & Dàn ý {aiGuide ? "⚡" : "(1 req)"}
-                  </button>
-                </div>
-
-                {leftTab === "blueprint" ? (
-                  <div className="mt-3 space-y-2.5">
-                    <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-xs text-emerald-800 dark:text-emerald-200">
-                      <b>Mẹo dạng {subMeta.shortLabel}:</b> {subMeta.keyTip}
-                    </div>
-                    {blueprint.steps.map((st, idx) => (
-                      <details
-                        key={st.key}
-                        className="group rounded-xl border border-line bg-bg p-3"
-                      >
-                        <summary className="cursor-pointer text-xs font-bold text-ink">
-                          Bước {idx + 1}: {st.label}
-                        </summary>
-                        <div className="mt-2 space-y-2">
-                          <p className="text-xs text-muted">{st.guideVi}</p>
-                          <div className="flex flex-wrap gap-1.5">
-                            {st.connectors.map((c) => (
-                              <button
-                                key={c}
-                                type="button"
-                                onClick={() => insertSnippetIntoStep(st.key, c)}
-                                className="rounded-lg border border-line bg-card px-2 py-1 text-[11px] font-semibold text-brand-hover hover:border-brand-hover"
-                                title="Bấm để chèn vào bài viết"
-                              >
-                                + {c}
-                              </button>
-                            ))}
-                          </div>
-                          {st.templates.length > 0 && (
-                            <div className="space-y-1 border-t border-line pt-2 text-[11px] text-muted">
-                              <div className="font-semibold text-ink">Khung câu mẫu Band 6.5+:</div>
-                              {st.templates.map((tpl, i) => (
-                                <div key={i} className="italic">
-                                  &ldquo;{tpl}&rdquo;
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      </details>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="mt-3 space-y-3">
-                    {!aiGuide ? (
-                      <div className="space-y-3 rounded-xl border border-line bg-bg p-4 text-center">
-                        <Sparkles size={24} className="mx-auto text-brand-hover" />
-                        <div className="text-sm font-bold text-ink">
-                          Nhờ AI Gia sư Phân tích đề & Lập dàn ý
-                        </div>
-                        <p className="text-xs text-muted">
-                          AI sẽ đọc đề bài {chartImageUrl ? "(và số liệu ảnh biểu đồ)" : ""}, cảnh báo bẫy lạc đề, gợi ý luận điểm PEEL và collocations. Lưu cache vĩnh viễn theo đề.
-                        </p>
-                        <button
-                          type="button"
-                          disabled={loadingGuide}
-                          onClick={() => handleRequestAiOutline(false)}
-                          className="inline-flex items-center gap-2 rounded-full bg-brand px-4 py-2 text-xs font-bold text-white transition hover:bg-brand-hover hover:text-bg disabled:opacity-50"
-                        >
-                          <Sparkles size={14} />
-                          {loadingGuide
-                            ? "AI đang phân tích..."
-                            : "Phân tích đề & Gợi ý dàn ý (1 req)"}
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="space-y-2.5 text-xs">
-                        <div className="flex items-center justify-between rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-emerald-800 dark:text-emerald-200">
-                          <span className="font-bold">
-                            {guideCached
-                              ? "⚡ Đã tải từ Cache (0 token)"
-                              : "✓ Dàn ý AI đã lưu"}
-                          </span>
-                          <button
-                            type="button"
-                            disabled={loadingGuide}
-                            onClick={() => handleRequestAiOutline(true)}
-                            className="inline-flex items-center gap-1 font-semibold underline"
-                          >
-                            <RefreshCw size={11} /> Tạo lại
-                          </button>
-                        </div>
-
-                        {/* 1. Phân tích yêu cầu đề (Đóng/mở) */}
-                        <details open className="rounded-xl border border-line bg-bg p-3">
-                          <summary className="cursor-pointer font-bold text-ink">
-                            1. Phân tích yêu cầu & Bẫy lạc đề
-                          </summary>
-                          <div className="mt-2 space-y-2">
-                            <p className="text-ink">{aiGuide.task_analysis?.main_topic_vi}</p>
-                            {aiGuide.task_analysis?.required_parts_vi?.length > 0 && (
-                              <div>
-                                <div className="font-semibold text-emerald-700 dark:text-emerald-300">
-                                  Các vế bắt buộc phải trả lời:
-                                </div>
-                                <ul className="mt-1 list-disc space-y-0.5 pl-4 text-muted">
-                                  {aiGuide.task_analysis.required_parts_vi.map((item, i) => (
-                                    <li key={i}>{item}</li>
-                                  ))}
-                                </ul>
-                              </div>
-                            )}
-                            {aiGuide.task_analysis?.common_pitfalls_vi?.length > 0 && (
-                              <div>
-                                <div className="font-semibold text-rose-600 dark:text-rose-300">
-                                  Bẫy dễ mất điểm cần tránh:
-                                </div>
-                                <ul className="mt-1 list-disc space-y-0.5 pl-4 text-muted">
-                                  {aiGuide.task_analysis.common_pitfalls_vi.map((item, i) => (
-                                    <li key={i}>{item}</li>
-                                  ))}
-                                </ul>
-                              </div>
-                            )}
-                            {aiGuide.task_analysis?.suggested_stance_vi && (
-                              <div className="rounded-lg bg-card p-2 text-ink">
-                                <b>Hướng đi gợi ý:</b>{" "}
-                                {aiGuide.task_analysis.suggested_stance_vi}
-                              </div>
-                            )}
-                          </div>
-                        </details>
-
-                        {/* 2. Dàn ý gợi ý từng phần (Đóng/mở) */}
-                        <details open className="rounded-xl border border-line bg-bg p-3">
-                          <summary className="cursor-pointer font-bold text-ink">
-                            2. Dàn ý gợi ý từng bước
-                          </summary>
-                          <div className="mt-2 space-y-2">
-                            <div className="rounded-lg bg-card p-2">
-                              <b className="text-brand-hover">Mở bài (Paraphrase):</b>{" "}
-                              {aiGuide.step_guides?.intro_paraphrase_hint}
-                            </div>
-                            <div className="rounded-lg bg-card p-2">
-                              <b className="text-brand-hover">
-                                {taskType === "task1" ? "Overview:" : "Thesis Statement:"}
-                              </b>{" "}
-                              {aiGuide.step_guides?.thesis_or_overview_hint}
-                            </div>
-                            <div className="rounded-lg bg-card p-2">
-                              <b className="text-brand-hover">Body 1:</b>{" "}
-                              {aiGuide.step_guides?.body1_peel_hint}
-                            </div>
-                            <div className="rounded-lg bg-card p-2">
-                              <b className="text-brand-hover">Body 2:</b>{" "}
-                              {aiGuide.step_guides?.body2_peel_hint}
-                            </div>
-                            {aiGuide.step_guides?.conclusion_hint && (
-                              <div className="rounded-lg bg-card p-2">
-                                <b className="text-brand-hover">Kết bài:</b>{" "}
-                                {aiGuide.step_guides.conclusion_hint}
-                              </div>
-                            )}
-                          </div>
-                        </details>
-
-                        {/* 3. Collocations chủ đề (Đóng/mở) */}
-                        {aiGuide.topic_collocations?.length > 0 && (
-                          <details className="rounded-xl border border-line bg-bg p-3">
-                            <summary className="cursor-pointer font-bold text-ink">
-                              3. Cụm từ học thuật sát đề ({aiGuide.topic_collocations.length})
-                            </summary>
-                            <div className="mt-2 space-y-2">
-                              {aiGuide.topic_collocations.map((col, idx) => {
-                                const key = `guide-col-${idx}`;
-                                const isSaved =
-                                  savedVocabKeys.has(key) ||
-                                  savedVocabKeys.has(col.phrase.toLowerCase());
-                                return (
-                                  <div key={idx} className="rounded-lg bg-card p-2.5">
-                                    <div className="flex items-center justify-between gap-2">
-                                      <span className="font-bold text-brand-hover">
-                                        {col.phrase} ({col.cefr_level})
-                                      </span>
-                                      <div className="flex items-center gap-1.5">
-                                        <button
-                                          type="button"
-                                          onClick={() =>
-                                            insertSnippetIntoStep(
-                                              blueprint.steps[0]?.key ?? "intro",
-                                              col.phrase
-                                            )
-                                          }
-                                          className="rounded bg-bg px-2 py-0.5 text-[10px] font-bold text-ink hover:text-brand-hover"
-                                        >
-                                          + Chèn
-                                        </button>
-                                        <button
-                                          type="button"
-                                          disabled={isSaved || savingVocabKey === key}
-                                          onClick={() =>
-                                            handleSaveVocabToSrs(
-                                              [
-                                                {
-                                                  lemma: col.phrase,
-                                                  pos: "phr",
-                                                  meaning_vi: col.meaning_vi,
-                                                  example: col.example_sentence,
-                                                  cefr_level: col.cefr_level,
-                                                  topic: submission.topic,
-                                                },
-                                              ],
-                                              key
-                                            )
-                                          }
-                                          className="rounded bg-brand/15 px-2 py-0.5 text-[10px] font-bold text-brand-hover disabled:opacity-50"
-                                        >
-                                          {isSaved ? "✓ Đã lưu SRS" : "+ Lưu SRS"}
-                                        </button>
-                                      </div>
-                                    </div>
-                                    <div className="mt-0.5 text-ink">{col.meaning_vi}</div>
-                                    <div className="mt-0.5 italic text-muted">
-                                      VD: {col.example_sentence}
-                                    </div>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          </details>
-                        )}
-
-                        {/* 4. Cấu trúc ngữ pháp ăn điểm (Đóng/mở) */}
-                        {aiGuide.grammar_structures?.length > 0 && (
-                          <details className="rounded-xl border border-line bg-bg p-3">
-                            <summary className="cursor-pointer font-bold text-ink">
-                              4. Cấu trúc câu Band 6.5+ áp dụng trực tiếp
-                            </summary>
-                            <div className="mt-2 space-y-2">
-                              {aiGuide.grammar_structures.map((g, idx) => (
-                                <div key={idx} className="rounded-lg bg-card p-2.5">
-                                  <div className="font-bold text-ink">{g.pattern_name}</div>
-                                  <div className="text-[11px] font-mono text-brand-hover">
-                                    Công thức: {g.formula}
-                                  </div>
-                                  <div className="mt-1 italic text-ink">
-                                    &ldquo;{g.applied_example}&rdquo;
-                                  </div>
-                                  <div className="mt-0.5 text-muted">{g.explanation_vi}</div>
-                                </div>
-                              ))}
-                            </div>
-                          </details>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
+        {/* THANH KÉO GIÃN 2 CỘT (DESKTOP) */}
+        <div
+          role="separator"
+          aria-orientation="vertical"
+          onPointerDown={() => {
+            isDraggingSplitRef.current = true;
+            document.body.style.userSelect = "none";
+          }}
+          title="Kéo trái/phải để thay đổi độ rộng 2 cột"
+          className="hidden lg:flex w-4 shrink-0 cursor-col-resize items-center justify-center self-stretch py-8 text-muted/60 hover:text-brand-hover transition"
+        >
+          <div className="flex h-12 w-1.5 items-center justify-center rounded-full bg-line/80 hover:bg-brand">
+            <GripVertical size={12} />
           </div>
         </div>
 
-        {/* CỘT PHẢI (7/12): SOẠN THẢO -> CHẤM 4 TIÊU CHÍ -> TRẠM GÕ LẠI CÂU SAI -> BÀI MẪU & LƯU TỪ */}
-        <div className="space-y-5 lg:col-span-7">
+        {/* CỘT PHẢI: SOẠN THẢO -> CHẤM 4 TIÊU CHÍ -> TRẠM GÕ LẠI CÂU SAI -> BÀI MẪU & LƯU TỪ */}
+        <div className="min-w-0 flex-1 space-y-5">
           {/* Thanh chuyển đổi chế độ xem ở cột phải khi đã có kết quả chấm */}
           {feedback && (
             <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-line bg-card p-2">
@@ -1470,42 +1397,26 @@ function WritingStudioInner() {
                 </div>
               ) : (
                 <div className="space-y-3">
+                  {sessionMode === "practice" && (
+                    <div className="rounded-xl border border-emerald-500/25 bg-emerald-500/10 px-3.5 py-2 text-xs text-emerald-800 dark:text-emerald-200">
+                      <b>Gợi ý cấu trúc ({subMeta.shortLabel}):</b> {subMeta.keyTip}
+                    </div>
+                  )}
+                  {examLocked && (
+                    <div className="rounded-xl border border-rose-500/40 bg-rose-500/10 px-3.5 py-2 text-xs font-bold text-rose-700 dark:text-rose-200">
+                      🔒 Đã hết thời gian làm bài! Khung viết đã được khóa.
+                    </div>
+                  )}
                   <textarea
                     rows={18}
                     value={content}
+                    disabled={examLocked || grading}
                     onChange={(e) => setContent(e.target.value)}
                     placeholder="Nhập bài viết hoàn chỉnh của bạn tại đây (chia đoạn bằng 1 dòng trống)..."
-                    className="min-h-[420px] w-full rounded-2xl border border-line bg-bg p-4 text-[15px] leading-relaxed text-ink focus:border-brand focus:outline-none"
+                    className="min-h-[450px] lg:min-h-[calc(100vh-280px)] w-full rounded-2xl border border-line bg-bg p-4 text-[15px] leading-relaxed text-ink focus:border-brand focus:outline-none disabled:opacity-70"
                   />
                 </div>
               )}
-
-              {/* Thanh nút Lưu nháp & Nộp chấm AI */}
-              <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line pt-4">
-                <button
-                  type="button"
-                  disabled={savingDraft}
-                  onClick={handleSaveDraft}
-                  className="inline-flex items-center gap-2 rounded-full border border-line bg-bg px-4 py-2.5 text-xs font-bold text-ink transition hover:border-brand-hover disabled:opacity-50"
-                >
-                  <Save size={15} />
-                  {savingDraft ? "Đang lưu nháp..." : "Lưu nháp bài viết"}
-                </button>
-
-                <button
-                  type="button"
-                  disabled={grading || wordCount < 15}
-                  onClick={handleSubmitForGrading}
-                  className="inline-flex items-center gap-2 rounded-full bg-brand px-6 py-2.5 text-sm font-bold text-white transition hover:bg-brand-hover hover:text-bg disabled:opacity-50"
-                >
-                  <Sparkles size={16} />
-                  {grading
-                    ? "Giám khảo AI đang chấm 4 tiêu chí & sửa từng câu..."
-                    : feedback
-                    ? "Chấm lại bài viết (1 request AI)"
-                    : "Nộp bài & Chấm chữa chuẩn IELTS (1 request AI)"}
-                </button>
-              </div>
             </div>
           )}
 
@@ -1966,6 +1877,685 @@ function WritingStudioInner() {
           )}
         </div>
       </div>
+
+      {/* NÚT NỔI GÓC DƯỚI PHẢI (CHỈ Ở CHẾ ĐỘ LUYỆN TẬP) */}
+      {sessionMode === "practice" && rightTab === "write" && drawerTab === null && (
+        <div className="fixed bottom-20 right-5 z-30 flex flex-col items-end gap-2">
+          <button
+            type="button"
+            onClick={() => setDrawerTab("guide")}
+            className="inline-flex items-center gap-2 rounded-full border border-line bg-card px-4 py-2.5 text-xs font-bold text-ink shadow-lg transition hover:border-brand hover:text-brand-hover"
+          >
+            <Lightbulb size={15} className="text-amber-500" />
+            <span>Gợi ý & Từ vựng SRS</span>
+            {targetVocab.length > 0 && (
+              <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-bold text-emerald-700 dark:text-emerald-300">
+                {usedTargetWords.length}/{targetVocab.length}
+              </span>
+            )}
+          </button>
+          <button
+            type="button"
+            onClick={() => setDrawerTab("dict")}
+            className="inline-flex items-center gap-2 rounded-full border border-line bg-card px-4 py-2.5 text-xs font-bold text-ink shadow-lg transition hover:border-brand hover:text-brand-hover"
+          >
+            <Search size={15} className="text-brand-hover" />
+            <span>Tra từ nhanh</span>
+          </button>
+        </div>
+      )}
+
+      {/* NGĂN KÉO TRƯỢT (SLIDE-OVER DRAWER - CHỈ Ở CHẾ ĐỘ LUYỆN TẬP) */}
+      {sessionMode === "practice" && drawerTab !== null && (
+        <div
+          className="fixed inset-0 z-40 flex justify-end bg-black/40 backdrop-blur-[1px]"
+          onClick={() => setDrawerTab(null)}
+        >
+          <div
+            className="flex h-full w-full max-w-md flex-col border-l border-line bg-card shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header Drawer */}
+            <div className="flex items-center justify-between border-b border-line px-4 py-3">
+              <div className="flex items-center gap-1 rounded-xl bg-bg p-1">
+                <button
+                  type="button"
+                  onClick={() => setDrawerTab("guide")}
+                  className={`rounded-lg px-2.5 py-1.5 text-xs font-bold transition ${
+                    drawerTab === "guide"
+                      ? "bg-card text-brand-hover shadow-xs"
+                      : "text-muted hover:text-ink"
+                  }`}
+                >
+                  💡 Gợi ý & Dàn ý
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDrawerTab("vocab")}
+                  className={`rounded-lg px-2.5 py-1.5 text-xs font-bold transition ${
+                    drawerTab === "vocab"
+                      ? "bg-card text-brand-hover shadow-xs"
+                      : "text-muted hover:text-ink"
+                  }`}
+                >
+                  🎯 SRS ({usedTargetWords.length}/{targetVocab.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDrawerTab("dict")}
+                  className={`rounded-lg px-2.5 py-1.5 text-xs font-bold transition ${
+                    drawerTab === "dict"
+                      ? "bg-card text-brand-hover shadow-xs"
+                      : "text-muted hover:text-ink"
+                  }`}
+                >
+                  🔍 Tra từ
+                </button>
+              </div>
+              <button
+                type="button"
+                onClick={() => setDrawerTab(null)}
+                className="rounded-lg p-1.5 text-muted hover:bg-bg hover:text-ink"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Body Drawer */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+              {drawerTab === "guide" && (
+                <div className="space-y-3">
+                  <div className="grid grid-cols-2 gap-1.5 rounded-xl bg-bg p-1">
+                    <button
+                      type="button"
+                      onClick={() => setLeftTab("blueprint")}
+                      className={`rounded-lg py-2 text-xs font-bold transition ${
+                        leftTab === "blueprint"
+                          ? "bg-card text-ink shadow-xs"
+                          : "text-muted hover:text-ink"
+                      }`}
+                    >
+                      Khung công thức (0 token)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setLeftTab("ai_coach")}
+                      className={`rounded-lg py-2 text-xs font-bold transition ${
+                        leftTab === "ai_coach"
+                          ? "bg-card text-brand-hover shadow-xs"
+                          : "text-muted hover:text-ink"
+                      }`}
+                    >
+                      AI Phân tích & Dàn ý {aiGuide ? "⚡" : "(1 req)"}
+                    </button>
+                  </div>
+
+                  {leftTab === "blueprint" ? (
+                    <div className="space-y-2.5">
+                      <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-xs text-emerald-800 dark:text-emerald-200">
+                        <b>Mẹo dạng {subMeta.shortLabel}:</b> {subMeta.keyTip}
+                      </div>
+                      {blueprint.steps.map((st, idx) => (
+                        <details
+                          key={st.key}
+                          className="group rounded-xl border border-line bg-bg p-3"
+                        >
+                          <summary className="cursor-pointer text-xs font-bold text-ink">
+                            Bước {idx + 1}: {st.label}
+                          </summary>
+                          <div className="mt-2 space-y-2">
+                            <p className="text-xs text-muted">{st.guideVi}</p>
+                            <div className="flex flex-wrap gap-1.5">
+                              {st.connectors.map((c) => (
+                                <button
+                                  key={c}
+                                  type="button"
+                                  onClick={() => insertSnippetIntoStep(st.key, c)}
+                                  className="rounded-lg border border-line bg-card px-2 py-1 text-[11px] font-semibold text-brand-hover hover:border-brand-hover"
+                                  title="Bấm để chèn vào bài viết"
+                                >
+                                  + {c}
+                                </button>
+                              ))}
+                            </div>
+                            {st.templates.length > 0 && (
+                              <div className="space-y-1 border-t border-line pt-2 text-[11px] text-muted">
+                                <div className="font-semibold text-ink">
+                                  Khung câu mẫu Band 6.5+:
+                                </div>
+                                {st.templates.map((tpl, i) => (
+                                  <div key={i} className="italic">
+                                    &ldquo;{tpl}&rdquo;
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </details>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {!aiGuide ? (
+                        <div className="space-y-3 rounded-xl border border-line bg-bg p-4 text-center">
+                          <Sparkles size={24} className="mx-auto text-brand-hover" />
+                          <div className="text-sm font-bold text-ink">
+                            Nhờ AI Gia sư Phân tích đề & Lập dàn ý
+                          </div>
+                          <p className="text-xs text-muted">
+                            AI sẽ đọc đề bài {chartImageUrl ? "(và số liệu ảnh biểu đồ)" : ""}, cảnh báo bẫy lạc đề, gợi ý luận điểm PEEL và collocations.
+                          </p>
+                          <button
+                            type="button"
+                            disabled={loadingGuide}
+                            onClick={() => handleRequestAiOutline(false)}
+                            className="inline-flex items-center gap-2 rounded-full bg-brand px-4 py-2 text-xs font-bold text-white transition hover:bg-brand-hover hover:text-bg disabled:opacity-50"
+                          >
+                            <Sparkles size={14} />
+                            {loadingGuide
+                              ? "AI đang phân tích..."
+                              : "Phân tích đề & Gợi ý dàn ý (1 req)"}
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="space-y-2.5 text-xs">
+                          <div className="flex items-center justify-between rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-emerald-800 dark:text-emerald-200">
+                            <span className="font-bold">
+                              {guideCached
+                                ? "⚡ Đã tải từ Cache (0 token)"
+                                : "✓ Dàn ý AI đã lưu"}
+                            </span>
+                            <button
+                              type="button"
+                              disabled={loadingGuide}
+                              onClick={() => handleRequestAiOutline(true)}
+                              className="inline-flex items-center gap-1 font-semibold underline"
+                            >
+                              <RefreshCw size={11} /> Tạo lại
+                            </button>
+                          </div>
+
+                          <details open className="rounded-xl border border-line bg-bg p-3">
+                            <summary className="cursor-pointer font-bold text-ink">
+                              1. Phân tích yêu cầu & Bẫy lạc đề
+                            </summary>
+                            <div className="mt-2 space-y-2">
+                              <p className="text-ink">{aiGuide.task_analysis?.main_topic_vi}</p>
+                              {aiGuide.task_analysis?.required_parts_vi?.length > 0 && (
+                                <div>
+                                  <div className="font-semibold text-emerald-700 dark:text-emerald-300">
+                                    Các vế bắt buộc phải trả lời:
+                                  </div>
+                                  <ul className="mt-1 list-disc space-y-0.5 pl-4 text-muted">
+                                    {aiGuide.task_analysis.required_parts_vi.map((item, i) => (
+                                      <li key={i}>{item}</li>
+                                    ))}
+                                  </ul>
+                                </div>
+                              )}
+                              {aiGuide.task_analysis?.common_pitfalls_vi?.length > 0 && (
+                                <div>
+                                  <div className="font-semibold text-rose-600 dark:text-rose-300">
+                                    Bẫy dễ mất điểm cần tránh:
+                                  </div>
+                                  <ul className="mt-1 list-disc space-y-0.5 pl-4 text-muted">
+                                    {aiGuide.task_analysis.common_pitfalls_vi.map((item, i) => (
+                                      <li key={i}>{item}</li>
+                                    ))}
+                                  </ul>
+                                </div>
+                              )}
+                              {aiGuide.task_analysis?.suggested_stance_vi && (
+                                <div className="rounded-lg bg-card p-2 text-ink">
+                                  <b>Hướng đi gợi ý:</b>{" "}
+                                  {aiGuide.task_analysis.suggested_stance_vi}
+                                </div>
+                              )}
+                            </div>
+                          </details>
+
+                          <details open className="rounded-xl border border-line bg-bg p-3">
+                            <summary className="cursor-pointer font-bold text-ink">
+                              2. Dàn ý gợi ý từng bước
+                            </summary>
+                            <div className="mt-2 space-y-2">
+                              <div className="rounded-lg bg-card p-2">
+                                <b className="text-brand-hover">Mở bài (Paraphrase):</b>{" "}
+                                {aiGuide.step_guides?.intro_paraphrase_hint}
+                              </div>
+                              <div className="rounded-lg bg-card p-2">
+                                <b className="text-brand-hover">
+                                  {taskType === "task1" ? "Overview:" : "Thesis Statement:"}
+                                </b>{" "}
+                                {aiGuide.step_guides?.thesis_or_overview_hint}
+                              </div>
+                              <div className="rounded-lg bg-card p-2">
+                                <b className="text-brand-hover">Body 1:</b>{" "}
+                                {aiGuide.step_guides?.body1_peel_hint}
+                              </div>
+                              <div className="rounded-lg bg-card p-2">
+                                <b className="text-brand-hover">Body 2:</b>{" "}
+                                {aiGuide.step_guides?.body2_peel_hint}
+                              </div>
+                              {aiGuide.step_guides?.conclusion_hint && (
+                                <div className="rounded-lg bg-card p-2">
+                                  <b className="text-brand-hover">Kết bài:</b>{" "}
+                                  {aiGuide.step_guides.conclusion_hint}
+                                </div>
+                              )}
+                            </div>
+                          </details>
+
+                          {aiGuide.topic_collocations?.length > 0 && (
+                            <details className="rounded-xl border border-line bg-bg p-3">
+                              <summary className="cursor-pointer font-bold text-ink">
+                                3. Cụm từ học thuật sát đề ({aiGuide.topic_collocations.length})
+                              </summary>
+                              <div className="mt-2 space-y-2">
+                                {aiGuide.topic_collocations.map((col, idx) => {
+                                  const key = `guide-col-${idx}`;
+                                  const isSaved =
+                                    savedVocabKeys.has(key) ||
+                                    savedVocabKeys.has(col.phrase.toLowerCase());
+                                  return (
+                                    <div key={idx} className="rounded-lg bg-card p-2.5">
+                                      <div className="flex items-center justify-between gap-2">
+                                        <span className="font-bold text-brand-hover">
+                                          {col.phrase} ({col.cefr_level})
+                                        </span>
+                                        <div className="flex items-center gap-1.5">
+                                          <button
+                                            type="button"
+                                            onClick={() =>
+                                              insertSnippetIntoStep(
+                                                blueprint.steps[0]?.key ?? "intro",
+                                                col.phrase
+                                              )
+                                            }
+                                            className="rounded bg-bg px-2 py-0.5 text-[10px] font-bold text-ink hover:text-brand-hover"
+                                          >
+                                            + Chèn
+                                          </button>
+                                          <button
+                                            type="button"
+                                            disabled={isSaved || savingVocabKey === key}
+                                            onClick={() =>
+                                              handleSaveVocabToSrs(
+                                                [
+                                                  {
+                                                    lemma: col.phrase,
+                                                    pos: "phr",
+                                                    meaning_vi: col.meaning_vi,
+                                                    example: col.example_sentence,
+                                                    cefr_level: col.cefr_level,
+                                                    topic: submission.topic,
+                                                  },
+                                                ],
+                                                key
+                                              )
+                                            }
+                                            className="rounded bg-brand/15 px-2 py-0.5 text-[10px] font-bold text-brand-hover disabled:opacity-50"
+                                          >
+                                            {isSaved ? "✓ Đã lưu SRS" : "+ Lưu SRS"}
+                                          </button>
+                                        </div>
+                                      </div>
+                                      <div className="mt-0.5 text-ink">{col.meaning_vi}</div>
+                                      <div className="mt-0.5 italic text-muted">
+                                        VD: {col.example_sentence}
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </details>
+                          )}
+
+                          {aiGuide.grammar_structures?.length > 0 && (
+                            <details className="rounded-xl border border-line bg-bg p-3">
+                              <summary className="cursor-pointer font-bold text-ink">
+                                4. Cấu trúc câu Band 6.5+ áp dụng trực tiếp
+                              </summary>
+                              <div className="mt-2 space-y-2">
+                                {aiGuide.grammar_structures.map((g, idx) => (
+                                  <div key={idx} className="rounded-lg bg-card p-2.5">
+                                    <div className="font-bold text-ink">{g.pattern_name}</div>
+                                    <div className="text-[11px] font-mono text-brand-hover">
+                                      Công thức: {g.formula}
+                                    </div>
+                                    <div className="mt-1 italic text-ink">
+                                      &ldquo;{g.applied_example}&rdquo;
+                                    </div>
+                                    <div className="mt-0.5 text-muted">{g.explanation_vi}</div>
+                                  </div>
+                                ))}
+                              </div>
+                            </details>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {drawerTab === "vocab" && (
+                <div className="space-y-2.5">
+                  {targetVocab.length === 0 ? (
+                    <div className="rounded-xl border border-line bg-bg p-5 text-center text-xs text-muted">
+                      Chưa có từ vựng SRS mục tiêu nào được gắn cho phiên viết này.
+                    </div>
+                  ) : (
+                    targetVocab.map((v) => {
+                      const isUsed =
+                        usedTargetSet.has(v.lemma.toLowerCase()) ||
+                        usedTargetSet.has(v.word.toLowerCase());
+                      return (
+                        <div
+                          key={v.lemma}
+                          className={`rounded-xl border p-3 transition ${
+                            isUsed
+                              ? "border-emerald-500/50 bg-emerald-500/15"
+                              : "border-line bg-bg"
+                          }`}
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              <span className="font-bold text-ink">{v.lemma}</span>
+                              {v.ipa && <span className="text-xs text-muted">{v.ipa}</span>}
+                              {v.pos && (
+                                <span className="rounded bg-card px-1.5 py-0.5 text-[10px] font-semibold text-muted">
+                                  {v.pos}
+                                </span>
+                              )}
+                              <span
+                                className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${
+                                  levelColor[v.cefr_level] ?? levelColor.B2
+                                }`}
+                              >
+                                {v.cefr_level}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              {isUsed ? (
+                                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500 px-2 py-0.5 text-[10px] font-bold text-white">
+                                  <Check size={11} /> Đã dùng
+                                </span>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    insertSnippetIntoStep(
+                                      blueprint.steps[0]?.key ?? "intro",
+                                      v.lemma
+                                    )
+                                  }
+                                  className="rounded-lg bg-card px-2 py-0.5 text-[10px] font-bold text-brand-hover hover:underline"
+                                >
+                                  + Chèn
+                                </button>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => speakEnglish(v.lemma)}
+                                className="rounded-lg p-1 text-muted hover:text-ink"
+                                title="Nghe phát âm"
+                              >
+                                <Volume2 size={14} />
+                              </button>
+                            </div>
+                          </div>
+                          <div className="mt-1 text-xs text-ink">{v.meaning_vi}</div>
+                          {v.collocations?.length > 0 && (
+                            <div className="mt-1 text-[11px] text-muted">
+                              Cụm đi kèm: <i>{v.collocations.slice(0, 3).join(" · ")}</i>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              )}
+
+              {drawerTab === "dict" && (
+                <div className="space-y-3">
+                  <form
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      handleDictSearch(dictQuery);
+                    }}
+                    className="flex gap-2"
+                  >
+                    <input
+                      type="text"
+                      value={dictQuery}
+                      onChange={(e) => {
+                        setDictQuery(e.target.value);
+                        if (!e.target.value.trim()) setDictResults([]);
+                      }}
+                      placeholder="Nhập từ tiếng Anh hoặc nghĩa tiếng Việt..."
+                      className="flex-1 rounded-xl border border-line bg-bg px-3 py-2 text-xs text-ink focus:border-brand focus:outline-none"
+                    />
+                    <button
+                      type="submit"
+                      disabled={dictLoading}
+                      className="rounded-xl bg-brand px-3.5 py-2 text-xs font-bold text-white hover:bg-brand-hover disabled:opacity-50"
+                    >
+                      {dictLoading ? "..." : "Tìm"}
+                    </button>
+                  </form>
+
+                  {dictResults.length === 0 && !dictLoading && (
+                    <div className="rounded-xl border border-line bg-bg p-4 text-center text-xs text-muted">
+                      {dictQuery.trim()
+                        ? "Bấm Tìm để tra từ trong Kho từ vựng cá nhân & Bộ sách IELTS."
+                        : "Nhập từ cần tra (Anh–Việt hoặc Việt–Anh) để chèn nhanh hoặc lưu vào SRS."}
+                    </div>
+                  )}
+
+                  <div className="space-y-2">
+                    {dictResults.map((w) => {
+                      const key = `dict-${w.word.toLowerCase()}`;
+                      const isSaved =
+                        savedVocabKeys.has(key) ||
+                        savedVocabKeys.has(w.word.toLowerCase());
+                      return (
+                        <div
+                          key={w.id || w.word}
+                          className="rounded-xl border border-line bg-bg p-3 space-y-1.5"
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              <span className="font-bold text-ink">{w.word}</span>
+                              {w.ipa && <span className="text-xs text-muted">{w.ipa}</span>}
+                              {w.pos && (
+                                <span className="rounded bg-card px-1.5 py-0.5 text-[10px] font-semibold text-muted">
+                                  {w.pos}
+                                </span>
+                              )}
+                              <span
+                                className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${
+                                  levelColor[w.level] ?? levelColor.B2
+                                }`}
+                              >
+                                {w.level || "B2"}
+                              </span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => speakEnglish(w.word)}
+                              className="rounded-lg p-1 text-muted hover:text-ink"
+                              title="Nghe phát âm"
+                            >
+                              <Volume2 size={14} />
+                            </button>
+                          </div>
+                          {w.vi && <div className="text-xs font-medium text-ink">{w.vi}</div>}
+                          {w.en && <div className="text-[11px] text-muted">{w.en}</div>}
+                          <div className="flex items-center gap-2 pt-1">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                insertSnippetIntoStep(
+                                  blueprint.steps[0]?.key ?? "intro",
+                                  w.word
+                                )
+                              }
+                              className="rounded-lg bg-card px-2.5 py-1 text-[10px] font-bold text-brand-hover hover:underline"
+                            >
+                              + Chèn vào bài
+                            </button>
+                            <button
+                              type="button"
+                              disabled={isSaved || savingVocabKey === key}
+                              onClick={() =>
+                                handleSaveVocabToSrs(
+                                  [
+                                    {
+                                      lemma: w.word,
+                                      pos: w.pos || "n",
+                                      meaning_vi: w.vi,
+                                      definition_en: w.en,
+                                      example: w.example,
+                                      cefr_level: (w.level as "B1" | "B2" | "C1" | "C2") || "B2",
+                                      topic: w.topic || submission.topic,
+                                    },
+                                  ],
+                                  key
+                                )
+                              }
+                              className="rounded-lg bg-brand/15 px-2.5 py-1 text-[10px] font-bold text-brand-hover disabled:opacity-50"
+                            >
+                              {isSaved ? "✓ Đã lưu SRS" : "+ Lưu SRS"}
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* KHUNG GHI CHÚ NHÁP (SCRATCHPAD - DÙNG ĐƯỢC Ở CẢ 2 CHẾ ĐỘ) */}
+      {scratchpadOpen && (
+        <div className="fixed bottom-20 right-4 z-40 w-[calc(100vw-2rem)] max-w-sm rounded-2xl border border-line bg-card p-4 shadow-2xl">
+          <div className="flex items-center justify-between gap-2 pb-2">
+            <span className="inline-flex items-center gap-1.5 text-xs font-bold text-ink">
+              <StickyNote size={14} className="text-amber-500" />
+              Giấy nháp / Dàn ý nhanh
+            </span>
+            <button
+              type="button"
+              onClick={() => setScratchpadOpen(false)}
+              className="rounded-lg p-1 text-muted hover:text-ink"
+            >
+              <X size={15} />
+            </button>
+          </div>
+          <textarea
+            rows={7}
+            value={scratchpadText}
+            onChange={(e) => setScratchpadText(e.target.value)}
+            placeholder="Ghi chú nhanh ý tưởng, số liệu nổi bật hoặc dàn ý (tự lưu trên trình duyệt)..."
+            className="w-full rounded-xl border border-line bg-bg p-3 text-xs leading-relaxed text-ink focus:border-brand focus:outline-none"
+          />
+        </div>
+      )}
+
+      {/* THANH ĐÁY CỐ ĐỊNH (BOTTOM BAR) */}
+      {(rightTab === "write" || !feedback) && (
+        <div className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-card/95 backdrop-blur px-4 py-2.5 shadow-lg">
+          <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3">
+            {/* Trái: Đếm từ */}
+            <div className="hidden sm:flex items-center gap-2 text-xs font-bold text-muted">
+              <Target size={14} className="text-brand-hover" />
+              <span>
+                {wordCount} / {blueprint.minWords} từ
+              </span>
+            </div>
+
+            {/* Giữa: Đồng hồ */}
+            <div
+              className={`flex items-center gap-2 rounded-xl border px-3.5 py-1.5 font-mono text-sm font-extrabold ${
+                sessionMode === "exam" && remainingSeconds <= 120
+                  ? "border-rose-500/50 bg-rose-500/15 text-rose-600 dark:text-rose-300 animate-pulse"
+                  : "border-line bg-bg text-ink"
+              }`}
+            >
+              {sessionMode === "exam" ? (
+                <>
+                  <Timer size={15} className="text-rose-500" />
+                  <span>
+                    {formatTimer(remainingSeconds)} / {blueprint.recommendedMinutes}:00
+                  </span>
+                </>
+              ) : (
+                <>
+                  <Clock size={15} className="text-brand-hover" />
+                  <span>{formatTimer(elapsedSeconds)}</span>
+                  <button
+                    type="button"
+                    onClick={() => setTimerRunning((r) => !r)}
+                    className="ml-1 rounded-lg bg-card p-1 text-muted hover:text-ink"
+                    title={timerRunning ? "Tạm dừng" : "Tiếp tục bấm giờ"}
+                  >
+                    {timerRunning ? <Pause size={12} /> : <Play size={12} />}
+                  </button>
+                </>
+              )}
+            </div>
+
+            {/* Phải: Ghi chú + Lưu nháp + Nộp bài */}
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setScratchpadOpen((v) => !v)}
+                className={`inline-flex items-center gap-1.5 rounded-full border px-3.5 py-2 text-xs font-bold transition ${
+                  scratchpadOpen
+                    ? "border-amber-500 bg-amber-500/15 text-amber-800 dark:text-amber-300"
+                    : "border-line bg-bg text-ink hover:border-brand-hover"
+                }`}
+              >
+                <StickyNote size={14} />
+                <span>Ghi chú</span>
+              </button>
+
+              {sessionMode === "practice" && (
+                <button
+                  type="button"
+                  disabled={savingDraft}
+                  onClick={handleSaveDraft}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-line bg-bg px-3.5 py-2 text-xs font-bold text-ink transition hover:border-brand-hover disabled:opacity-50"
+                >
+                  <Save size={14} />
+                  <span>{savingDraft ? "Đang lưu..." : "Lưu nháp"}</span>
+                </button>
+              )}
+
+              <button
+                type="button"
+                disabled={grading || wordCount < 15}
+                onClick={() => handleSubmitForGrading(false)}
+                className="inline-flex items-center gap-1.5 rounded-full bg-brand px-5 py-2 text-xs sm:text-sm font-bold text-white transition hover:bg-brand-hover hover:text-bg disabled:opacity-50"
+              >
+                <Sparkles size={15} />
+                <span>
+                  {grading
+                    ? "Đang chấm AI..."
+                    : feedback
+                    ? "Chấm lại AI"
+                    : "Nộp bài & Chấm AI →"}
+                </span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* LIGHTBOX PHÓNG TO BIỂU ĐỒ TASK 1 */}
       {lightboxOpen && chartImageUrl && (
