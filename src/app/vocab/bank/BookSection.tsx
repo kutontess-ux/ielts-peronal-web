@@ -871,10 +871,49 @@ export default function BookSection({
       </div>
 
       {bookWords.length === 0 ? (
-        <div className="rounded-2xl bg-card/60 p-10 text-center text-muted">
+        <div className="space-y-4 rounded-2xl bg-card/60 p-8 text-center text-muted sm:p-10">
           {isAdmin ? (
             <>
-              Bộ sách này chưa có từ nào. Hãy dùng khung <b className="text-ink">“Nhờ Agent tìm từ”</b> ở trên{activeBook.id === "book-3000" ? " hoặc bấm “Nạp 30 từ Oxford 3000”" : activeBook.id === "book-5000" ? " hoặc bấm “Nạp 30 từ 5000 Collegiate”" : ""} để thêm từ!
+              <div>
+                Bộ sách này chưa có từ nào.{" "}
+                {activeBook.id === "book-5000"
+                  ? "Bấm nút bên dưới để tự động nạp và phân loại toàn bộ 5000 từ!"
+                  : "Hãy mở công cụ ở trên hoặc bấm nút bên dưới để nạp từ."}
+              </div>
+              {activeBook.id === "book-5000" && (
+                <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
+                  <button
+                    onClick={() => void seed5000Auto(150)}
+                    disabled={seedBusy && !autoSeeding}
+                    className={`inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-bold text-white transition disabled:opacity-40 ${
+                      autoSeeding ? "bg-rose-500 hover:bg-rose-400" : "bg-brand hover:bg-brand-hover hover:text-bg"
+                    }`}
+                  >
+                    {autoSeeding ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
+                    {autoSeeding ? "Dừng nạp tự động" : "Nạp tự động toàn bộ (150 từ/lượt)"}
+                  </button>
+                  <button
+                    onClick={() => void seed5000(150)}
+                    disabled={seedBusy}
+                    className="inline-flex items-center gap-2 rounded-full border border-line bg-bg px-4 py-2.5 text-sm font-semibold text-ink hover:border-brand-hover disabled:opacity-40"
+                  >
+                    {seedBusy && !autoSeeding ? <Loader2 size={15} className="animate-spin" /> : <Plus size={15} />}
+                    Nạp 150 từ
+                  </button>
+                </div>
+              )}
+              {activeBook.id === "book-3000" && (
+                <div className="pt-1">
+                  <button
+                    onClick={seed3000}
+                    disabled={seedBusy}
+                    className="inline-flex items-center gap-2 rounded-full bg-brand px-5 py-2.5 text-sm font-bold text-white hover:bg-brand-hover hover:text-bg disabled:opacity-40"
+                  >
+                    {seedBusy ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} strokeWidth={2} />}
+                    {seedBusy ? "Đang nạp 30 từ..." : "Nạp 30 từ Oxford 3000"}
+                  </button>
+                </div>
+              )}
             </>
           ) : (
             "Bộ sách này hiện chưa có từ vựng nào."
