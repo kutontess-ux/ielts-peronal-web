@@ -31,10 +31,10 @@ export function CharacterLoader({
 }: CharacterLoaderProps) {
   const bodyAnimation =
     mode === 'listening'
-      ? 'animate-[owl-groove_1.4s_ease-in-out_infinite] [transform-origin:100px_95px]'
+      ? 'owl-anim-groove'
       : mode === 'success'
-        ? 'animate-[owl-celebrate_1.1s_ease-in-out_infinite] [transform-origin:100px_160px]'
-        : 'animate-[owl-float_2.4s_ease-in-out_infinite]';
+        ? 'owl-anim-celebrate'
+        : 'owl-anim-float';
 
   return (
     <div
@@ -54,7 +54,7 @@ export function CharacterLoader({
           rx="44"
           ry="7"
           fill="currentColor"
-          className="text-ink animate-[owl-shadow_2.4s_ease-in-out_infinite] [transform-origin:100px_176px]"
+          className="text-ink owl-anim-shadow"
         />
 
         {/* Sparkles (Success mode) */}
@@ -63,26 +63,26 @@ export function CharacterLoader({
             <path
               d="M36 52 L39 44 L42 52 L50 55 L42 58 L39 66 L36 58 L28 55 Z"
               fill="#FBBF24"
-              className="animate-[owl-sparkle_1.6s_ease-in-out_infinite] [transform-box:fill-box] [transform-origin:center]"
+              className="owl-anim-sparkle-1"
             />
             <path
               d="M162 44 L164.5 37 L167 44 L174 46.5 L167 49 L164.5 56 L162 49 L155 46.5 Z"
               fill="#34D399"
-              className="animate-[owl-sparkle_1.6s_ease-in-out_0.5s_infinite] [transform-box:fill-box] [transform-origin:center]"
+              className="owl-anim-sparkle-2"
             />
             <circle
               cx="155"
               cy="108"
               r="4"
               fill="#60A5FA"
-              className="animate-[owl-sparkle_1.6s_ease-in-out_infinite] [transform-box:fill-box] [transform-origin:center]"
+              className="owl-anim-sparkle-1"
             />
             <circle
               cx="44"
               cy="112"
               r="3.5"
               fill="#F472B6"
-              className="animate-[owl-sparkle_1.6s_ease-in-out_0.5s_infinite] [transform-box:fill-box] [transform-origin:center]"
+              className="owl-anim-sparkle-2"
             />
           </g>
         )}
@@ -90,7 +90,7 @@ export function CharacterLoader({
         {/* Music Notes (Listening mode) */}
         {mode === 'listening' && (
           <g>
-            <g className="animate-[owl-note-1_1.8s_ease-out_infinite]">
+            <g className="owl-anim-note-1">
               <path
                 d="M40 62 V44 L52 41 V57"
                 stroke="#60A5FA"
@@ -102,7 +102,7 @@ export function CharacterLoader({
               <circle cx="37" cy="62" r="4" fill="#60A5FA" />
               <circle cx="49" cy="57" r="4" fill="#60A5FA" />
             </g>
-            <g className="animate-[owl-note-2_1.8s_ease-out_0.7s_infinite]">
+            <g className="owl-anim-note-2">
               <path
                 d="M156 54 V38 L165 41"
                 stroke="#A78BFA"
@@ -181,11 +181,11 @@ export function CharacterLoader({
             </g>
           ) : (
             <g>
-              <g className="animate-[owl-blink_3.8s_ease-in-out_infinite] [transform-box:fill-box] [transform-origin:center]">
+              <g className="owl-anim-blink">
                 <circle cx="82" cy="80" r="8.5" fill="#1E1B4B" />
                 <circle cx="85" cy="77" r="3" fill="#FFFFFF" />
               </g>
-              <g className="animate-[owl-blink_3.8s_ease-in-out_infinite] [transform-box:fill-box] [transform-origin:center]">
+              <g className="owl-anim-blink">
                 <circle cx="118" cy="80" r="8.5" fill="#1E1B4B" />
                 <circle cx="121" cy="77" r="3" fill="#FFFFFF" />
               </g>
@@ -279,7 +279,7 @@ export function CharacterLoader({
                 fill="#FFFFFF"
                 stroke="#94A3B8"
                 strokeWidth="1"
-                className="animate-[owl-page-flip_1.5s_ease-in-out_infinite] [transform-origin:100px_142px]"
+                className="owl-anim-page"
               />
               <line
                 x1="72"
@@ -339,8 +339,7 @@ export function CharacterLoader({
                 strokeWidth="2"
                 fill="none"
                 strokeLinecap="round"
-                strokeDasharray="36"
-                className="animate-[owl-scribble_1.8s_ease-in-out_infinite]"
+                className="owl-anim-scribble"
               />
               <line
                 x1="76"
@@ -351,7 +350,7 @@ export function CharacterLoader({
                 strokeWidth="2"
                 strokeLinecap="round"
               />
-              <g className="animate-[owl-write_0.9s_ease-in-out_infinite] [transform-origin:122px_132px]">
+              <g className="owl-anim-write">
                 <g transform="translate(114, 114) rotate(32)">
                   <rect
                     x="0"
@@ -401,13 +400,13 @@ export function CharacterLoader({
           <div
             className={`${BAR_WIDTH_CLASSES[size]} h-1.5 rounded-full bg-line overflow-hidden`}
           >
-            <div className="h-full w-2/5 rounded-full bg-brand animate-[owl-bar-slide_1.2s_ease-in-out_infinite]" />
+            <div className="h-full w-2/5 rounded-full bg-brand owl-anim-bar" />
           </div>
         ) : (
           <div className="flex items-center justify-center gap-1.5 h-3">
-            <span className="w-2 h-2 rounded-full bg-brand animate-[owl-dot-bounce_1.2s_ease-in-out_0s_infinite]" />
-            <span className="w-2 h-2 rounded-full bg-brand animate-[owl-dot-bounce_1.2s_ease-in-out_0.2s_infinite]" />
-            <span className="w-2 h-2 rounded-full bg-brand animate-[owl-dot-bounce_1.2s_ease-in-out_0.4s_infinite]" />
+            <span className="w-2 h-2 rounded-full bg-brand owl-anim-dot-1" />
+            <span className="w-2 h-2 rounded-full bg-brand owl-anim-dot-2" />
+            <span className="w-2 h-2 rounded-full bg-brand owl-anim-dot-3" />
           </div>
         )
       )}
