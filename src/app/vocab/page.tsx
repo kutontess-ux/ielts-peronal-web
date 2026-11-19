@@ -2173,16 +2173,20 @@ function VocabLearnContent() {
               </div>
             )}
 
-            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line">
-              <div className="flex flex-wrap items-center gap-4 sm:gap-6">
+            <div
+              className={`flex items-center justify-between gap-2 border-b border-line ${
+                activeTab === "sets" ? "flex-wrap" : ""
+              }`}
+            >
+              <div className="flex min-w-0 flex-1 items-center gap-3 overflow-x-auto sm:gap-6">
                 <button
                   type="button"
                   onClick={() => switchTab("sets")}
-                  className={`relative inline-flex items-center gap-2 whitespace-nowrap pb-3 text-sm font-bold transition ${
+                  className={`relative inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap pb-3 text-[13px] font-bold transition sm:gap-2 sm:text-sm ${
                     activeTab === "sets" ? "text-brand-hover" : "text-muted hover:text-ink"
                   }`}
                 >
-                  <Layers size={16} /> Học phần ({studySets.length})
+                  <Layers size={15} className="shrink-0 sm:h-4 sm:w-4" /> Học phần ({studySets.length})
                   {activeTab === "sets" && (
                     <span className="absolute inset-x-0 bottom-0 h-0.5 rounded-full bg-brand-hover" />
                   )}
@@ -2190,11 +2194,11 @@ function VocabLearnContent() {
                 <button
                   type="button"
                   onClick={() => switchTab("folders")}
-                  className={`relative inline-flex items-center gap-2 whitespace-nowrap pb-3 text-sm font-bold transition ${
+                  className={`relative inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap pb-3 text-[13px] font-bold transition sm:gap-2 sm:text-sm ${
                     activeTab === "folders" ? "text-brand-hover" : "text-muted hover:text-ink"
                   }`}
                 >
-                  <Folder size={16} /> Thư mục ({folders.length})
+                  <Folder size={15} className="shrink-0 sm:h-4 sm:w-4" /> Thư mục ({folders.length})
                   {activeTab === "folders" && (
                     <span className="absolute inset-x-0 bottom-0 h-0.5 rounded-full bg-brand-hover" />
                   )}
@@ -2202,20 +2206,24 @@ function VocabLearnContent() {
                 <button
                   type="button"
                   onClick={() => switchTab("books")}
-                  className={`relative inline-flex items-center gap-2 whitespace-nowrap pb-3 text-sm font-bold transition ${
+                  className={`relative inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap pb-3 text-[13px] font-bold transition sm:gap-2 sm:text-sm ${
                     activeTab === "books" ? "text-brand-hover" : "text-muted hover:text-ink"
                   }`}
                 >
-                  <BookMarked size={16} /> Bộ sách
+                  <BookMarked size={15} className="shrink-0 sm:h-4 sm:w-4" /> Bộ sách
                   {activeTab === "books" && (
                     <span className="absolute inset-x-0 bottom-0 h-0.5 rounded-full bg-brand-hover" />
                   )}
                 </button>
               </div>
 
-              <div className="flex items-center gap-2 pb-2">
+              <div
+                className={`flex shrink-0 items-center justify-end gap-2 pb-2 ${
+                  activeTab === "sets" ? "w-full sm:w-auto" : ""
+                }`}
+              >
                 {activeTab === "sets" && (
-                  <div className="relative flex items-center">
+                  <div className="relative flex flex-1 items-center sm:flex-initial">
                     <Search
                       size={14}
                       className="pointer-events-none absolute left-3 text-muted"
@@ -2225,7 +2233,7 @@ function VocabLearnContent() {
                       value={setSearch}
                       onChange={(e) => setSetSearch(e.target.value)}
                       placeholder="Tìm kiếm thẻ ghi nhớ"
-                      className="h-8 w-44 rounded-full border border-line bg-card pl-8 pr-7 text-xs text-ink outline-none transition placeholder:text-muted focus:border-brand sm:w-60"
+                      className="h-8 w-full rounded-full border border-line bg-card pl-8 pr-7 text-xs text-ink outline-none transition placeholder:text-muted focus:border-brand sm:w-60"
                     />
                     {setSearch && (
                       <button
