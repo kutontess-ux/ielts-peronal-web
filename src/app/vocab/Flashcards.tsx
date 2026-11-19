@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ArrowLeft, ArrowLeftRight, ArrowRight, CalendarClock, Check, Home, PartyPopper,
   Pause, Play, Repeat, RotateCcw, Shuffle, Sparkles, Star, Undo2, Volume2, X,
@@ -89,6 +89,7 @@ export default function Flashcards({
 }) {
   const draftKey = setId ? `ielts_draft_flashcards_v1_${setId}` : null;
   const [initialDraft] = useState(() => restoreFlashcardsDraft(setId, words));
+  const enrolledIdsRef = useRef<Set<number>>(new Set());
 
   const [deck, setDeck] = useState<Word[]>(() => initialDraft?.deck ?? words);
   const [idx, setIdx] = useState(() => initialDraft?.idx ?? 0);
@@ -161,6 +162,12 @@ export default function Flashcards({
   const mark = useCallback(
     (status: HistoryStatus) => {
       if (!card) return;
+      if (!enrolledIdsRef.current.has(card.id)) {
+        enrolledIdsRef.current.add(card.id);
+        void enrollWordsInSrs([card.id])
+          .then(() => notifyDueUpdated())
+          .catch(() => {});
+      }
       const nextHistory = [...history, { word: card, status }];
       const nextIdx = idx + 1;
       setHistory(nextHistory);

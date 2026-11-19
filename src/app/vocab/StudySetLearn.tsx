@@ -251,6 +251,7 @@ export default function StudySetLearn({
   const completionRecordedRef = useRef(false);
   const advancingRef = useRef(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const enrolledIdsRef = useRef<Set<number>>(new Set());
 
   const currentItem = queue[0] ?? null;
   const done = queue.length === 0;
@@ -389,6 +390,12 @@ export default function StudySetLearn({
       meaningMatch?: VietnameseMeaningMatchResult
     ) => {
       if (!currentItem || feedback) return;
+      if (!enrolledIdsRef.current.has(currentItem.word.id)) {
+        enrolledIdsRef.current.add(currentItem.word.id);
+        void enrollWordsInSrs([currentItem.word.id])
+          .then(() => notifyDueUpdated())
+          .catch(() => {});
+      }
       advancingRef.current = false;
       setSoftHintMsg("");
       speakWord(currentItem.word.word);
