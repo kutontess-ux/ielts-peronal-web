@@ -42,6 +42,10 @@
 }
 
 @layer base {
+  html {
+    background: var(--bg);
+  }
+
   body {
     background: var(--bg);
     color: var(--ink);
