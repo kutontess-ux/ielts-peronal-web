@@ -19,7 +19,7 @@ export async function POST(req: Request) {
     const db = ctx.db;
 
     const body = (await req.json().catch(() => ({}))) as { level?: string; count?: number };
-    const count = Math.min(40, Math.max(10, body.count ?? 30));
+    const count = Math.min(200, Math.max(10, body.count ?? 150));
     const targetLevel = body.level && body.level !== "Tất cả" ? body.level : "";
 
     const haveBookKeys = new Set<string>();
@@ -34,20 +34,22 @@ export async function POST(req: Request) {
       for (const r of existingRows ?? []) haveBookKeys.add(r.norm_key as string);
     }
 
-    const candidates = OX_LIST.filter((item) => {
-      if (targetLevel && item.level !== targetLevel) return false;
-      if (!targetLevel && !["B1", "B2"].includes(item.level)) return false;
-      return !haveBookKeys.has(normKey(item.word));
+    const allUnseeded = OX_LIST.filter((item) => !haveBookKeys.has(normKey(item.word)));
+    const levelCandidates = allUnseeded.filter((item) => {
+      if (targetLevel) return item.level === targetLevel;
+      return ["B1", "B2"].includes(item.level);
     });
 
-    const pool =
-      candidates.length >= count
-        ? candidates
-        : OX_LIST.filter((item) => !haveBookKeys.has(normKey(item.word)));
-
+    const pool = levelCandidates.length >= count ? levelCandidates : allUnseeded;
     const picked = pool.slice(0, count);
+    const remaining = Math.max(0, allUnseeded.length - picked.length);
+
     if (picked.length === 0) {
-      return NextResponse.json({ added: 0, message: "Bạn đã nạp hết toàn bộ danh sách The Oxford 3000!" });
+      return NextResponse.json({
+        added: 0,
+        remaining: 0,
+        message: "Bạn đã nạp hết toàn bộ danh sách The Oxford 3000!",
+      });
     }
 
     // Kiểm tra từ nào đã có sẵn trong từ điển dùng chung (user đã tự nạp trước) để gắn vào sách với 0 lượt AI
@@ -72,7 +74,7 @@ export async function POST(req: Request) {
     }
 
     if (needAiPicked.length === 0) {
-      return NextResponse.json({ added: promotedCount });
+      return NextResponse.json({ added: promotedCount, remaining });
     }
 
     const quotaErr = await consumeAiQuota(ctx, "oxford-3000");
@@ -114,7 +116,7 @@ export async function POST(req: Request) {
     }
 
     if (rows.length === 0) {
-      return NextResponse.json({ added: promotedCount });
+      return NextResponse.json({ added: promotedCount, remaining });
     }
 
     const { data, error } = await db
@@ -123,7 +125,7 @@ export async function POST(req: Request) {
       .select("id");
     if (error) throw new Error(error.message);
 
-    return NextResponse.json({ added: promotedCount + (data?.length ?? 0) });
+    return NextResponse.json({ added: promotedCount + (data?.length ?? 0), remaining });
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message }, { status: 500 });
   }

@@ -327,6 +327,60 @@ export default function BookSection({
     }
   };
 
+  const seed3000Auto = async (batchCount = 150) => {
+    if (!isAdmin) return;
+    if (autoSeeding) {
+      autoSeedStopRef.current = true;
+      return;
+    }
+    autoSeedStopRef.current = false;
+    setAutoSeeding(true);
+    setSeedBusy(true);
+    setErr("");
+    setMsg("");
+
+    let sessionAdded = 0;
+    let round = 0;
+    try {
+      while (!autoSeedStopRef.current) {
+        round += 1;
+        setActivityLabel(
+          "/api/books/ielts-3000",
+          `Đợt ${round}: Đang nạp ${batchCount} từ Oxford 3000 & AI bổ sung nghĩa...`
+        );
+        const r = await fetch("/api/books/ielts-3000", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ level: oxLevel, count: batchCount }),
+        });
+        const j = await r.json();
+        if (!r.ok) throw new Error(j.error || `Lỗi HTTP ${r.status}`);
+
+        sessionAdded += Number(j.added ?? 0);
+        const remaining = Number(j.remaining ?? 0);
+        setMsg(
+          `Đang nạp tự động Oxford 3000 (đợt ${round}): đã thêm +${sessionAdded} từ · Còn lại ${remaining} từ chưa nạp.`
+        );
+
+        if (remaining <= 0 || Number(j.added ?? 0) === 0) {
+          setMsg(`Hoàn tất! Đã nạp xong toàn bộ sách The Oxford 3000 (+${sessionAdded} từ mới).`);
+          break;
+        }
+      }
+      if (autoSeedStopRef.current) {
+        setMsg(`Đã tạm dừng nạp tự động Oxford 3000. Phiên này đã thêm +${sessionAdded} từ (bấm lại để nạp tiếp).`);
+      }
+      await onReload();
+      notifyDueUpdated();
+    } catch (e) {
+      setErr(`Dừng ở đợt ${round} (đã lưu ${sessionAdded} từ trước đó): ${(e as Error).message}`);
+      await onReload().catch(() => {});
+    } finally {
+      setAutoSeeding(false);
+      setSeedBusy(false);
+    }
+  };
+
   const seed5000 = async (batchCount = 30) => {
     if (!isAdmin) return;
     setSeedBusy(true); setErr(""); setMsg("");
@@ -734,12 +788,25 @@ export default function BookSection({
                         <option value="A2">Nạp từ mức A2</option>
                       </select>
                       <button
+                        onClick={() => void seed3000Auto(150)}
+                        disabled={seedBusy && !autoSeeding}
+                        title="Tự động chạy liên tục từng lô 150 từ cho đến khi hết toàn bộ Oxford 3000"
+                        className={`inline-flex items-center gap-2 rounded-full px-5 py-2 text-sm font-bold text-white transition disabled:opacity-40 ${
+                          autoSeeding
+                            ? "bg-rose-500 hover:bg-rose-400"
+                            : "bg-brand hover:bg-brand-hover hover:text-bg"
+                        }`}
+                      >
+                        {autoSeeding ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
+                        {autoSeeding ? "Dừng nạp tự động" : "Nạp tự động toàn bộ (150 từ/lượt)"}
+                      </button>
+                      <button
                         onClick={seed3000}
                         disabled={seedBusy}
-                        className="inline-flex items-center gap-2 rounded-full bg-brand px-5 py-2 text-sm font-bold text-white hover:bg-brand-hover hover:text-bg disabled:opacity-40"
+                        className="inline-flex items-center gap-2 rounded-full border border-line bg-bg px-4 py-2 text-sm font-semibold text-ink hover:border-brand-hover disabled:opacity-40"
                       >
-                        {seedBusy ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} strokeWidth={2} />}
-                        {seedBusy ? "Đang nạp 30 từ..." : "Nạp 30 từ Oxford 3000"}
+                        {seedBusy && !autoSeeding ? <Loader2 size={15} className="animate-spin" /> : <Plus size={15} />}
+                        Nạp 30 từ
                       </button>
                     </>
                   )}
@@ -903,14 +970,24 @@ export default function BookSection({
                 </div>
               )}
               {activeBook.id === "book-3000" && (
-                <div className="pt-1">
+                <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
+                  <button
+                    onClick={() => void seed3000Auto(150)}
+                    disabled={seedBusy && !autoSeeding}
+                    className={`inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-bold text-white transition disabled:opacity-40 ${
+                      autoSeeding ? "bg-rose-500 hover:bg-rose-400" : "bg-brand hover:bg-brand-hover hover:text-bg"
+                    }`}
+                  >
+                    {autoSeeding ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
+                    {autoSeeding ? "Dừng nạp tự động" : "Nạp tự động toàn bộ (150 từ/lượt)"}
+                  </button>
                   <button
                     onClick={seed3000}
                     disabled={seedBusy}
-                    className="inline-flex items-center gap-2 rounded-full bg-brand px-5 py-2.5 text-sm font-bold text-white hover:bg-brand-hover hover:text-bg disabled:opacity-40"
+                    className="inline-flex items-center gap-2 rounded-full border border-line bg-bg px-4 py-2.5 text-sm font-semibold text-ink hover:border-brand-hover disabled:opacity-40"
                   >
-                    {seedBusy ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} strokeWidth={2} />}
-                    {seedBusy ? "Đang nạp 30 từ..." : "Nạp 30 từ Oxford 3000"}
+                    {seedBusy && !autoSeeding ? <Loader2 size={15} className="animate-spin" /> : <Plus size={15} />}
+                    Nạp 30 từ
                   </button>
                 </div>
               )}
