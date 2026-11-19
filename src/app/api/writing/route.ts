@@ -15,7 +15,10 @@ import {
   type WritingSubType,
   type WritingTaskType,
 } from "@/lib/writing-frameworks";
-import { WRITING_PROMPTS_SEED } from "@/data/writing-prompts-seed";
+import {
+  LEGACY_SYNTHETIC_TASK1_TEXTS,
+  WRITING_PROMPTS_SEED,
+} from "@/data/writing-prompts-seed";
 
 function isMissingWritingTable(msg: string): boolean {
   const lower = (msg || "").toLowerCase();
@@ -215,6 +218,54 @@ export async function GET(req: Request) {
         );
       if (seededRows && seededRows.length > 0) {
         promptRows = seededRows;
+      }
+    } else {
+      const legacySet = new Set(LEGACY_SYNTHETIC_TASK1_TEXTS);
+      const legacyIds = (promptRows ?? [])
+        .filter((r) => legacySet.has(String(r.prompt_text ?? "")) && Number(r.times_practiced ?? 0) === 0)
+        .map((r) => Number(r.id));
+
+      if (legacyIds.length > 0) {
+        await ctx.db
+          .from("writing_prompts")
+          .delete()
+          .eq("user_id", ctx.user.id)
+          .in("id", legacyIds);
+
+        const existingTexts = new Set(
+          (promptRows ?? [])
+            .filter((r) => !legacyIds.includes(Number(r.id)))
+            .map((r) => String(r.prompt_text ?? "").trim())
+        );
+
+        const missingTask1 = WRITING_PROMPTS_SEED.filter(
+          (item) => item.task_type === "task1" && !existingTexts.has(item.prompt_text.trim())
+        ).map((item) => ({
+          user_id: ctx.user.id,
+          task_type: item.task_type,
+          sub_type: item.sub_type,
+          title: item.title,
+          source_name: item.source_name,
+          topic: item.topic,
+          prompt_text: item.prompt_text,
+          image_data_url: item.image_data_url,
+          chart_notes: item.chart_notes,
+          status: "queued" as const,
+        }));
+
+        if (missingTask1.length > 0) {
+          await ctx.db.from("writing_prompts").insert(missingTask1);
+        }
+
+        const { data: refreshed } = await ctx.db
+          .from("writing_prompts")
+          .select(
+            "id,task_type,sub_type,title,source_name,topic,prompt_text,image_data_url,chart_notes,ai_guide_json,status,times_practiced,last_practiced_at,created_at"
+          )
+          .eq("user_id", ctx.user.id)
+          .order("created_at", { ascending: false })
+          .limit(200);
+        if (refreshed) promptRows = refreshed;
       }
     }
 

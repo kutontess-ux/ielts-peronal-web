@@ -282,3 +282,14 @@ export const WRITING_PROMPTS_SEED: SeedWritingPrompt[] = [
       "Day: River water stored in high-level reservoir behind dam flows through open intake to reversible turbines -> spins generator -> electricity sent via power lines to national grid; water collects in low-level reservoir. Night: intake closed, reversible turbines pump water from low-level reservoir back up to high-level reservoir.",
   },
 ];
+
+export const LEGACY_SYNTHETIC_TASK1_TEXTS = [
+  "The line graph below shows the percentage of electricity generated from four different sources (coal, natural gas, solar, and wind) in a European country between 2000 and 2025. Summarise the information by selecting and reporting the main features, and make comparisons where relevant.",
+  "The bar chart compares the average weekly household expenditure on five categories (housing, food, transport, healthcare, and entertainment) in two years: 2010 and 2022. Summarise the information by selecting and reporting the main features, and make comparisons where relevant.",
+  "The two pie charts illustrate the destinations of graduates from a UK university in 2015 and 2024. Summarise the information by selecting and reporting the main features, and make comparisons where relevant.",
+  "The table gives information about the underground railway networks in five major cities (London, Paris, Tokyo, Seoul, and New York), including opening year, route length (km), and annual passengers (millions). Summarise the information by selecting and reporting the main features, and make comparisons where relevant.",
+  "The diagram illustrates the linear process by which used plastic bottles are recycled and manufactured into polyester clothing. Summarise the information by selecting and reporting the main features, and make comparisons where relevant.",
+  "The two maps show the layout of Riverside Park in 2005 and its current layout after redevelopment. Summarise the information by selecting and reporting the main features, and make comparisons where relevant.",
+  "The line graph shows total global smartphone sales (in millions of units) from 2018 to 2024, while the pie chart illustrates the market share of leading brands in 2024. Summarise the information by selecting and reporting the main features, and make comparisons where relevant.",
+  "The bar chart shows the average number of hours per day that people in four age groups (13–17, 18–34, 35–54, and 55+) spend on smartphones, laptops, and television. Summarise the information by selecting and reporting the main features, and make comparisons where relevant.",
+];
