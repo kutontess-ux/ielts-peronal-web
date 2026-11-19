@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { AlertTriangle, BookOpenCheck, Loader2, ShieldCheck } from "lucide-react";
 import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
 import { CharacterLoader } from "@/components/CharacterLoader";
+import { OwlIcon } from "@/components/BrandLogo";
 
 type AuthStatus = {
   authConfigured: boolean;
@@ -64,12 +65,12 @@ function LoginCard() {
   return (
     <div className="flex min-h-[75vh] items-center justify-center px-4">
       <div className="w-full max-w-md rounded-3xl border border-line bg-card p-8 text-center shadow-2xl">
-        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-brand/15 text-brand-hover">
-          <BookOpenCheck size={28} strokeWidth={1.7} />
+        <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-brand/10">
+          <OwlIcon className="h-12 w-12" />
         </div>
 
-        <h1 className="mt-5 text-2xl font-bold tracking-tight">
-          IELTS <span className="text-brand-hover">Personal</span>
+        <h1 className="mt-4 text-2xl font-bold tracking-tight">
+          LonTon<span className="text-brand-hover">Vocab</span>
         </h1>
         <p className="mt-2 text-sm text-muted">
           Đăng nhập bằng tài khoản Google để truy cập kho từ vựng và dữ liệu học tập của bạn.

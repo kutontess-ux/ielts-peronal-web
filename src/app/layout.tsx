@@ -12,12 +12,12 @@ const outfit = Outfit({
 });
 
 export const metadata: Metadata = {
-  title: "IELTS Personal – Học IELTS cá nhân hoá",
+  title: "LonTonVocab – Học IELTS cá nhân hoá",
   description: "Web học IELTS Academic cá nhân hoá: từ vựng, reading, writing",
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
-    title: "IELTS Personal",
+    title: "LonTonVocab",
   },
 };
 

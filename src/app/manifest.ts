@@ -2,8 +2,8 @@ import type { MetadataRoute } from "next";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "IELTS Personal",
-    short_name: "IELTS App",
+    name: "LonTonVocab",
+    short_name: "LonTonVocab",
     description: "Học từ vựng và phân tích Reading IELTS Academic cá nhân",
     start_url: "/",
     display: "standalone",

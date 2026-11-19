@@ -18,6 +18,7 @@ import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
 import { useMe, type MeInfo } from "@/lib/use-me";
 import ThemeToggle from "@/components/ThemeToggle";
 import { VoiceSettingsButton } from "@/components/VoiceSettingsModal";
+import { BrandLogo } from "@/components/BrandLogo";
 
 type Item = { href: string; label: string; icon: LucideIcon; exact?: boolean; badge?: number; soon?: boolean };
 
@@ -273,7 +274,7 @@ export default function Sidebar() {
       {/* Header trên điện thoại */}
       <header className="sticky top-0 z-30 flex items-center justify-between border-b border-line bg-bg/95 px-4 py-3 backdrop-blur md:hidden">
         <Link href="/" className="text-lg font-bold tracking-tight">
-          IELTS <span className="text-brand-hover">Personal</span>
+          <BrandLogo iconClassName="w-7 h-7" textClassName="text-inherit" />
         </Link>
         <div className="flex items-center gap-2">
           {meLoaded && !me && (
@@ -315,7 +316,7 @@ export default function Sidebar() {
           <div className="relative z-10 flex h-full w-72 flex-col gap-1 overflow-y-auto border-r border-line bg-bg p-4">
             <div className="mb-3 flex items-center justify-between px-2">
               <span className="text-lg font-bold">
-                IELTS <span className="text-brand-hover">Personal</span>
+                <BrandLogo iconClassName="w-7 h-7" textClassName="text-inherit" />
               </span>
               <button
                 onClick={() => setMobileMenuOpen(false)}
@@ -383,7 +384,7 @@ export default function Sidebar() {
       {/* Sidebar cố định trên PC */}
       <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col gap-1 overflow-y-auto border-r border-line bg-bg p-3 md:flex">
         <Link href="/" className="mb-3 px-3 py-2 text-xl font-bold tracking-tight">
-          IELTS <span className="text-brand-hover">Personal</span>
+          <BrandLogo iconClassName="w-7 h-7" textClassName="text-inherit" />
         </Link>
         {MAIN.map((i) => <NavLink key={i.href} item={i} path={path} />)}
 
