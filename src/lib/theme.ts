@@ -18,6 +18,7 @@ export function applyThemeToDom(theme: Theme) {
   root.classList.toggle("dark", theme === "dark");
   root.classList.toggle("light", theme === "light");
   root.setAttribute("data-theme", theme);
+  root.style.colorScheme = theme;
   document.querySelectorAll('meta[name="theme-color"]').forEach((meta) => {
     meta.setAttribute("content", THEME_META_COLOR[theme]);
   });
