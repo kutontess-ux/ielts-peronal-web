@@ -11,7 +11,14 @@ import { enrollWordsInSrs } from "@/lib/srs";
 import { notifyDueUpdated } from "@/lib/due-events";
 import { recordStudySetSession, type StudySetReviewResult } from "@/lib/study-sets";
 import { clearStudyDraft, loadStudyDraft, saveStudyDraft } from "@/lib/study-drafts";
-import { speakVietnamese, speakWord } from "@/lib/tts";
+import {
+  getTtsSettings,
+  saveTtsSettings,
+  speakVietnamese,
+  speakWord,
+  TTS_SETTINGS_CHANGED_EVENT,
+  type TtsSettings,
+} from "@/lib/tts";
 import { VoiceSettingsButton } from "@/components/VoiceSettingsModal";
 
 type HistoryStatus = "known" | "unknown" | "viewed";
@@ -88,10 +95,24 @@ export default function Flashcards({
   const [flipped, setFlipped] = useState(false);
   const [meaningFirst, setMeaningFirst] = useState(() => initialDraft?.meaningFirst ?? false);
   const [autoplay, setAutoplay] = useState(false);
+  const [autoplayReadVi, setAutoplayReadVi] = useState(() => getTtsSettings().autoplayReadVi);
   const [star, setStar] = useState<Record<number, boolean>>(() => initialDraft?.star ?? {});
   const [history, setHistory] = useState<HistoryEntry[]>(() => initialDraft?.history ?? []);
   const [srsMsg, setSrsMsg] = useState("");
   const [reviewSchedule, setReviewSchedule] = useState<StudySetReviewResult | null>(null);
+
+  useEffect(() => {
+    const onSettingsChanged = (e: Event) => {
+      const detail = (e as CustomEvent<TtsSettings>).detail;
+      if (detail) {
+        setAutoplayReadVi(detail.autoplayReadVi);
+      } else {
+        setAutoplayReadVi(getTtsSettings().autoplayReadVi);
+      }
+    };
+    window.addEventListener(TTS_SETTINGS_CHANGED_EVENT, onSettingsChanged);
+    return () => window.removeEventListener(TTS_SETTINGS_CHANGED_EVENT, onSettingsChanged);
+  }, []);
 
   const done = idx >= deck.length;
   const card = deck[idx];
@@ -232,16 +253,29 @@ export default function Flashcards({
   // Chế độ tự động phát (Autoplay)
   useEffect(() => {
     if (!autoplay || done || !card) return;
-    if (!flipped && !meaningFirst) speak(card.word);
+    if (!flipped) {
+      if (!meaningFirst) {
+        speak(card.word);
+      } else if (autoplayReadVi && card.vi) {
+        speakVietnamese(card.vi);
+      }
+    } else {
+      if (!meaningFirst && autoplayReadVi && card.vi) {
+        speakVietnamese(card.vi);
+      } else if (meaningFirst) {
+        speak(card.word);
+      }
+    }
+    const delay = flipped ? (autoplayReadVi && card.vi ? 2800 : 2600) : 2200;
     const t = setTimeout(() => {
       if (!flipped) {
         setFlipped(true);
       } else {
         mark("viewed");
       }
-    }, flipped ? 2600 : 2200);
+    }, delay);
     return () => clearTimeout(t);
-  }, [autoplay, done, card, flipped, meaningFirst, mark, speak]);
+  }, [autoplay, autoplayReadVi, done, card, flipped, meaningFirst, mark, speak]);
 
   // Màn hình chúc mừng khi học xong
   if (done) {
@@ -531,6 +565,22 @@ export default function Flashcards({
           >
             {autoplay ? <Pause size={16} /> : <Play size={16} />}
             {autoplay ? "Đang phát" : "Tự phát"}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              const next = !autoplayReadVi;
+              setAutoplayReadVi(next);
+              saveTtsSettings({ autoplayReadVi: next });
+            }}
+            title="Khi Tự phát: đọc tiếng Anh rồi lật thẻ đọc thêm nghĩa tiếng Việt"
+            className={`inline-flex h-11 items-center gap-1.5 rounded-full border px-3.5 text-xs font-semibold transition ${
+              autoplayReadVi
+                ? "border-brand bg-brand/15 text-brand-hover"
+                : "border-line bg-card text-muted hover:bg-card-hover hover:text-ink"
+            }`}
+          >
+            EN → VI {autoplayReadVi ? "Bật" : "Tắt"}
           </button>
         </div>
 

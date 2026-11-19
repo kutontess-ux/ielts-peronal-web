@@ -12,14 +12,17 @@ import {
 import {
   ACCENT_OPTIONS,
   DEFAULT_TTS_SETTINGS,
+  GOOGLE_VI_VOICE_ID,
   SPEED_PRESETS,
   SpeechAccent,
   TTS_SETTINGS_CHANGED_EVENT,
   TtsSettings,
   findMatchingVoice,
+  getAvailableVietnameseVoices,
   getAvailableVoices,
   getTtsSettings,
   saveTtsSettings,
+  speakVietnamese,
   speakWord,
   stopSpeaking,
 } from "@/lib/tts";
@@ -32,6 +35,7 @@ interface VoiceSettingsModalProps {
 export function VoiceSettingsModal({ isOpen, onClose }: VoiceSettingsModalProps) {
   const [settings, setSettings] = useState<TtsSettings>(() => getTtsSettings());
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
+  const [viVoices, setViVoices] = useState<SpeechSynthesisVoice[]>([]);
   const [isPlayingTest, setIsPlayingTest] = useState(false);
   const [testPhrase, setTestPhrase] = useState("Comprehensive preparation is the key to IELTS success.");
 
@@ -39,8 +43,11 @@ export function VoiceSettingsModal({ isOpen, onClose }: VoiceSettingsModalProps)
   useEffect(() => {
     if (!isOpen) return;
     let active = true;
-    void getAvailableVoices().then((v) => {
-      if (active) setVoices(v);
+    void Promise.all([getAvailableVoices(), getAvailableVietnameseVoices()]).then(([en, vi]) => {
+      if (active) {
+        setVoices(en);
+        setViVoices(vi);
+      }
     });
     return () => {
       active = false;
@@ -293,34 +300,137 @@ export function VoiceSettingsModal({ isOpen, onClose }: VoiceSettingsModalProps)
             </div>
           </div>
 
-          {/* 4. Âm lượng (Boost) */}
-          <div>
-            <div className="mb-2 flex items-center justify-between">
-              <label className="text-xs font-bold uppercase tracking-wider text-muted">
-                4. Âm lượng phát âm (Boost)
-              </label>
-              <span className="rounded-md bg-bg px-2 py-0.5 text-xs font-bold tabular-nums text-brand-hover">
-                {Math.round(settings.volume * 100)}%
-              </span>
+          {/* 4. Âm lượng & Khuếch đại (Boost) */}
+          <div className="space-y-3 rounded-xl border border-line bg-bg/60 p-3 sm:p-3.5">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <div className="text-xs font-bold uppercase tracking-wider text-muted">
+                  4. Âm lượng & Khuếch đại (Boost)
+                </div>
+                <p className="mt-0.5 text-[11px] text-muted">
+                  {settings.boostEnabled
+                    ? "Đang dùng MP3 + Web Audio API để khuếch đại âm lượng."
+                    : "Đang dùng giọng gốc của trình duyệt (rõ, tự nhiên)."}
+                </p>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={settings.boostEnabled}
+                onClick={() => {
+                  const nextBoost = !settings.boostEnabled;
+                  handleUpdate({
+                    boostEnabled: nextBoost,
+                    volume: nextBoost
+                      ? settings.volume <= 1.0
+                        ? 2.0
+                        : settings.volume
+                      : Math.min(1.0, settings.volume),
+                  });
+                }}
+                className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition ${
+                  settings.boostEnabled ? "bg-brand" : "bg-line"
+                }`}
+              >
+                <span
+                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition ${
+                    settings.boostEnabled ? "translate-x-6" : "translate-x-1"
+                  }`}
+                />
+              </button>
             </div>
-            <input
-              type="range"
-              min="0.5"
-              max="3.0"
-              step="0.1"
-              value={settings.volume}
-              onChange={(e) => handleUpdate({ volume: parseFloat(e.target.value) })}
-              className="w-full accent-brand"
-            />
-            <div className="mt-1 flex justify-between text-[10px] text-muted">
-              <span>50%</span>
-              <span>100% (Chuẩn)</span>
-              <span>220% (Mặc định)</span>
-              <span>300% (To nhất)</span>
+
+            <div>
+              <div className="mb-1.5 flex items-center justify-between text-xs">
+                <span className="text-muted">Mức âm lượng</span>
+                <span className="rounded-md bg-card px-2 py-0.5 font-bold tabular-nums text-brand-hover">
+                  {Math.round(settings.volume * 100)}%
+                </span>
+              </div>
+              <input
+                type="range"
+                min="0.5"
+                max={settings.boostEnabled ? "3.0" : "1.0"}
+                step="0.1"
+                value={Math.min(settings.boostEnabled ? 3.0 : 1.0, settings.volume)}
+                onChange={(e) => handleUpdate({ volume: parseFloat(e.target.value) })}
+                className="w-full accent-brand"
+              />
+              <div className="mt-1 flex justify-between text-[10px] text-muted">
+                <span>50%</span>
+                <span>100% (Chuẩn)</span>
+                {settings.boostEnabled && (
+                  <>
+                    <span>200%</span>
+                    <span>300% (To nhất)</span>
+                  </>
+                )}
+              </div>
             </div>
           </div>
 
-          {/* 5. Thử giọng & Kiểm tra trực tiếp */}
+          {/* 5. Giọng đọc tiếng Việt */}
+          <div className="space-y-2 rounded-xl border border-line bg-bg/60 p-3 sm:p-3.5">
+            <div className="flex items-center justify-between gap-2">
+              <label className="text-xs font-bold uppercase tracking-wider text-muted">
+                5. Giọng đọc tiếng Việt
+              </label>
+              <button
+                type="button"
+                onClick={() => speakVietnamese("Xin chào, đây là giọng đọc nghĩa tiếng Việt.")}
+                className="inline-flex items-center gap-1 rounded-lg bg-card px-2.5 py-1 text-[11px] font-semibold text-brand-hover transition hover:bg-brand hover:text-white"
+              >
+                <Play size={11} fill="currentColor" /> Nghe thử tiếng Việt
+              </button>
+            </div>
+            <select
+              value={settings.viVoiceURI}
+              onChange={(e) => handleUpdate({ viVoiceURI: e.target.value })}
+              className="w-full rounded-xl border border-line bg-card px-3 py-2 text-xs text-ink focus:border-brand focus:outline-none"
+            >
+              <option value="">Tự động (Ưu tiên giọng máy vi-VN, dự phòng Google)</option>
+              {viVoices.map((v) => (
+                <option key={v.voiceURI} value={v.voiceURI}>
+                  {v.name} ({v.lang})
+                </option>
+              ))}
+              <option value={GOOGLE_VI_VOICE_ID}>Google Tiếng Việt (Online)</option>
+            </select>
+            {viVoices.length === 0 && (
+              <p className="text-[11px] text-muted">
+                Trình duyệt chưa cài sẵn giọng vi-VN, hệ thống sẽ tự dùng Google Tiếng Việt.
+              </p>
+            )}
+          </div>
+
+          {/* 6. Tự phát Flashcards */}
+          <div className="flex items-center justify-between gap-3 rounded-xl border border-line bg-bg/60 p-3 sm:p-3.5">
+            <div>
+              <div className="text-xs font-bold uppercase tracking-wider text-muted">
+                6. Tự phát Flashcards (EN → VI)
+              </div>
+              <p className="mt-0.5 text-[11px] text-muted">
+                Đọc tiếng Anh xong, khi lật thẻ sẽ tự động đọc thêm nghĩa tiếng Việt.
+              </p>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={settings.autoplayReadVi}
+              onClick={() => handleUpdate({ autoplayReadVi: !settings.autoplayReadVi })}
+              className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition ${
+                settings.autoplayReadVi ? "bg-brand" : "bg-line"
+              }`}
+            >
+              <span
+                className={`inline-block h-4 w-4 transform rounded-full bg-white transition ${
+                  settings.autoplayReadVi ? "translate-x-6" : "translate-x-1"
+                }`}
+              />
+            </button>
+          </div>
+
+          {/* 7. Thử giọng & Kiểm tra trực tiếp */}
           <div className="rounded-xl border border-line bg-bg p-3 sm:p-3.5">
             <label className="mb-1.5 block text-xs font-bold text-muted">
               Nghe thử trực tiếp:

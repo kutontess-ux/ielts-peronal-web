@@ -1,12 +1,17 @@
 export type SpeechAccent = "en-US" | "en-GB" | "en-AU" | "en-CA" | "en-IN";
 export type SpeechLang = SpeechAccent | "vi" | "vi-VN";
 
+export const GOOGLE_VI_VOICE_ID = "__google__";
+
 export interface TtsSettings {
   accent: SpeechAccent;
   voiceURI: string;
   rate: number; // 0.6x - 1.4x (default: 0.95)
-  pitch: number; // 0.7 - 1.3 (default: 1.0)
-  volume: number; // 0.5 - 3.0 (default: 2.2 = 220% boost)
+  pitch: number; // 0.8 - 1.2 (default: 1.0)
+  volume: number; // 0.5 - 1.0 (chuẩn) hoặc 0.5 - 3.0 (khi bật Boost)
+  boostEnabled: boolean; // false = giọng gốc trình duyệt; true = MP3 + Web Audio Boost
+  viVoiceURI: string; // "" = tự động (ưu tiên giọng vi-VN của máy, dự phòng Google), "__google__" = Google TTS
+  autoplayReadVi: boolean; // false = chỉ đọc tiếng Anh; true = lật thẻ đọc thêm tiếng Việt khi Tự phát
 }
 
 export const ACCENT_OPTIONS: { id: SpeechAccent; label: string; desc: string; flag: string }[] = [
@@ -29,7 +34,10 @@ export const DEFAULT_TTS_SETTINGS: TtsSettings = {
   voiceURI: "",
   rate: 0.95,
   pitch: 1.0,
-  volume: 2.2,
+  volume: 1.0,
+  boostEnabled: false,
+  viVoiceURI: "",
+  autoplayReadVi: false,
 };
 
 const STORAGE_KEY = "ielts_tts_settings_v1";
@@ -61,15 +69,18 @@ export function getTtsSettings(): TtsSettings {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return DEFAULT_TTS_SETTINGS;
     const parsed = JSON.parse(raw) as Partial<TtsSettings>;
+    const boostEnabled = typeof parsed.boostEnabled === "boolean" ? parsed.boostEnabled : false;
+    const maxVol = boostEnabled ? 3.0 : 1.0;
+    const rawVol = typeof parsed.volume === "number" && parsed.volume > 0 ? parsed.volume : 1.0;
     return {
       accent: parsed.accent ?? DEFAULT_TTS_SETTINGS.accent,
       voiceURI: typeof parsed.voiceURI === "string" ? parsed.voiceURI : "",
       rate: typeof parsed.rate === "number" && parsed.rate > 0 ? parsed.rate : DEFAULT_TTS_SETTINGS.rate,
       pitch: typeof parsed.pitch === "number" && parsed.pitch > 0 ? parsed.pitch : DEFAULT_TTS_SETTINGS.pitch,
-      volume:
-        typeof parsed.volume === "number" && parsed.volume >= 0
-          ? Math.min(3.0, Math.max(0.5, parsed.volume))
-          : DEFAULT_TTS_SETTINGS.volume,
+      volume: Math.min(maxVol, Math.max(0.5, rawVol)),
+      boostEnabled,
+      viVoiceURI: typeof parsed.viVoiceURI === "string" ? parsed.viVoiceURI : "",
+      autoplayReadVi: typeof parsed.autoplayReadVi === "boolean" ? parsed.autoplayReadVi : false,
     };
   } catch {
     return DEFAULT_TTS_SETTINGS;
@@ -93,10 +104,7 @@ export function saveTtsSettings(patch: Partial<TtsSettings>): TtsSettings {
   return next;
 }
 
-/**
- * Lấy danh sách giọng đọc tiếng Anh hỗ trợ từ trình duyệt
- */
-export function getAvailableVoices(): Promise<SpeechSynthesisVoice[]> {
+function loadBrowserVoices(): Promise<SpeechSynthesisVoice[]> {
   return new Promise((resolve) => {
     if (typeof window === "undefined" || !("speechSynthesis" in window)) {
       resolve([]);
@@ -105,21 +113,37 @@ export function getAvailableVoices(): Promise<SpeechSynthesisVoice[]> {
 
     const voices = window.speechSynthesis.getVoices();
     if (voices.length > 0) {
-      resolve(filterEnglishVoices(voices));
+      resolve(voices);
       return;
     }
 
     const onVoicesChanged = () => {
       const v = window.speechSynthesis.getVoices();
       window.speechSynthesis.onvoiceschanged = null;
-      resolve(filterEnglishVoices(v));
+      resolve(v);
     };
     window.speechSynthesis.onvoiceschanged = onVoicesChanged;
 
     setTimeout(() => {
-      resolve(filterEnglishVoices(window.speechSynthesis.getVoices()));
+      resolve(window.speechSynthesis.getVoices());
     }, 1000);
   });
+}
+
+/**
+ * Lấy danh sách giọng đọc tiếng Anh hỗ trợ từ trình duyệt
+ */
+export async function getAvailableVoices(): Promise<SpeechSynthesisVoice[]> {
+  const voices = await loadBrowserVoices();
+  return filterEnglishVoices(voices);
+}
+
+/**
+ * Lấy danh sách giọng đọc tiếng Việt hỗ trợ từ trình duyệt
+ */
+export async function getAvailableVietnameseVoices(): Promise<SpeechSynthesisVoice[]> {
+  const voices = await loadBrowserVoices();
+  return filterVietnameseVoices(voices);
 }
 
 function filterEnglishVoices(voices: SpeechSynthesisVoice[]): SpeechSynthesisVoice[] {
@@ -129,8 +153,15 @@ function filterEnglishVoices(voices: SpeechSynthesisVoice[]): SpeechSynthesisVoi
   });
 }
 
+function filterVietnameseVoices(voices: SpeechSynthesisVoice[]): SpeechSynthesisVoice[] {
+  return voices.filter((v) => {
+    const lang = (v.lang || "").toLowerCase().replace("_", "-");
+    return lang === "vi" || lang.startsWith("vi-");
+  });
+}
+
 /**
- * Tìm giọng phù hợp theo voiceURI hoặc accent đã chọn
+ * Tìm giọng tiếng Anh phù hợp theo voiceURI hoặc accent đã chọn
  */
 export function findMatchingVoice(
   voices: SpeechSynthesisVoice[],
@@ -157,7 +188,29 @@ export function findMatchingVoice(
   return voices[0] || null;
 }
 
-function speakWithBrowserTTS(text: string, settings: TtsSettings, langOverride?: SpeechLang): void {
+/**
+ * Tìm giọng tiếng Việt phù hợp từ trình duyệt
+ */
+export function findMatchingVietnameseVoice(
+  voices: SpeechSynthesisVoice[],
+  viVoiceURI: string
+): SpeechSynthesisVoice | null {
+  const viVoices = filterVietnameseVoices(voices);
+  if (viVoices.length === 0) return null;
+
+  if (viVoiceURI && viVoiceURI !== GOOGLE_VI_VOICE_ID) {
+    const found = viVoices.find((v) => v.voiceURI === viVoiceURI);
+    if (found) return found;
+  }
+
+  return viVoices.find((v) => !v.localService || v.default) || viVoices[0];
+}
+
+function speakWithBrowserTTS(
+  text: string,
+  settings: TtsSettings,
+  langOverride?: SpeechLang
+): void {
   if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
   try {
     window.speechSynthesis.cancel();
@@ -171,10 +224,11 @@ function speakWithBrowserTTS(text: string, settings: TtsSettings, langOverride?:
 
     const allVoices = window.speechSynthesis.getVoices();
     if (isVi) {
-      const viVoice = allVoices.find((v) => (v.lang || "").toLowerCase().startsWith("vi"));
+      const viVoice = findMatchingVietnameseVoice(allVoices, settings.viVoiceURI);
       if (viVoice) utterance.voice = viVoice;
     } else {
-      const matchingVoice = findMatchingVoice(allVoices, settings);
+      const enVoices = filterEnglishVoices(allVoices);
+      const matchingVoice = findMatchingVoice(enVoices, settings);
       if (matchingVoice) utterance.voice = matchingVoice;
     }
 
@@ -189,20 +243,24 @@ function playDecodedBuffer(ctx: AudioContext, buffer: AudioBuffer, settings: Tts
   source.buffer = buffer;
   source.playbackRate.value = Math.min(2.0, Math.max(0.5, settings.rate));
 
-  // Khuếch đại âm lượng trước khi qua limiter để âm to rõ mà không bị rè
-  const gainNode = ctx.createGain();
-  gainNode.gain.value = Math.min(3.0, Math.max(0.5, settings.volume));
+  const targetGain = settings.boostEnabled
+    ? Math.min(3.0, Math.max(0.5, settings.volume))
+    : Math.min(1.0, Math.max(0.5, settings.volume));
 
-  const compressor = ctx.createDynamicsCompressor();
-  compressor.threshold.value = -4;
-  compressor.knee.value = 10;
-  compressor.ratio.value = 12;
-  compressor.attack.value = 0.003;
-  compressor.release.value = 0.15;
+  const gainNode = ctx.createGain();
+  gainNode.gain.value = targetGain;
+
+  // Limiter nhẹ ở -1.5dB để bảo vệ loa khi bật Boost mà không làm méo phụ âm
+  const limiter = ctx.createDynamicsCompressor();
+  limiter.threshold.value = -1.5;
+  limiter.knee.value = 6;
+  limiter.ratio.value = 6;
+  limiter.attack.value = 0.003;
+  limiter.release.value = 0.15;
 
   source.connect(gainNode);
-  gainNode.connect(compressor);
-  compressor.connect(ctx.destination);
+  gainNode.connect(limiter);
+  limiter.connect(ctx.destination);
 
   source.onended = () => {
     if (activeSource === source) {
@@ -214,25 +272,7 @@ function playDecodedBuffer(ctx: AudioContext, buffer: AudioBuffer, settings: Tts
   source.start(0);
 }
 
-/**
- * Phát âm một từ hoặc đoạn văn bản với cài đặt hiện tại (kèm khuếch đại âm lượng)
- */
-export function speakWord(
-  text: string,
-  customOptions?: Partial<TtsSettings> & { lang?: SpeechLang }
-): void {
-  if (typeof window === "undefined") return;
-  const cleanText = text.trim();
-  if (!cleanText) return;
-
-  stopSpeaking();
-
-  const settings = {
-    ...getTtsSettings(),
-    ...customOptions,
-  };
-  const targetLang: SpeechLang = customOptions?.lang ?? settings.accent;
-
+function playViaTtsApi(cleanText: string, targetLang: SpeechLang, settings: TtsSettings): void {
   const ctx = getAudioContext();
   if (!ctx) {
     speakWithBrowserTTS(cleanText, settings, targetLang);
@@ -282,10 +322,69 @@ export function speakWord(
 }
 
 /**
- * Phát âm nghĩa tiếng Việt
+ * Phát âm tiếng Anh (mặc định dùng giọng gốc trình duyệt; dùng MP3 + Boost nếu người dùng bật boostEnabled)
  */
-export function speakVietnamese(text: string): void {
-  speakWord(text, { lang: "vi" });
+export function speakWord(
+  text: string,
+  customOptions?: Partial<TtsSettings> & { lang?: SpeechLang }
+): void {
+  if (typeof window === "undefined") return;
+  const cleanText = text.trim();
+  if (!cleanText) return;
+
+  stopSpeaking();
+
+  const settings = {
+    ...getTtsSettings(),
+    ...customOptions,
+  };
+  const targetLang: SpeechLang = customOptions?.lang ?? settings.accent;
+
+  if (targetLang.toLowerCase().startsWith("vi")) {
+    speakVietnamese(cleanText, customOptions);
+    return;
+  }
+
+  // Mặc định dùng giọng gốc trình duyệt để giữ nguyên chất âm & accent đã chọn
+  if (!settings.boostEnabled) {
+    speakWithBrowserTTS(cleanText, settings, targetLang);
+    return;
+  }
+
+  playViaTtsApi(cleanText, targetLang, settings);
+}
+
+/**
+ * Phát âm nghĩa tiếng Việt (theo giọng vi-VN đã chọn hoặc Google Tiếng Việt)
+ */
+export function speakVietnamese(text: string, customOptions?: Partial<TtsSettings>): void {
+  if (typeof window === "undefined") return;
+  const cleanText = text.trim();
+  if (!cleanText) return;
+
+  stopSpeaking();
+
+  const settings = {
+    ...getTtsSettings(),
+    ...customOptions,
+  };
+
+  if (settings.viVoiceURI === GOOGLE_VI_VOICE_ID) {
+    playViaTtsApi(cleanText, "vi", settings);
+    return;
+  }
+
+  const allVoices = "speechSynthesis" in window ? window.speechSynthesis.getVoices() : [];
+  const viVoice = findMatchingVietnameseVoice(allVoices, settings.viVoiceURI);
+
+  // Nếu máy có giọng vi-VN và không ép dùng Boost MP3 -> đọc bằng giọng vi-VN tự nhiên của máy
+  if (viVoice && !settings.boostEnabled) {
+    speakWithBrowserTTS(cleanText, settings, "vi");
+    return;
+  }
+
+  // Dự phòng hoặc khi bật Boost -> dùng Google Tiếng Việt qua /api/tts
+  playViaTtsApi(cleanText, "vi", settings);
 }
 
 /**
