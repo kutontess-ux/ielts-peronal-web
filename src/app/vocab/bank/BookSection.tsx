@@ -237,6 +237,7 @@ export default function BookSection({
   // Bộ lọc theo cấp độ chuẩn Quizlet (Tất cả / Beginner / Intermediate / Advanced)
   const [tierFilter, setTierFilter] = useState<"all" | "beginner" | "intermediate" | "advanced">("all");
   const [viewMode, setViewMode] = useState<"modules" | "all">("modules");
+  const [moduleSort, setModuleSort] = useState<"default" | "most" | "least" | "az">("default");
 
   const bookWords = useMemo(
     () => (activeBook ? words.filter((w) => w.source === activeBook.id) : []),
@@ -259,8 +260,15 @@ export default function BookSection({
         if (tierFilter === "beginner" && !["A2", "B1"].includes(w.level)) return false;
         if (tierFilter === "intermediate" && w.level !== "B2") return false;
         if (tierFilter === "advanced" && !["C1", "C2"].includes(w.level)) return false;
-        if (bookSearch && !(w.word + w.vi + w.en).toLowerCase().includes(bookSearch.toLowerCase())) {
-          return false;
+        if (bookSearch.trim()) {
+          const q = bookSearch.trim().toLowerCase();
+          const tierLabel = ["C1", "C2"].includes(w.level)
+            ? "advanced"
+            : w.level === "B2"
+            ? "intermediate"
+            : "beginner";
+          const haystack = `${w.word} ${w.vi} ${w.en} ${w.topic || ""} ${tierLabel}`.toLowerCase();
+          if (!haystack.includes(q)) return false;
         }
         return true;
       }),
@@ -283,7 +291,15 @@ export default function BookSection({
       groups.set(key, list);
     }
 
-    const modules: { id: string; title: string; tier: string; topic: string; words: Word[] }[] = [];
+    const modules: {
+      id: string;
+      title: string;
+      tier: string;
+      topic: string;
+      part: number;
+      totalParts: number;
+      words: Word[];
+    }[] = [];
     for (const [key, wordList] of groups.entries()) {
       const [tier, topic] = key.split(" · ");
       const totalParts = Math.ceil(wordList.length / CHUNK_SIZE);
@@ -295,12 +311,23 @@ export default function BookSection({
           title: `IELTS: ${tier} ${title}`,
           tier,
           topic,
+          part: i + 1,
+          totalParts,
           words: slice,
         });
       }
     }
+
+    if (moduleSort === "most") {
+      modules.sort((a, b) => b.words.length - a.words.length);
+    } else if (moduleSort === "least") {
+      modules.sort((a, b) => a.words.length - b.words.length);
+    } else if (moduleSort === "az") {
+      modules.sort((a, b) => a.title.localeCompare(b.title));
+    }
+
     return modules;
-  }, [bookFiltered]);
+  }, [bookFiltered, moduleSort]);
 
   const toggleLevel = (l: string) =>
     setBookLevels((prev) => (prev.includes(l) ? prev.filter((x) => x !== l) : [...prev, l]));
@@ -669,31 +696,71 @@ export default function BookSection({
     );
   }
 
-  // Chi tiết 1 bộ sách
+  const hasActiveFilters =
+    bookTopic !== "Tất cả" ||
+    bookLevels.length > 0 ||
+    bookSearch.trim() !== "" ||
+    tierFilter !== "all" ||
+    moduleSort !== "default";
+
+  const resetFilters = () => {
+    setBookTopic("Tất cả");
+    setBookLevels([]);
+    setBookSearch("");
+    setTierFilter("all");
+    setModuleSort("default");
+  };
+
+  // Bộ lọc hiển thị trực tiếp phía trên danh sách học phần / từ vựng
   const filterControls = bookWords.length > 0 && (
-    <div className="flex flex-wrap items-center gap-3">
-      <div className="relative w-full max-w-xs">
-        <Search size={16} strokeWidth={1.75} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted" />
-        <input
-          value={bookSearch}
-          onChange={(e) => setBookSearch(e.target.value)}
-          placeholder="Tìm từ hoặc nghĩa trong sách..."
-          className="w-full rounded-full border border-line py-2 pl-10 pr-4 text-sm outline-none focus:border-brand-hover"
-        />
+    <div className="space-y-3 rounded-2xl border border-line bg-card/70 p-4">
+      <div className="flex flex-wrap items-center gap-2.5">
+        <div className="relative min-w-[200px] flex-1">
+          <Search size={16} strokeWidth={1.75} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted" />
+          <input
+            value={bookSearch}
+            onChange={(e) => setBookSearch(e.target.value)}
+            placeholder="Tìm học phần, chủ đề hoặc từ vựng..."
+            className="w-full rounded-full border border-line bg-bg py-2 pl-10 pr-4 text-sm outline-none focus:border-brand-hover"
+          />
+        </div>
+        <select
+          value={bookTopic}
+          onChange={(e) => setBookTopic(e.target.value)}
+          className="rounded-full border border-line bg-bg px-4 py-2 text-sm"
+        >
+          <option value="Tất cả">Chủ đề: Tất cả ({bookWords.length})</option>
+          {bookTopics.map((t) => (
+            <option key={t} value={t}>{t} ({bookWords.filter((w) => w.topic === t).length})</option>
+          ))}
+        </select>
+        {viewMode === "modules" && (
+          <select
+            value={moduleSort}
+            onChange={(e) => setModuleSort(e.target.value as typeof moduleSort)}
+            className="rounded-full border border-line bg-bg px-4 py-2 text-sm"
+          >
+            <option value="default">Sắp xếp: Mặc định</option>
+            <option value="most">Nhiều thẻ nhất</option>
+            <option value="least">Ít thẻ nhất</option>
+            <option value="az">Tên A → Z</option>
+          </select>
+        )}
+        {hasActiveFilters && (
+          <button
+            type="button"
+            onClick={resetFilters}
+            className="rounded-full border border-line bg-bg px-3.5 py-2 text-xs font-semibold text-muted transition hover:border-brand-hover hover:text-ink"
+          >
+            Xoá bộ lọc
+          </button>
+        )}
       </div>
-      <select
-        value={bookTopic}
-        onChange={(e) => setBookTopic(e.target.value)}
-        className="rounded-full border border-line px-4 py-2 text-sm"
-      >
-        <option value="Tất cả">Chương: Tất cả ({bookWords.length})</option>
-        {bookTopics.map((t) => (
-          <option key={t} value={t}>{t} ({bookWords.filter((w) => w.topic === t).length})</option>
-        ))}
-      </select>
+
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-xs font-semibold text-muted">CEFR:</span>
         <button
+          type="button"
           onClick={() => setBookLevels([])}
           className={`rounded-full px-3 py-1 text-xs font-semibold ${bookLevels.length === 0 ? "bg-brand text-white" : "bg-bg text-muted hover:text-ink"}`}
         >
@@ -701,6 +768,7 @@ export default function BookSection({
         </button>
         {bookPresentLevels.map((l) => (
           <button
+            type="button"
             key={l}
             onClick={() => toggleLevel(l)}
             className={`rounded-full px-3 py-1 text-xs font-semibold ${bookLevels.includes(l) ? "bg-brand text-white" : "bg-bg text-muted hover:text-ink"}`}
@@ -751,19 +819,13 @@ export default function BookSection({
             {!isAdmin && bookFiltered.length > 0 && (
               <ExportButton words={bookFiltered} filename={activeBook.id} label={`Xuất ${bookFiltered.length} từ`} />
             )}
-            {(isAdmin || bookWords.length > 0) && (
+            {isAdmin && (
               <button
                 type="button"
                 onClick={() => setToolsOpen((v) => !v)}
                 className="inline-flex items-center gap-1.5 rounded-full border border-line bg-bg px-3.5 py-1.5 text-xs font-semibold text-muted transition hover:border-brand hover:text-ink"
               >
-                {toolsOpen
-                  ? isAdmin
-                    ? "Thu gọn công cụ & lọc"
-                    : "Thu gọn tra cứu & lọc"
-                  : isAdmin
-                    ? "Mở công cụ & lọc"
-                    : "Tra cứu & lọc từ"}
+                {toolsOpen ? "Thu gọn công cụ nạp từ" : "Mở công cụ nạp từ"}
                 {toolsOpen ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
               </button>
             )}
@@ -926,10 +988,6 @@ export default function BookSection({
               </>
             )}
 
-            {/* Bộ lọc cấp độ CEFR, chương & tìm kiếm trong sách */}
-            {bookWords.length > 0 && (
-              <div className={isAdmin ? "border-t border-line pt-4" : ""}>{filterControls}</div>
-            )}
           </div>
         )}
 
@@ -998,7 +1056,7 @@ export default function BookSection({
         </div>
       ) : (
         <div className="space-y-6">
-          {/* Thanh phân loại cấp độ & chế độ xem kiểu Quizlet */}
+          {/* Thanh phân loại cấp độ, bộ lọc & chế độ xem kiểu Quizlet */}
           <div className="space-y-3">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="flex flex-wrap items-center gap-2">
@@ -1046,6 +1104,8 @@ export default function BookSection({
                 </button>
               </div>
             </div>
+
+            {filterControls}
           </div>
 
           {/* Chế độ 1: Danh sách học phần chia nhỏ ~65 từ theo Chủ đề kiểu Quizlet */}
@@ -1054,40 +1114,55 @@ export default function BookSection({
               <div className="text-xs font-bold uppercase tracking-wider text-muted">
                 Gợi ý cho bạn · {studyModules.length} học phần theo chủ đề
               </div>
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                {studyModules.map((m) => (
-                  <div
-                    key={m.id}
-                    className="group flex flex-col justify-between rounded-2xl border border-line bg-card p-5 transition hover:border-brand-hover hover:shadow-lg hover:shadow-slate-900/5 dark:hover:shadow-black/20"
-                  >
-                    <div>
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand/15 text-brand-hover">
-                          <Layers size={18} />
+              {studyModules.length === 0 ? (
+                <div className="space-y-3 rounded-2xl border border-line bg-card/60 p-8 text-center text-sm text-muted">
+                  <div>Không tìm thấy học phần nào khớp với bộ lọc hiện tại.</div>
+                  {hasActiveFilters && (
+                    <button
+                      type="button"
+                      onClick={resetFilters}
+                      className="rounded-full bg-brand px-4 py-2 text-xs font-bold text-white hover:bg-brand-hover hover:text-bg"
+                    >
+                      Xoá bộ lọc
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  {studyModules.map((m) => (
+                    <div
+                      key={m.id}
+                      className="group flex flex-col justify-between rounded-2xl border border-line bg-card p-5 transition hover:border-brand-hover hover:shadow-lg hover:shadow-slate-900/5 dark:hover:shadow-black/20"
+                    >
+                      <div>
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand/15 text-brand-hover">
+                            <Layers size={18} />
+                          </div>
+                          <span className="rounded-full bg-line px-2.5 py-0.5 text-[11px] font-semibold text-muted">
+                            {m.tier}
+                          </span>
                         </div>
-                        <span className="rounded-full bg-line px-2.5 py-0.5 text-[11px] font-semibold text-muted">
-                          {m.tier}
-                        </span>
+                        <div className="mt-3 font-bold text-ink group-hover:text-brand-hover">
+                          {m.title}
+                        </div>
+                        <div className="mt-1 text-xs text-muted">
+                          {m.words.length} thẻ · Tác giả: IELTS Personal
+                        </div>
                       </div>
-                      <div className="mt-3 font-bold text-ink group-hover:text-brand-hover">
-                        {m.title}
-                      </div>
-                      <div className="mt-1 text-xs text-muted">
-                        {m.words.length} thẻ · Tác giả: IELTS Personal
+                      <div className="mt-4 flex items-center justify-between border-t border-line/60 pt-3">
+                        <Link
+                          href={`/vocab?source=${encodeURIComponent(activeBook.id)}&tier=${encodeURIComponent(m.tier)}&topic=${encodeURIComponent(m.topic)}&part=${m.part}`}
+                          className="inline-flex items-center gap-1 text-xs font-bold text-brand-hover hover:underline"
+                        >
+                          Học Flashcards →
+                        </Link>
+                        <span className="text-[11px] text-muted">{m.words[0]?.level}</span>
                       </div>
                     </div>
-                    <div className="mt-4 flex items-center justify-between border-t border-line/60 pt-3">
-                      <Link
-                        href={`/vocab?source=${encodeURIComponent(activeBook.id)}&topic=${encodeURIComponent(m.topic)}`}
-                        className="inline-flex items-center gap-1 text-xs font-bold text-brand-hover hover:underline"
-                      >
-                        Học Flashcards →
-                      </Link>
-                      <span className="text-[11px] text-muted">{m.words[0]?.level}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
             </div>
           ) : (
             <>

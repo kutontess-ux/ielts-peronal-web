@@ -34,6 +34,7 @@ export default function StudySetDetail({
   studySet,
   words,
   enrolling = false,
+  readOnly = false,
   onBack,
   onStartFlashcards,
   onStartLearn,
@@ -48,6 +49,7 @@ export default function StudySetDetail({
   folder?: StudyFolder | null;
   words: Word[];
   enrolling?: boolean;
+  readOnly?: boolean;
   onBack: () => void;
   onOpenFolder?: (folderId: string) => void;
   onStartFlashcards: () => void;
@@ -268,37 +270,41 @@ export default function StudySetDetail({
               >
                 <Share2 size={14} className="text-muted" /> Chia sẻ học phần
               </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setMenuOpen(false);
-                  onEdit();
-                }}
-                className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-xs font-semibold text-ink transition hover:bg-bg"
-              >
-                <Pencil size={14} className="text-muted" /> Chỉnh sửa học phần
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setMenuOpen(false);
-                  onMoveFolder();
-                }}
-                className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-xs font-semibold text-ink transition hover:bg-bg"
-              >
-                <FolderInput size={14} className="text-muted" /> Chuyển thư mục
-              </button>
-              <div className="my-1 border-t border-line" />
-              <button
-                type="button"
-                onClick={() => {
-                  setMenuOpen(false);
-                  onDelete();
-                }}
-                className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-xs font-semibold text-rose-600 transition hover:bg-rose-500/10 dark:text-rose-400"
-              >
-                <Trash2 size={14} /> Xoá học phần
-              </button>
+              {!readOnly && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMenuOpen(false);
+                      onEdit();
+                    }}
+                    className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-xs font-semibold text-ink transition hover:bg-bg"
+                  >
+                    <Pencil size={14} className="text-muted" /> Chỉnh sửa học phần
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMenuOpen(false);
+                      onMoveFolder();
+                    }}
+                    className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-xs font-semibold text-ink transition hover:bg-bg"
+                  >
+                    <FolderInput size={14} className="text-muted" /> Chuyển thư mục
+                  </button>
+                  <div className="my-1 border-t border-line" />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMenuOpen(false);
+                      onDelete();
+                    }}
+                    className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-xs font-semibold text-rose-600 transition hover:bg-rose-500/10 dark:text-rose-400"
+                  >
+                    <Trash2 size={14} /> Xoá học phần
+                  </button>
+                </>
+              )}
             </div>
           )}
         </div>
@@ -352,14 +358,16 @@ export default function StudySetDetail({
               </button>
 
               <div className="flex items-center gap-1">
-                <button
-                  type="button"
-                  title="Chỉnh sửa học phần"
-                  onClick={onEdit}
-                  className="rounded-xl p-2 text-muted transition hover:bg-bg hover:text-ink"
-                >
-                  <Pencil size={16} />
-                </button>
+                {!readOnly && (
+                  <button
+                    type="button"
+                    title="Chỉnh sửa học phần"
+                    onClick={onEdit}
+                    className="rounded-xl p-2 text-muted transition hover:bg-bg hover:text-ink"
+                  >
+                    <Pencil size={16} />
+                  </button>
+                )}
                 <button
                   type="button"
                   title="Phát âm"
@@ -717,14 +725,16 @@ export default function StudySetDetail({
                         fill={starred[w.id] ? "currentColor" : "none"}
                       />
                     </button>
-                    <button
-                      type="button"
-                      title="Chỉnh sửa học phần"
-                      onClick={onEdit}
-                      className="rounded-lg p-1.5 text-muted transition hover:bg-bg hover:text-ink"
-                    >
-                      <Pencil size={15} />
-                    </button>
+                    {!readOnly && (
+                      <button
+                        type="button"
+                        title="Chỉnh sửa học phần"
+                        onClick={onEdit}
+                        className="rounded-lg p-1.5 text-muted transition hover:bg-bg hover:text-ink"
+                      >
+                        <Pencil size={15} />
+                      </button>
+                    )}
                   </div>
                 </div>
               ))}

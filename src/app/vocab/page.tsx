@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CharacterLoader } from "@/components/CharacterLoader";
 import {
@@ -1207,9 +1208,18 @@ function MoveFolderModal({
 }
 
 export default function VocabLearn() {
+  const router = useRouter();
   const [words, setWords] = useState<Word[]>([]);
   const [stats, setStats] = useState({ dueCount: 0, totalWords: 0, masteredCount: 0 });
   const [loading, setLoading] = useState(true);
+  const [bookModuleQuery, setBookModuleQuery] = useState<{
+    source: string;
+    tier: string | null;
+    topic: string | null;
+    part: number;
+  } | null>(null);
+  const [bookWords, setBookWords] = useState<Word[]>([]);
+  const [bookLoading, setBookLoading] = useState(false);
   const [selectedSetId, setSelectedSetId] = useState<string | null>(null);
   const [openMenuSetId, setOpenMenuSetId] = useState<string | null>(null);
   const [moveFolderSet, setMoveFolderSet] = useState<StudySet | null>(null);
@@ -1292,14 +1302,31 @@ export default function VocabLearn() {
   }, []);
 
   useEffect(() => {
+    const params =
+      typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null;
+    const qSource = params?.get("source") ?? "";
+    const isBookLink = qSource.startsWith("book-");
+
     const rafId = requestAnimationFrame(() => {
       setNowMs(Date.now());
+      if (isBookLink) {
+        setBookLoading(true);
+        setBookModuleQuery({
+          source: qSource,
+          tier: params?.get("tier") ?? null,
+          topic: params?.get("topic") ?? null,
+          part: Math.max(1, Number(params?.get("part") || "1") || 1),
+        });
+      }
     });
     Promise.all([
       fetch("/api/words", { cache: "no-store" }).then((r) => r.json()),
       fetch("/api/reviews", { cache: "no-store" }).then((r) => r.json()),
+      isBookLink
+        ? fetch("/api/words?scope=books", { cache: "no-store" }).then((r) => r.json())
+        : Promise.resolve(null),
     ])
-      .then(([wJson, rJson]) => {
+      .then(([wJson, rJson, bJson]) => {
         const list = (wJson.words ?? []) as Word[];
         setWords(list);
         setStats({
@@ -1307,14 +1334,56 @@ export default function VocabLearn() {
           totalWords: rJson.totalWords ?? list.length,
           masteredCount: rJson.masteredCount ?? 0,
         });
+        if (bJson) {
+          setBookWords((bJson.words ?? []) as Word[]);
+        }
       })
-      .finally(() => setLoading(false));
+      .finally(() => {
+        setLoading(false);
+        setBookLoading(false);
+      });
     return () => cancelAnimationFrame(rafId);
   }, []);
 
   const wordMap = useMemo(() => new Map(words.map((w) => [w.id, w])), [words]);
   const folderMap = useMemo(() => new Map(folders.map((f) => [f.id, f])), [folders]);
   const activeFolder = activeFolderId ? folderMap.get(activeFolderId) ?? null : null;
+
+  const virtualBookModule = useMemo<{ studySet: StudySet; words: Word[] } | null>(() => {
+    if (!bookModuleQuery) return null;
+    const CHUNK_SIZE = 65;
+    const filtered = bookWords.filter((w) => {
+      if (w.source !== bookModuleQuery.source) return false;
+      if (bookModuleQuery.tier) {
+        const tierLabel = ["C1", "C2"].includes(w.level)
+          ? "Advanced"
+          : w.level === "B2"
+          ? "Intermediate"
+          : "Beginner";
+        if (tierLabel.toLowerCase() !== bookModuleQuery.tier.toLowerCase()) return false;
+      }
+      if (bookModuleQuery.topic && (w.topic || "General") !== bookModuleQuery.topic) {
+        return false;
+      }
+      return true;
+    });
+    const totalParts = Math.max(1, Math.ceil(filtered.length / CHUNK_SIZE));
+    const safePart = Math.min(bookModuleQuery.part, totalParts);
+    const slice = filtered.slice((safePart - 1) * CHUNK_SIZE, safePart * CHUNK_SIZE);
+    const tierPart = bookModuleQuery.tier ? `${bookModuleQuery.tier} ` : "";
+    const topicPart = bookModuleQuery.topic || "Tổng hợp";
+    const partSuffix = totalParts > 1 ? ` – Phần ${safePart}` : "";
+    return {
+      studySet: {
+        id: `book:${bookModuleQuery.source}:${bookModuleQuery.tier ?? "all"}:${bookModuleQuery.topic ?? "all"}:p${safePart}`,
+        title: `IELTS: ${tierPart}${topicPart}${partSuffix}`,
+        desc: `Học phần từ Bộ sách (${slice.length} thẻ)`,
+        wordIds: slice.map((w) => w.id),
+        createdAt: "",
+      },
+      words: slice,
+    };
+  }, [bookModuleQuery, bookWords]);
 
   const deepLinkAppliedRef = useRef(false);
   useEffect(() => {
@@ -1441,6 +1510,7 @@ export default function VocabLearn() {
 
   const handleSessionCompleted = useCallback(
     (setId: string, scorePct: number) => {
+      if (setId.startsWith("book:")) return null;
       const result = completeStudySetReview(setId, scorePct);
       setNowMs(Date.now());
       void reloadWords();
@@ -1456,7 +1526,7 @@ export default function VocabLearn() {
           setId={activeSession.id}
           title={activeSession.title}
           words={activeSession.words}
-          wordPool={words}
+          wordPool={bookModuleQuery ? bookWords : words}
           isAdmin={isAdmin}
           onBack={() => setActiveSession(null)}
           onSwitchToFlashcards={() =>
@@ -1472,7 +1542,7 @@ export default function VocabLearn() {
           setId={activeSession.id}
           title={activeSession.title}
           words={activeSession.words}
-          wordPool={words}
+          wordPool={bookModuleQuery ? bookWords : words}
           isAdmin={isAdmin}
           onBack={() => setActiveSession(null)}
           onCompleted={(res) => handleSessionCompleted(activeSession.id, res.scorePct)}
@@ -1504,6 +1574,10 @@ export default function VocabLearn() {
     );
   }
 
+  if (bookModuleQuery && bookLoading) {
+    return <CharacterLoader />;
+  }
+
   const selectedSetWords = selectedSet
     ? selectedSet.wordIds
         .map((id) => wordMap.get(id))
@@ -1512,9 +1586,13 @@ export default function VocabLearn() {
   const selectedSetFolder =
     selectedSet?.folderId ? folderMap.get(selectedSet.folderId) ?? null : null;
 
+  const isVirtualBook = Boolean(virtualBookModule);
+  const activeDetailSet = virtualBookModule?.studySet ?? selectedSet;
+  const activeDetailWords = virtualBookModule ? virtualBookModule.words : selectedSetWords;
+
   return (
     <div className="space-y-6 sm:space-y-8">
-      {selectedSet ? (
+      {activeDetailSet ? (
         <>
           {srsBanner && (
             <div
@@ -1535,11 +1613,12 @@ export default function VocabLearn() {
             </div>
           )}
           <StudySetDetail
-            studySet={selectedSet}
-            folder={selectedSetFolder}
-            words={selectedSetWords}
-            enrolling={enrollingId === selectedSet.id}
-            onBack={() => setSelectedSetId(null)}
+            studySet={activeDetailSet}
+            folder={isVirtualBook ? null : selectedSetFolder}
+            words={activeDetailWords}
+            enrolling={enrollingId === activeDetailSet.id}
+            readOnly={isVirtualBook}
+            onBack={() => (isVirtualBook ? router.push("/vocab/bank") : setSelectedSetId(null))}
             onOpenFolder={(fId) => {
               setSelectedSetId(null);
               setActiveFolderId(fId);
@@ -1547,45 +1626,50 @@ export default function VocabLearn() {
             onStartFlashcards={() =>
               setActiveSession({
                 mode: "flashcards",
-                id: selectedSet.id,
-                title: selectedSet.title,
-                words: selectedSetWords,
+                id: activeDetailSet.id,
+                title: activeDetailSet.title,
+                words: activeDetailWords,
               })
             }
             onStartLearn={() =>
               setActiveSession({
                 mode: "learn",
-                id: selectedSet.id,
-                title: selectedSet.title,
-                words: selectedSetWords,
+                id: activeDetailSet.id,
+                title: activeDetailSet.title,
+                words: activeDetailWords,
               })
             }
             onStartTest={() =>
               setActiveSession({
                 mode: "test",
-                id: selectedSet.id,
-                title: selectedSet.title,
-                words: selectedSetWords,
+                id: activeDetailSet.id,
+                title: activeDetailSet.title,
+                words: activeDetailWords,
               })
             }
             onStartMatch={() =>
               setActiveSession({
                 mode: "match",
-                id: selectedSet.id,
-                title: selectedSet.title,
-                words: selectedSetWords,
+                id: activeDetailSet.id,
+                title: activeDetailSet.title,
+                words: activeDetailWords,
               })
             }
-            onEdit={() => setModalState({ open: true, editing: selectedSet })}
-            onMoveFolder={() => setMoveFolderSet(selectedSet)}
-            onEnroll={() => handleEnrollSet(selectedSet, selectedSetWords)}
+            onEdit={() => {
+              if (!isVirtualBook) setModalState({ open: true, editing: activeDetailSet });
+            }}
+            onMoveFolder={() => {
+              if (!isVirtualBook) setMoveFolderSet(activeDetailSet);
+            }}
+            onEnroll={() => handleEnrollSet(activeDetailSet, activeDetailWords)}
             onDelete={() => {
+              if (isVirtualBook) return;
               if (
                 confirm(
-                  `Xoá học phần "${selectedSet.title}"? (Các từ vẫn giữ nguyên trong Kho từ vựng)`
+                  `Xoá học phần "${activeDetailSet.title}"? (Các từ vẫn giữ nguyên trong Kho từ vựng)`
                 )
               ) {
-                deleteStudySet(selectedSet.id);
+                deleteStudySet(activeDetailSet.id);
                 setSelectedSetId(null);
               }
             }}
