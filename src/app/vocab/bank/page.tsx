@@ -723,7 +723,7 @@ export default function Bank() {
 
       {loading && (
         <div className="flex justify-center py-10">
-          <CharacterLoader mode="reading" indicator="bar" size="md" />
+          <CharacterLoader mode="reading" indicator="dots" size="md" />
         </div>
       )}
       {loadErr && <div className="rounded-xl bg-rose-500/15 p-4 text-sm text-rose-700 dark:bg-rose-400/15 dark:text-rose-300">Không tải được kho: {loadErr}</div>}

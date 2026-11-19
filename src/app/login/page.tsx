@@ -156,7 +156,7 @@ export default function LoginPage() {
     <Suspense
       fallback={
         <div className="flex min-h-[70vh] items-center justify-center">
-          <CharacterLoader mode="reading" indicator="bar" size="md" />
+          <CharacterLoader mode="reading" indicator="dots" size="md" />
         </div>
       }
     >

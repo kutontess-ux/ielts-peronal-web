@@ -1074,7 +1074,7 @@ export default function WritingHubPage() {
 
             {loading ? (
               <div className="rounded-2xl border border-line bg-card p-10 flex justify-center">
-                <CharacterLoader mode="writing" indicator="bar" size="md" />
+                <CharacterLoader mode="writing" indicator="dots" size="md" />
               </div>
             ) : filteredPrompts.length === 0 ? (
               <div className="rounded-2xl border border-line bg-card p-10 text-center">

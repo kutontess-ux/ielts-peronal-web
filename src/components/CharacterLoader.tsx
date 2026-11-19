@@ -25,7 +25,7 @@ const BAR_WIDTH_CLASSES: Record<CharacterLoaderSize, string> = {
 
 export function CharacterLoader({
   mode = 'reading',
-  indicator = 'bar',
+  indicator = 'dots',
   size = 'md',
   className = '',
 }: CharacterLoaderProps) {

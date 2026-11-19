@@ -127,7 +127,7 @@ export default function AdminPage() {
   if (loading) {
     return (
       <div className="flex justify-center py-12">
-        <CharacterLoader mode="reading" indicator="bar" size="md" />
+        <CharacterLoader mode="reading" indicator="dots" size="md" />
       </div>
     );
   }

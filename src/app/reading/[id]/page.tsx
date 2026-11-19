@@ -2573,7 +2573,7 @@ export default function ReadingDetailPage() {
     <Suspense
       fallback={
         <div className="rounded-2xl border border-line bg-card p-10 flex justify-center">
-          <CharacterLoader mode="reading" indicator="bar" size="md" />
+          <CharacterLoader mode="reading" indicator="dots" size="md" />
         </div>
       }
     >

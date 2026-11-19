@@ -2118,7 +2118,7 @@ export default function VocabLearn() {
           )
         ) : loading ? (
           <div className="flex justify-center py-8">
-            <CharacterLoader mode="reading" indicator="bar" size="md" />
+            <CharacterLoader mode="reading" indicator="dots" size="md" />
           </div>
         ) : activeFolder && visibleSets.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-line bg-card p-10 text-center">

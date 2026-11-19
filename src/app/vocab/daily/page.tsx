@@ -836,7 +836,7 @@ export default function Daily() {
 
       {loading && (
         <div className="flex justify-center rounded-2xl bg-card p-8">
-          <CharacterLoader mode="reading" indicator="bar" size="md" />
+          <CharacterLoader mode="reading" indicator="dots" size="md" />
         </div>
       )}
 

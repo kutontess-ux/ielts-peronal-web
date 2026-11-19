@@ -168,7 +168,7 @@ export default function ReadingHistoryPage() {
       {/* Danh sách lịch sử bài đọc */}
       {loading ? (
         <div className="rounded-2xl border border-line bg-card p-8 flex justify-center">
-          <CharacterLoader mode="reading" indicator="bar" size="md" />
+          <CharacterLoader mode="reading" indicator="dots" size="md" />
         </div>
       ) : filtered.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-line bg-card/40 p-10 text-center">

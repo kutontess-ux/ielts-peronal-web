@@ -2591,7 +2591,7 @@ export default function WritingStudioPage() {
     <Suspense
       fallback={
         <div className="rounded-2xl border border-line bg-card p-10 flex justify-center">
-          <CharacterLoader mode="writing" indicator="bar" size="md" />
+          <CharacterLoader mode="writing" indicator="dots" size="md" />
         </div>
       }
     >
