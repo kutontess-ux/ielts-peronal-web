@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { BookOpen, ChevronRight, Flame, Layers, Library, MoreVertical, Newspaper, PenLine, Repeat, Trash2, type LucideIcon } from "lucide-react";
 import { HorizontalCarousel } from "@/components/HorizontalCarousel";
+import { useMe } from "@/lib/use-me";
 import { useStudySets } from "@/lib/study-sets";
 import {
   clearStudyDraftByMode,
@@ -31,6 +32,7 @@ type WritingSummary = {
 };
 
 export default function Home() {
+  const { isAdmin } = useMe();
   const [dueCount, setDueCount] = useState<number | null>(null);
   const [totalWords, setTotalWords] = useState<number | null>(null);
   const [recentPassages, setRecentPassages] = useState<ReadingItem[]>([]);
@@ -183,7 +185,7 @@ export default function Home() {
     ...recentStudySets.map((s) => ({
       title: s.title,
       sub: `${s.wordIds.length} thẻ · Tác giả: bạn`,
-      tag: "Học phần",
+      tag: "",
       href: `/vocab?setId=${encodeURIComponent(s.id)}`,
       icon: Layers,
     })),
@@ -323,10 +325,12 @@ export default function Home() {
             >
               <div className="flex items-start justify-between gap-4">
                 <div className="min-w-0 flex-1">
-                  <span className="inline-block rounded-full bg-brand/10 px-2.5 py-0.5 text-[11px] font-bold text-brand-hover">
-                    {j.badge}
-                  </span>
-                  <div className="mt-2.5 break-words text-lg font-bold sm:text-xl">{j.title}</div>
+                  {isAdmin && (
+                    <span className="mb-2.5 inline-block rounded-full bg-brand/10 px-2.5 py-0.5 text-[11px] font-bold text-brand-hover">
+                      {j.badge}
+                    </span>
+                  )}
+                  <div className="break-words text-lg font-bold sm:text-xl">{j.title}</div>
                   <div className="mt-1 line-clamp-2 text-sm text-muted">{j.sub}</div>
                 </div>
                 <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl border border-line/70 bg-bg/70 text-brand-hover sm:h-20 sm:w-20">
@@ -367,9 +371,11 @@ export default function Home() {
                 <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-bg text-brand-hover">
                   <item.icon size={18} strokeWidth={1.6} />
                 </div>
-                <span className="truncate rounded-full bg-bg px-2.5 py-0.5 text-[11px] font-semibold text-muted">
-                  {item.tag}
-                </span>
+                {item.tag && (
+                  <span className="truncate rounded-full bg-bg px-2.5 py-0.5 text-[11px] font-semibold text-muted">
+                    {item.tag}
+                  </span>
+                )}
               </div>
               <div className="mt-4 min-w-0">
                 <div className="line-clamp-1 text-sm font-bold text-ink">{item.title}</div>
