@@ -190,7 +190,7 @@ export function ReviewOverview({
                   Đi tới Thẻ ghi nhớ
                 </Link>
                 <Link
-                  href="/vocab/bank"
+                  href="/vocab/stats?tab=bank"
                   className="rounded-full bg-line px-6 py-3 text-sm font-bold text-ink transition hover:bg-card-hover"
                 >
                   Xem Kho từ vựng
@@ -229,7 +229,7 @@ export function ReviewOverview({
                   Học thêm từ mới
                 </Link>
                 <Link
-                  href="/vocab/bank"
+                  href="/vocab/stats?tab=bank"
                   className="rounded-full bg-line px-6 py-2.5 text-sm font-bold text-ink transition hover:bg-card-hover"
                 >
                   Mở Kho từ vựng
@@ -240,7 +240,7 @@ export function ReviewOverview({
 
           {unEnrolledCount > 0 && (
             <Link
-              href="/vocab/bank"
+              href="/vocab/stats?tab=bank"
               className="mt-5 text-xs font-semibold text-muted underline-offset-4 transition hover:text-ink hover:underline"
             >
               Còn {unEnrolledCount} từ trong Kho từ vựng chưa đưa vào sổ tay ôn →

@@ -593,7 +593,7 @@ export default function Review() {
         <Repeat size={44} strokeWidth={1.3} className="mx-auto text-brand-hover" />
         <h1 className="mt-4 text-2xl font-bold">Chưa có từ nào trong kho</h1>
         <p className="mt-2 text-muted">Hãy nạp từ vựng vào kho và tạo học phần trước khi ôn tập.</p>
-        <Link href="/vocab/bank" className="mt-6 inline-block rounded-full bg-brand px-6 py-3 font-bold text-white hover:bg-brand-hover hover:text-bg">
+        <Link href="/vocab/stats?tab=bank" className="mt-6 inline-block rounded-full bg-brand px-6 py-3 font-bold text-white hover:bg-brand-hover hover:text-bg">
           Đi tới Kho từ vựng
         </Link>
       </div>

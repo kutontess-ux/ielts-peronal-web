@@ -193,7 +193,7 @@ export default function Home() {
       title: "Kho từ vựng",
       sub: totalWords !== null ? `${totalWords} từ cá nhân trong kho` : "Từ đã học, tra cứu & tải lên cá nhân",
       tag: totalWords !== null ? `${totalWords} từ` : "Kho từ",
-      href: "/vocab/bank",
+      href: "/vocab/stats?tab=bank",
       icon: Library,
     },
     {

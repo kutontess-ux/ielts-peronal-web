@@ -1,17 +1,19 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CharacterLoader } from "@/components/CharacterLoader";
 import {
-  ArrowLeft, BarChart3, Bell, Bot, CalendarClock, Check, CheckCircle2, ChevronDown, ChevronUp, Clock, Folder, FolderInput, FolderOpen, FolderPlus, Layers, ListChecks, Loader2, MoreVertical, Pencil, PenLine, Plus, Repeat, Search, Settings2, Sparkles, Trash2, X,
+  ArrowLeft, BarChart3, Bell, BookMarked, Bot, CalendarClock, Check, CheckCircle2, ChevronDown, ChevronUp, Clock, Folder, FolderInput, FolderOpen, FolderPlus, Layers, ListChecks, Loader2, MoreVertical, Pencil, PenLine, Plus, Repeat, Search, Settings2, Sparkles, Trash2, X,
 } from "lucide-react";
 import { levelColor, type Word } from "@/lib/mock";
 import { enrollWordsInSrs } from "@/lib/srs";
 import { notifyDueUpdated } from "@/lib/due-events";
 import { setActivityLabel } from "@/lib/activity";
 import { useMe } from "@/lib/use-me";
+import BookSection from "@/app/vocab/bank/BookSection";
+import { WordGrid as SharedWordGrid } from "@/components/vocab/WordGrid";
 import {
   completeStudySetReview,
   createStudyFolder,
@@ -1207,19 +1209,29 @@ function MoveFolderModal({
   );
 }
 
-export default function VocabLearn() {
+function VocabLearnContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const urlTab = searchParams.get("tab");
+  const selectedBookId = searchParams.get("book");
+  const bookModuleQuery = useMemo(() => {
+    const qSource = searchParams.get("source") ?? "";
+    if (!qSource.startsWith("book-")) return null;
+    return {
+      source: qSource,
+      tier: searchParams.get("tier") ?? null,
+      topic: searchParams.get("topic") ?? null,
+      part: Math.max(1, Number(searchParams.get("part") || "1") || 1),
+    };
+  }, [searchParams]);
+
   const [words, setWords] = useState<Word[]>([]);
   const [stats, setStats] = useState({ dueCount: 0, totalWords: 0, masteredCount: 0 });
   const [loading, setLoading] = useState(true);
-  const [bookModuleQuery, setBookModuleQuery] = useState<{
-    source: string;
-    tier: string | null;
-    topic: string | null;
-    part: number;
-  } | null>(null);
   const [bookWords, setBookWords] = useState<Word[]>([]);
   const [bookLoading, setBookLoading] = useState(false);
+  const [bookLoaded, setBookLoaded] = useState(false);
+  const [bookErr, setBookErr] = useState("");
   const [savedBookSetId, setSavedBookSetId] = useState<string | null>(null);
   const [bookFolderModalOpen, setBookFolderModalOpen] = useState(false);
   const [newBookFolderName, setNewBookFolderName] = useState("");
@@ -1242,7 +1254,21 @@ export default function VocabLearn() {
   });
   const [folderSetsModalOpen, setFolderSetsModalOpen] = useState(false);
   const [activeFolderId, setActiveFolderId] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<"sets" | "folders">("sets");
+  const [localTab, setLocalTab] = useState<"sets" | "folders">("sets");
+  const activeTab: "sets" | "folders" | "books" = urlTab === "books" ? "books" : localTab;
+  const switchTab = useCallback(
+    (next: "sets" | "folders" | "books") => {
+      if (next === "books") {
+        router.replace("/vocab?tab=books", { scroll: false });
+      } else {
+        setLocalTab(next);
+        if (urlTab === "books" || selectedBookId) {
+          router.replace("/vocab", { scroll: false });
+        }
+      }
+    },
+    [router, urlTab, selectedBookId]
+  );
   const [setFilter, setSetFilter] = useState<"all" | "unfoldered">("all");
   const [setSearch, setSetSearch] = useState("");
   const [enrollingId, setEnrollingId] = useState<string | null>(null);
@@ -1304,22 +1330,45 @@ export default function VocabLearn() {
     return list;
   }, []);
 
+  const loadBookWords = useCallback(async () => {
+    setBookLoading(true);
+    setBookErr("");
+    try {
+      const r = await fetch("/api/words?scope=books", { cache: "no-store" });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`);
+      setBookWords((j.words ?? []) as Word[]);
+      setBookLoaded(true);
+    } catch (e) {
+      setBookErr((e as Error).message || "Không tải được danh sách bộ sách");
+    } finally {
+      setBookLoading(false);
+    }
+  }, []);
+
+  const reloadBookAndPersonalWords = useCallback(async () => {
+    await Promise.all([loadBookWords(), reloadWords()]);
+  }, [loadBookWords, reloadWords]);
+
+  const deleteBookWord = async (w: Word) => {
+    if (!isAdmin) return;
+    if (!window.confirm(`Xoá từ "${w.word}" khỏi Bộ sách cộng đồng?`)) return;
+    setActivityLabel("/api/words", `Đang xoá từ "${w.word}" khỏi bộ sách...`);
+    const r = await fetch(`/api/words?scope=book&id=${w.id}`, { method: "DELETE" });
+    if (r.ok) {
+      setBookWords((prev) => prev.filter((x) => x.id !== w.id));
+      setWords((prev) => prev.filter((x) => x.id !== w.id));
+      notifyDueUpdated();
+    }
+  };
+
   useEffect(() => {
-    const params =
-      typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null;
-    const qSource = params?.get("source") ?? "";
-    const isBookLink = qSource.startsWith("book-");
+    const isBookLink = Boolean(bookModuleQuery);
 
     const rafId = requestAnimationFrame(() => {
       setNowMs(Date.now());
       if (isBookLink) {
         setBookLoading(true);
-        setBookModuleQuery({
-          source: qSource,
-          tier: params?.get("tier") ?? null,
-          topic: params?.get("topic") ?? null,
-          part: Math.max(1, Number(params?.get("part") || "1") || 1),
-        });
       }
     });
     Promise.all([
@@ -1339,6 +1388,7 @@ export default function VocabLearn() {
         });
         if (bJson) {
           setBookWords((bJson.words ?? []) as Word[]);
+          setBookLoaded(true);
         }
       })
       .finally(() => {
@@ -1346,7 +1396,16 @@ export default function VocabLearn() {
         setBookLoading(false);
       });
     return () => cancelAnimationFrame(rafId);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if ((activeTab !== "books" && !bookModuleQuery) || bookLoaded || bookLoading) return;
+    const rafId = requestAnimationFrame(() => {
+      void loadBookWords();
+    });
+    return () => cancelAnimationFrame(rafId);
+  }, [activeTab, bookModuleQuery, bookLoaded, bookLoading, loadBookWords]);
 
   const wordMap = useMemo(() => new Map(words.map((w) => [w.id, w])), [words]);
   const combinedWordMap = useMemo(() => {
@@ -1708,7 +1767,7 @@ export default function VocabLearn() {
             onBack={() =>
               isVirtualBook
                 ? router.push(
-                    `/vocab/bank?tab=book&book=${encodeURIComponent(bookModuleQuery!.source)}`,
+                    `/vocab?tab=books&book=${encodeURIComponent(bookModuleQuery!.source)}`,
                     { scroll: false }
                   )
                 : setSelectedSetId(null)
@@ -1772,7 +1831,7 @@ export default function VocabLearn() {
       ) : (
         <>
       {/* Mục tự ôn lại tối đa 5 học phần học gần nhất */}
-      {!activeFolder && studySets.length > 0 && (() => {
+      {!activeFolder && activeTab !== "books" && studySets.length > 0 && (() => {
         const showOnlyCongrats = !loading && visibleQueue.length === 0 && recentQueue.length > 0;
         return (
         <section className="rounded-3xl bg-card p-5 shadow-lg shadow-slate-900/5 dark:shadow-black/25 sm:p-6">
@@ -2094,30 +2153,32 @@ export default function VocabLearn() {
         {!activeFolder && (
           <div className="mb-5 space-y-4">
             {/* Thanh tạo học phần giống Quizlet */}
-            <div className="flex items-center justify-between gap-3 rounded-2xl border border-line/70 bg-card px-4 py-3 shadow-sm shadow-slate-900/5 dark:shadow-black/20">
-              <div className="flex min-w-0 items-center gap-3">
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-brand/10 text-brand-hover">
-                  <Layers size={18} strokeWidth={1.8} />
-                </span>
-                <span className="truncate text-sm font-bold text-ink">
-                  Tạo bộ thẻ ghi nhớ
-                </span>
-              </div>
-              <button
-                type="button"
-                onClick={() => setModalState({ open: true, editing: null })}
-                className="shrink-0 rounded-full bg-brand px-5 py-1.5 text-xs font-bold text-white shadow-xs transition hover:bg-brand-hover sm:text-sm"
-              >
-                Tạo
-              </button>
-            </div>
-
-            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line">
-              <div className="flex items-center gap-5 sm:gap-6">
+            {activeTab !== "books" && (
+              <div className="flex items-center justify-between gap-3 rounded-2xl border border-line/70 bg-card px-4 py-3 shadow-sm shadow-slate-900/5 dark:shadow-black/20">
+                <div className="flex min-w-0 items-center gap-3">
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-brand/10 text-brand-hover">
+                    <Layers size={18} strokeWidth={1.8} />
+                  </span>
+                  <span className="truncate text-sm font-bold text-ink">
+                    Tạo bộ thẻ ghi nhớ
+                  </span>
+                </div>
                 <button
                   type="button"
-                  onClick={() => setActiveTab("sets")}
-                  className={`relative inline-flex items-center gap-2 pb-3 text-sm font-bold transition ${
+                  onClick={() => setModalState({ open: true, editing: null })}
+                  className="shrink-0 rounded-full bg-brand px-5 py-1.5 text-xs font-bold text-white shadow-xs transition hover:bg-brand-hover sm:text-sm"
+                >
+                  Tạo
+                </button>
+              </div>
+            )}
+
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line">
+              <div className="flex flex-wrap items-center gap-4 sm:gap-6">
+                <button
+                  type="button"
+                  onClick={() => switchTab("sets")}
+                  className={`relative inline-flex items-center gap-2 whitespace-nowrap pb-3 text-sm font-bold transition ${
                     activeTab === "sets" ? "text-brand-hover" : "text-muted hover:text-ink"
                   }`}
                 >
@@ -2128,13 +2189,25 @@ export default function VocabLearn() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => setActiveTab("folders")}
-                  className={`relative inline-flex items-center gap-2 pb-3 text-sm font-bold transition ${
+                  onClick={() => switchTab("folders")}
+                  className={`relative inline-flex items-center gap-2 whitespace-nowrap pb-3 text-sm font-bold transition ${
                     activeTab === "folders" ? "text-brand-hover" : "text-muted hover:text-ink"
                   }`}
                 >
                   <Folder size={16} /> Thư mục ({folders.length})
                   {activeTab === "folders" && (
+                    <span className="absolute inset-x-0 bottom-0 h-0.5 rounded-full bg-brand-hover" />
+                  )}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => switchTab("books")}
+                  className={`relative inline-flex items-center gap-2 whitespace-nowrap pb-3 text-sm font-bold transition ${
+                    activeTab === "books" ? "text-brand-hover" : "text-muted hover:text-ink"
+                  }`}
+                >
+                  <BookMarked size={16} /> Bộ sách
+                  {activeTab === "books" && (
                     <span className="absolute inset-x-0 bottom-0 h-0.5 rounded-full bg-brand-hover" />
                   )}
                 </button>
@@ -2242,7 +2315,42 @@ export default function VocabLearn() {
           </div>
         )}
 
-        {!activeFolder && activeTab === "folders" ? (
+        {!activeFolder && activeTab === "books" ? (
+          bookLoading && !bookLoaded ? (
+            <div className="flex justify-center py-10">
+              <CharacterLoader mode="reading" indicator="dots" size="md" />
+            </div>
+          ) : bookErr ? (
+            <div className="rounded-2xl border border-rose-500/30 bg-rose-500/10 p-6 text-center text-sm text-rose-700 dark:text-rose-300">
+              <div>{bookErr}</div>
+              <button
+                type="button"
+                onClick={() => void loadBookWords()}
+                className="mt-3 rounded-full bg-card px-4 py-1.5 text-xs font-bold text-ink shadow-xs hover:bg-bg"
+              >
+                Thử lại
+              </button>
+            </div>
+          ) : (
+            <BookSection
+              words={bookWords}
+              onReload={reloadBookAndPersonalWords}
+              isAdmin={isAdmin}
+              selectedBookId={selectedBookId}
+              onSelectBook={(bookId) =>
+                router.push(
+                  bookId
+                    ? `/vocab?tab=books&book=${encodeURIComponent(bookId)}`
+                    : "/vocab?tab=books",
+                  { scroll: false }
+                )
+              }
+              WordGrid={({ list }) => (
+                <SharedWordGrid list={list} onDelete={isAdmin ? deleteBookWord : undefined} />
+              )}
+            />
+          )
+        ) : !activeFolder && activeTab === "folders" ? (
           folders.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-line bg-card p-10 text-center">
               <FolderPlus size={40} strokeWidth={1.3} className="mx-auto text-brand-hover" />
@@ -2647,5 +2755,19 @@ export default function VocabLearn() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function VocabLearn() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex min-h-[50vh] items-center justify-center">
+          <CharacterLoader mode="reading" indicator="dots" size="md" />
+        </div>
+      }
+    >
+      <VocabLearnContent />
+    </Suspense>
   );
 }

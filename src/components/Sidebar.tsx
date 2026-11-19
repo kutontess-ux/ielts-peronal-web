@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import {
-  BarChart3, Bell, BookOpen, Eye, Home, Layers, LogIn, LogOut, Menu, Newspaper, Package, PenLine, Repeat, Shield, Target, X,
+  BarChart3, Bell, BookOpen, Eye, Home, Layers, LogIn, LogOut, Menu, Newspaper, PenLine, Repeat, Shield, Target, X,
   type LucideIcon,
 } from "lucide-react";
 import {
@@ -256,7 +256,6 @@ export default function Sidebar() {
   const LIBRARY: Item[] = [
     { href: "/vocab", label: "Thẻ ghi nhớ", icon: Layers, exact: true },
     { href: "/vocab/review", label: "Ôn tập", icon: Repeat, badge: dueCount },
-    { href: "/vocab/bank", label: "Kho từ vựng", icon: Package },
     { href: "/vocab/daily", label: "Từ hằng ngày", icon: Newspaper },
     { href: "/vocab/stats", label: "Thống kê", icon: BarChart3 },
   ];
@@ -265,8 +264,8 @@ export default function Sidebar() {
     { href: "/", label: "Trang chủ", icon: Home, exact: true },
     { href: "/vocab", label: "Thẻ nhớ", icon: Layers, exact: true },
     { href: "/vocab/review", label: "Ôn tập", icon: Repeat, badge: dueCount },
-    { href: "/vocab/daily", label: "Từ hằng ngày", icon: Newspaper },
-    { href: "/vocab/bank", label: "Kho từ vựng", icon: Package },
+    { href: "/reading", label: "Reading", icon: BookOpen },
+    { href: "/writing", label: "Writing", icon: PenLine },
   ];
 
   return (
