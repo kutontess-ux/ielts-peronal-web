@@ -223,6 +223,8 @@ export default function WritingHubPage() {
   const [selectedWeekTaskType, setSelectedWeekTaskType] = useState<WritingTaskType | null>(null);
   const [selectedMissionPromptId, setSelectedMissionPromptId] = useState<number | null>(null);
   const [startingSessionId, setStartingSessionId] = useState<number | null>(null);
+  const [seeding, setSeeding] = useState(false);
+  const [seedNotice, setSeedNotice] = useState("");
 
   // 3 Tabs chính
   const [activeTab, setActiveTab] = useState<"queue" | "submissions" | "errors">("queue");
@@ -528,6 +530,37 @@ export default function WritingHubPage() {
       }
     } catch (err) {
       setError((err as Error).message);
+    }
+  }
+
+  async function handleSeedStarterPrompts() {
+    if (seeding) return;
+    setSeeding(true);
+    setError("");
+    setSeedNotice("");
+    try {
+      const res = await fetch("/api/writing/seed", { method: "POST" });
+      const j = await res.json();
+      if (!res.ok) throw new Error(j.error || "Không nạp được bộ đề mẫu");
+
+      const refresh = await fetch("/api/writing", { cache: "no-store" });
+      if (refresh.ok) {
+        const rj = await refresh.json();
+        setPrompts(rj.prompts ?? []);
+        if (rj.recommendedPrompt?.id) {
+          setSelectedMissionPromptId(rj.recommendedPrompt.id);
+        }
+      }
+
+      if (Number(j.inserted ?? 0) > 0) {
+        setSeedNotice(`Đã nạp thêm ${j.inserted} đề IELTS Writing mẫu vào Kho đề!`);
+      } else {
+        setSeedNotice(`Kho đề của bạn đã có đủ ${j.totalSeed ?? 24} đề mẫu rồi.`);
+      }
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setSeeding(false);
     }
   }
 
@@ -907,6 +940,15 @@ export default function WritingHubPage() {
               <div className="flex shrink-0 flex-wrap gap-2">
                 <button
                   type="button"
+                  disabled={seeding}
+                  onClick={() => void handleSeedStarterPrompts()}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-brand/40 bg-brand/10 px-4 py-2 text-xs font-bold text-brand-hover hover:bg-brand/20 disabled:opacity-50"
+                >
+                  <Sparkles size={13} />
+                  {seeding ? "Đang nạp..." : "Nạp bộ đề mẫu (+24)"}
+                </button>
+                <button
+                  type="button"
                   onClick={() => openAddPromptModal(false, missionTaskType)}
                   className="rounded-full border border-line bg-card px-4 py-2 text-xs font-bold text-ink hover:border-brand-hover"
                 >
@@ -1013,7 +1055,21 @@ export default function WritingHubPage() {
                   </option>
                 ))}
               </select>
+              <button
+                type="button"
+                disabled={seeding}
+                onClick={() => void handleSeedStarterPrompts()}
+                className="inline-flex items-center gap-1.5 rounded-xl border border-brand/40 bg-brand/10 px-3.5 py-2 text-xs font-bold text-brand-hover hover:bg-brand/20 disabled:opacity-50"
+              >
+                <Sparkles size={14} />
+                {seeding ? "Đang nạp..." : "Nạp bộ đề mẫu (+24)"}
+              </button>
             </div>
+            {seedNotice && (
+              <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3.5 py-2 text-xs font-semibold text-emerald-700 dark:text-emerald-300">
+                {seedNotice}
+              </div>
+            )}
 
             {loading ? (
               <div className="rounded-2xl border border-line bg-card p-10 text-center text-sm text-muted">

@@ -73,6 +73,7 @@ create table if not exists public.reviews (
   level            smallint not null default 1 check (level between 1 and 5),
   next_review_at   timestamptz not null default now(),
   level5_streak    int not null default 0,
+  recovery_level   smallint null check (recovery_level between 1 and 5),
   lapses           int not null default 0,
   last_reviewed_at timestamptz
 );

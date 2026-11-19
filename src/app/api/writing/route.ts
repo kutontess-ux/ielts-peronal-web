@@ -15,6 +15,7 @@ import {
   type WritingSubType,
   type WritingTaskType,
 } from "@/lib/writing-frameworks";
+import { WRITING_PROMPTS_SEED } from "@/data/writing-prompts-seed";
 
 function isMissingWritingTable(msg: string): boolean {
   const lower = (msg || "").toLowerCase();
@@ -167,7 +168,7 @@ export async function GET(req: Request) {
     const todaySchedule = getTodaySchedule();
     const targetVocab = await fetchTargetVocabForWriting(ctx, topicFilter, 5);
 
-    const { data: promptRows, error: promptErr } = await ctx.db
+    let { data: promptRows, error: promptErr } = await ctx.db
       .from("writing_prompts")
       .select(
         "id,task_type,sub_type,title,source_name,topic,prompt_text,image_data_url,chart_notes,ai_guide_json,status,times_practiced,last_practiced_at,created_at"
@@ -191,6 +192,29 @@ export async function GET(req: Request) {
         });
       }
       throw new Error(promptErr.message);
+    }
+
+    if ((promptRows ?? []).length === 0) {
+      const toInsert = WRITING_PROMPTS_SEED.map((item) => ({
+        user_id: ctx.user.id,
+        task_type: item.task_type,
+        sub_type: item.sub_type,
+        title: item.title,
+        source_name: item.source_name,
+        topic: item.topic,
+        prompt_text: item.prompt_text,
+        chart_notes: item.chart_notes,
+        status: "queued" as const,
+      }));
+      const { data: seededRows } = await ctx.db
+        .from("writing_prompts")
+        .insert(toInsert)
+        .select(
+          "id,task_type,sub_type,title,source_name,topic,prompt_text,image_data_url,chart_notes,ai_guide_json,status,times_practiced,last_practiced_at,created_at"
+        );
+      if (seededRows && seededRows.length > 0) {
+        promptRows = seededRows;
+      }
     }
 
     const { data: subRows, error: subErr } = await ctx.db

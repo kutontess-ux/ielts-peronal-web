@@ -5,11 +5,14 @@ export type LeitnerLevel = 1 | 2 | 3 | 4 | 5;
 export type LeitnerState = {
   level: number;
   level5_streak?: number;
+  recovery_level?: number | null;
 };
 
 export type ComputedLeitnerReview = {
   level: LeitnerLevel;
   level5_streak: number;
+  recovery_level: LeitnerLevel | null;
+  recovered: boolean;
   lapsesDelta: number;
   delayMs: number;
   intervalDays: number;
@@ -71,8 +74,9 @@ export function clampLevel(level: number): LeitnerLevel {
 
 /**
  * Tính toán trạng thái Leitner 5 cấp độ tiếp theo:
- * - Gõ SAI: tụt ngay về Level 1, hẹn 10 phút sau.
- * - Gõ ĐÚNG lại ở cuối phiên (sau khi đã sai trong phiên): giữ Level 1, hẹn 1 ngày sau.
+ * - Gõ SAI: tụt tạm về Level 1, hẹn 10 phút sau. Nếu đang ở Level >= 2 (và chưa trong trạng thái chờ phục hồi), lưu recovery_level = level - 1. Nếu sai tiếp khi đang chờ phục hồi thì mất quyền phục hồi (recovery_level = null).
+ * - Gõ ĐÚNG khi có recovery_level: phục hồi về recovery_level với chu kỳ chuẩn tương ứng và xóa recovery_level.
+ * - Gõ ĐÚNG lại ở cuối phiên (không có recovery_level): giữ Level 1, hẹn 1 ngày sau.
  * - Gõ ĐÚNG bình thường: level = min(level + 1, 5); ở Level 5 tiếp tục giãn 30 -> 60 -> 90 ngày.
  */
 export function computeLeitnerReview(
@@ -82,11 +86,23 @@ export function computeLeitnerReview(
 ): ComputedLeitnerReview {
   const currentLevel = clampLevel(prev.level);
   const currentStreak = Math.max(0, Number(prev.level5_streak ?? 0));
+  const currentRecovery =
+    prev.recovery_level != null && Number.isFinite(Number(prev.recovery_level))
+      ? clampLevel(Number(prev.recovery_level))
+      : null;
 
   if (!isCorrect) {
+    const nextRecovery =
+      currentRecovery !== null
+        ? null
+        : currentLevel >= 2
+          ? clampLevel(currentLevel - 1)
+          : null;
     return {
       level: 1,
       level5_streak: 0,
+      recovery_level: nextRecovery,
+      recovered: false,
       lapsesDelta: 1,
       delayMs: 10 * MINUTE_MS,
       intervalDays: 0,
@@ -94,10 +110,26 @@ export function computeLeitnerReview(
     };
   }
 
+  if (currentRecovery !== null) {
+    const days = LEITNER_INTERVAL_DAYS[currentRecovery];
+    return {
+      level: currentRecovery,
+      level5_streak: 0,
+      recovery_level: null,
+      recovered: true,
+      lapsesDelta: 0,
+      delayMs: days * DAY_MS,
+      intervalDays: days,
+      label: `${days} ngày`,
+    };
+  }
+
   if (isRetryInSession) {
     return {
       level: 1,
       level5_streak: 0,
+      recovery_level: null,
+      recovered: false,
       lapsesDelta: 0,
       delayMs: 1 * DAY_MS,
       intervalDays: 1,
@@ -111,6 +143,8 @@ export function computeLeitnerReview(
     return {
       level: nextLevel,
       level5_streak: 0,
+      recovery_level: null,
+      recovered: false,
       lapsesDelta: 0,
       delayMs: days * DAY_MS,
       intervalDays: days,
@@ -124,6 +158,8 @@ export function computeLeitnerReview(
   return {
     level: 5,
     level5_streak: nextStreak,
+    recovery_level: null,
+    recovered: false,
     lapsesDelta: 0,
     delayMs: days * DAY_MS,
     intervalDays: days,

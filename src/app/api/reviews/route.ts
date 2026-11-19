@@ -14,6 +14,7 @@ import {
 export type ReviewWord = Word & {
   level_srs: LeitnerLevel;
   level5_streak: number;
+  recovery_level: LeitnerLevel | null;
   lapses: number;
   next_review_at: string;
   synonyms?: string[];
@@ -80,7 +81,7 @@ export async function GET() {
       db
         .from("reviews")
         .select(
-          "word_id,level,next_review_at,level5_streak,lapses,words!inner(id,lemma,ipa,pos,meaning_vi,definition_en,example,cefr_level,topic,is_awl,synonyms,status)"
+          "word_id,level,next_review_at,level5_streak,recovery_level,lapses,words!inner(id,lemma,ipa,pos,meaning_vi,definition_en,example,cefr_level,topic,is_awl,synonyms,status)"
         )
         .eq("user_id", userId)
         .eq("words.status", "approved")
@@ -137,6 +138,8 @@ export async function GET() {
         synonyms: Array.isArray(w.synonyms) ? w.synonyms : [],
         level_srs: clampLevel(row.level ?? 1),
         level5_streak: Number(row.level5_streak ?? 0),
+        recovery_level:
+          row.recovery_level != null ? clampLevel(Number(row.recovery_level)) : null,
         lapses: Number(row.lapses ?? 0),
         next_review_at: row.next_review_at as string,
       };
@@ -336,7 +339,7 @@ export async function POST(req: Request) {
 
     const { data: existing } = await db
       .from("reviews")
-      .select("level,level5_streak,lapses")
+      .select("level,level5_streak,recovery_level,lapses")
       .eq("user_id", userId)
       .eq("word_id", wordId)
       .maybeSingle();
@@ -346,6 +349,8 @@ export async function POST(req: Request) {
       {
         level: Number(existing?.level ?? 1),
         level5_streak: Number(existing?.level5_streak ?? 0),
+        recovery_level:
+          existing?.recovery_level != null ? Number(existing.recovery_level) : null,
       },
       isCorrect,
       Boolean(body.isRetryInSession)
@@ -361,6 +366,7 @@ export async function POST(req: Request) {
         level: next.level,
         next_review_at: nextReviewAt,
         level5_streak: next.level5_streak,
+        recovery_level: next.recovery_level,
         lapses: prevLapses + next.lapsesDelta,
         last_reviewed_at: new Date(now).toISOString(),
       },
@@ -372,6 +378,8 @@ export async function POST(req: Request) {
       ok: true,
       level: next.level,
       level5_streak: next.level5_streak,
+      recovery_level: next.recovery_level,
+      recovered: next.recovered,
       next_review_at: nextReviewAt,
       label: next.label,
     });

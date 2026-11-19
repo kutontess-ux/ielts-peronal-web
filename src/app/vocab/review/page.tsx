@@ -59,6 +59,8 @@ type FeedbackState = {
   typed: string;
   nextLevel: LeitnerLevel;
   nextLabel: string;
+  recoveryLevel: LeitnerLevel | null;
+  recovered: boolean;
   wasRetry: boolean;
   meaningMatch?: VietnameseMeaningMatchResult;
 } | null;
@@ -342,7 +344,11 @@ export default function Review() {
       if (!card || feedback) return;
       const isRetry = Boolean(card.isRetryInSession);
       const computed = computeLeitnerReview(
-        { level: card.level_srs, level5_streak: card.level5_streak },
+        {
+          level: card.level_srs,
+          level5_streak: card.level5_streak,
+          recovery_level: card.recovery_level ?? null,
+        },
         isCorrect,
         isRetry
       );
@@ -356,6 +362,8 @@ export default function Review() {
         typed: displayLabel,
         nextLevel: computed.level,
         nextLabel: computed.label,
+        recoveryLevel: computed.recovery_level,
+        recovered: computed.recovered,
         wasRetry: isRetry,
         meaningMatch,
       });
@@ -413,6 +421,15 @@ export default function Review() {
       if (!card || !feedback || advancingRef.current) return;
       advancingRef.current = true;
       commitReviewToServer(card, finalCorrect);
+      const nextComputed = computeLeitnerReview(
+        {
+          level: card.level_srs,
+          level5_streak: card.level5_streak,
+          recovery_level: card.recovery_level ?? null,
+        },
+        finalCorrect,
+        Boolean(card.isRetryInSession)
+      );
       setQueue((prev) => {
         const rest = prev.slice(1);
         if (!finalCorrect) {
@@ -420,6 +437,7 @@ export default function Review() {
             ...card,
             level_srs: 1,
             level5_streak: 0,
+            recovery_level: nextComputed.recovery_level,
             isRetryInSession: true,
           };
           return [...rest, retryItem];
@@ -1256,10 +1274,14 @@ export default function Review() {
               <div className="mt-3 text-xs font-semibold">
                 {isAdmin
                   ? feedback.isCorrect
-                    ? feedback.wasRetry
-                      ? `Giữ Level 1 · Hẹn xác nhận lại sau ${feedback.nextLabel}`
-                      : `Đạt Level ${feedback.nextLevel} · Ôn lại sau ${feedback.nextLabel}`
-                    : "Tụt về Level 1 (10 phút) · Đã đưa vào cuối phiên để ôn lại"
+                    ? feedback.recovered
+                      ? `Phục hồi về Level ${feedback.nextLevel} · Ôn lại sau ${feedback.nextLabel}`
+                      : feedback.wasRetry
+                        ? `Giữ Level 1 · Hẹn xác nhận lại sau ${feedback.nextLabel}`
+                        : `Đạt Level ${feedback.nextLevel} · Ôn lại sau ${feedback.nextLabel}`
+                    : feedback.recoveryLevel !== null
+                      ? `Tụt tạm về Level 1 (10 phút) · Trả lời đúng lại sẽ phục hồi về Level ${feedback.recoveryLevel}`
+                      : "Tụt về Level 1 (10 phút) · Đã đưa vào cuối phiên để ôn lại"
                   : feedback.isCorrect
                     ? "Đã ghi nhớ từ này!"
                     : "Đã đưa vào cuối phiên để ôn lại"}
@@ -1278,10 +1300,10 @@ export default function Review() {
                 <button
                   type="button"
                   onClick={overrideAsCorrectAndNext}
-                  title="Hệ thống chấm chưa đúng? Xác nhận tôi làm đúng & cho qua"
+                  title="Hệ thống chấm chưa đúng hoặc bạn đã hiểu đúng ý? Xác nhận đạt & cho qua"
                   className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/40 bg-emerald-500/15 px-5 py-3 text-xs font-bold text-emerald-700 transition hover:bg-emerald-500/25 dark:text-emerald-300 sm:text-sm"
                 >
-                  <Check size={16} /> Tôi làm đúng
+                  <Check size={16} /> Tôi hiểu đúng ý / Cho qua
                 </button>
               ) : (
                 <button
