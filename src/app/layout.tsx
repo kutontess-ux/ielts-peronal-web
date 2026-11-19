@@ -4,6 +4,7 @@ import { Outfit } from "next/font/google";
 import "./globals.css";
 import Sidebar from "@/components/Sidebar";
 import ActivityMonitor from "@/components/ActivityMonitor";
+import SwRegistrar from "@/components/SwRegistrar";
 
 // Outfit: font hình học miễn phí, gần giống Hurme Geometric Sans No.2 của Quizlet
 const outfit = Outfit({
@@ -46,6 +47,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
           <div className="mx-auto w-full min-w-0 max-w-5xl">{children}</div>
         </main>
         <ActivityMonitor />
+        <SwRegistrar />
       </body>
     </html>
   );

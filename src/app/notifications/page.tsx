@@ -3,16 +3,27 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import {
+  Bell,
   BellOff,
   CheckCircle2,
   Flame,
   Newspaper,
   PenLine,
   Repeat,
+  Send,
+  Smartphone,
   type LucideIcon,
 } from "lucide-react";
 import { markNotifSeenToday, notifySettingsUpdated } from "@/lib/due-events";
 import { DEFAULT_NOTIFICATION_SETTINGS, type NotificationSettings } from "@/lib/srs";
+import {
+  getExistingPushSubscription,
+  isIosDevice,
+  isPushSupported,
+  isStandalonePwa,
+  registerServiceWorker,
+  urlBase64ToUint8Array,
+} from "@/lib/push-client";
 
 type NotifKey = "notify_review_due" | "notify_writing_streak" | "notify_daily_vocab";
 
@@ -20,6 +31,15 @@ export default function Notifications() {
   const [perm, setPerm] = useState<string>(
     typeof Notification !== "undefined" ? Notification.permission : "default"
   );
+  const [pushSupported, setPushSupported] = useState(false);
+  const [pushConfigured, setPushConfigured] = useState<boolean | null>(null);
+  const [vapidPublicKey, setVapidPublicKey] = useState<string | null>(null);
+  const [pushSubscribed, setPushSubscribed] = useState(false);
+  const [pushDeviceCount, setPushDeviceCount] = useState(0);
+  const [pushBusy, setPushBusy] = useState(false);
+  const [pushMsg, setPushMsg] = useState<{ type: "ok" | "err"; text: string } | null>(null);
+  const [showIosHint, setShowIosHint] = useState(false);
+
   const [settings, setSettings] = useState<NotificationSettings>(DEFAULT_NOTIFICATION_SETTINGS);
   const [savingKey, setSavingKey] = useState<string | null>(null);
   const [dueCount, setDueCount] = useState<number | null>(null);
@@ -31,6 +51,31 @@ export default function Notifications() {
 
   useEffect(() => {
     markNotifSeenToday();
+
+    const supported = isPushSupported();
+    setPushSupported(supported);
+    if (isIosDevice() && !isStandalonePwa()) {
+      setShowIosHint(true);
+    }
+
+    if (supported) {
+      registerServiceWorker()
+        .then(() => getExistingPushSubscription())
+        .then((sub) => {
+          setPushSubscribed(Boolean(sub));
+        })
+        .catch(() => {});
+    }
+
+    fetch("/api/push/subscribe", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => {
+        if (!j) return;
+        setPushConfigured(Boolean(j.configured));
+        setVapidPublicKey(j.publicKey ?? null);
+        setPushDeviceCount(Number(j.subscriptionCount ?? 0));
+      })
+      .catch(() => {});
 
     fetch("/api/settings", { cache: "no-store" })
       .then((r) => (r.ok ? r.json() : null))
@@ -101,14 +146,124 @@ export default function Notifications() {
     }
   };
 
-  const enable = async () => {
-    if (typeof Notification === "undefined") return;
-    const p = await Notification.requestPermission();
-    setPerm(p);
-    if (p === "granted") {
-      new Notification("IELTS Personal", {
-        body: dueCount && dueCount > 0 ? `Bạn có ${dueCount} từ cần ôn hôm nay` : "Đã bật nhắc học hằng ngày!",
+  const enablePush = async () => {
+    setPushMsg(null);
+    if (!isPushSupported()) {
+      setPushMsg({
+        type: "err",
+        text: isIosDevice()
+          ? "Trên iPhone/iPad, hãy mở bằng Safari → Chia sẻ → Thêm vào màn hình chính (PWA) rồi mở lại app để bật thông báo."
+          : "Trình duyệt này chưa hỗ trợ Web Push PWA.",
       });
+      return;
+    }
+
+    setPushBusy(true);
+    try {
+      const p = await Notification.requestPermission();
+      setPerm(p);
+      if (p !== "granted") {
+        setPushMsg({
+          type: "err",
+          text: "Bạn chưa cấp quyền thông báo. Hãy cho phép trong cài đặt trình duyệt/thiết bị.",
+        });
+        return;
+      }
+
+      if (!vapidPublicKey) {
+        setPushMsg({
+          type: "err",
+          text: "Server chưa cấu hình NEXT_PUBLIC_VAPID_PUBLIC_KEY. Xem hướng dẫn biến môi trường trên Vercel.",
+        });
+        return;
+      }
+
+      const reg = await registerServiceWorker();
+      if (!reg) {
+        setPushMsg({ type: "err", text: "Không thể đăng ký Service Worker (/sw.js)." });
+        return;
+      }
+
+      let sub = await reg.pushManager.getSubscription();
+      if (!sub) {
+        sub = await reg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToUint8Array(vapidPublicKey),
+        });
+      }
+
+      const json = sub.toJSON();
+      const res = await fetch("/api/push/subscribe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          endpoint: json.endpoint,
+          keys: json.keys,
+        }),
+      });
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) {
+        throw new Error(data.error || "Lưu đăng ký thông báo thất bại");
+      }
+
+      setPushSubscribed(true);
+      setPushDeviceCount((c) => Math.max(1, c));
+      setPushMsg({
+        type: "ok",
+        text: "Đã bật thông báo đẩy PWA! Bạn sẽ nhận nhắc học dù đã đóng ứng dụng.",
+      });
+    } catch (e) {
+      setPushMsg({ type: "err", text: (e as Error).message });
+    } finally {
+      setPushBusy(false);
+    }
+  };
+
+  const disablePush = async () => {
+    setPushMsg(null);
+    setPushBusy(true);
+    try {
+      const sub = await getExistingPushSubscription();
+      const endpoint = sub?.endpoint;
+      if (sub) {
+        await sub.unsubscribe().catch(() => {});
+      }
+      await fetch("/api/push/subscribe", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ endpoint }),
+      });
+      setPushSubscribed(false);
+      setPushDeviceCount((c) => Math.max(0, c - 1));
+      setPushMsg({ type: "ok", text: "Đã tắt thông báo đẩy trên thiết bị này." });
+    } catch (e) {
+      setPushMsg({ type: "err", text: (e as Error).message });
+    } finally {
+      setPushBusy(false);
+    }
+  };
+
+  const sendTestPush = async () => {
+    setPushMsg(null);
+    setPushBusy(true);
+    try {
+      const res = await fetch("/api/push/test", { method: "POST" });
+      const data = (await res.json().catch(() => ({}))) as {
+        ok?: boolean;
+        sent?: number;
+        error?: string;
+      };
+      if (!res.ok || !data.ok) {
+        throw new Error(data.error || "Gửi thông báo thử thất bại");
+      }
+      setPushMsg({
+        type: "ok",
+        text: `Đã gửi thông báo thử tới ${data.sent ?? 1} thiết bị! Hãy kiểm tra thanh thông báo.`,
+      });
+    } catch (e) {
+      setPushMsg({ type: "err", text: (e as Error).message });
+    } finally {
+      setPushBusy(false);
     }
   };
 
@@ -210,10 +365,19 @@ export default function Notifications() {
       </div>
 
       <section className="rounded-2xl bg-card p-5">
-        <div className="font-bold">Nhắc ôn tập tự động</div>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="font-bold">Thông báo đẩy (PWA) & Lịch nhắc tự động</div>
+          {pushSubscribed && (
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/15 px-3 py-1 text-xs font-bold text-emerald-700 dark:text-emerald-300">
+              <Bell size={13} />
+              Đang bật trên thiết bị này{pushDeviceCount > 1 ? ` (${pushDeviceCount} thiết bị)` : ""}
+            </span>
+          )}
+        </div>
         <p className="mt-1 text-sm text-muted">
-          Hệ thống tính lịch ôn cho từng từ (lặp lại ngắt quãng) và nhắc bạn khi từ sắp quên.
+          Nhận thông báo nhắc ôn tập SRS và 10 từ vựng hằng ngày ngay cả khi đã đóng trình duyệt hoặc app.
         </p>
+
         <div className="mt-4 flex flex-wrap items-center gap-6">
           {(
             [
@@ -232,17 +396,73 @@ export default function Notifications() {
               {l}
             </label>
           ))}
-          <button
-            onClick={enable}
-            disabled={perm === "granted"}
-            className="rounded-full bg-brand px-5 py-2 text-sm font-bold text-white hover:bg-brand-hover hover:text-bg disabled:bg-emerald-500/20 disabled:text-emerald-700 dark:disabled:bg-emerald-500/30 dark:disabled:text-emerald-300"
-          >
-            {perm === "granted" ? "✓ Đã bật thông báo trình duyệt" : "Bật thông báo trình duyệt"}
-          </button>
         </div>
+
+        <div className="mt-4 flex flex-wrap items-center gap-2.5">
+          {!pushSubscribed ? (
+            <button
+              type="button"
+              onClick={enablePush}
+              disabled={pushBusy || !pushSupported}
+              className="inline-flex items-center gap-2 rounded-full bg-brand px-5 py-2 text-sm font-bold text-white transition hover:bg-brand-hover hover:text-bg disabled:opacity-50"
+            >
+              <Bell size={15} />
+              {pushBusy ? "Đang kích hoạt..." : "Bật thông báo đẩy (PWA)"}
+            </button>
+          ) : (
+            <>
+              <button
+                type="button"
+                onClick={sendTestPush}
+                disabled={pushBusy}
+                className="inline-flex items-center gap-2 rounded-full bg-brand px-4 py-2 text-sm font-bold text-white transition hover:bg-brand-hover hover:text-bg disabled:opacity-50"
+              >
+                <Send size={14} />
+                {pushBusy ? "Đang gửi..." : "Gửi thông báo thử"}
+              </button>
+              <button
+                type="button"
+                onClick={disablePush}
+                disabled={pushBusy}
+                className="inline-flex items-center gap-2 rounded-full border border-line bg-bg/60 px-4 py-2 text-xs font-bold text-muted transition hover:border-rose-400/50 hover:text-rose-500 disabled:opacity-50"
+              >
+                <BellOff size={14} />
+                Tắt trên thiết bị này
+              </button>
+            </>
+          )}
+        </div>
+
         {perm === "denied" && (
-          <p className="mt-2 text-xs text-rose-600 dark:text-rose-300">
-            Trình duyệt đang chặn thông báo, hãy cho phép trong cài đặt trang.
+          <p className="mt-2.5 text-xs text-rose-600 dark:text-rose-300">
+            Trình duyệt đang chặn thông báo, hãy cho phép trong cài đặt trang/thiết bị rồi bấm bật lại.
+          </p>
+        )}
+
+        {showIosHint && (
+          <div className="mt-3 flex items-start gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3.5 py-2.5 text-xs text-amber-800 dark:text-amber-200">
+            <Smartphone size={15} className="mt-0.5 shrink-0" />
+            <span>
+              Trên iPhone/iPad: bấm nút <b>Chia sẻ</b> trên Safari → <b>Thêm vào màn hình chính</b> (Add to Home Screen), sau đó mở app từ màn hình chính để bật thông báo đẩy.
+            </span>
+          </div>
+        )}
+
+        {pushConfigured === false && (
+          <p className="mt-2.5 text-xs text-amber-600 dark:text-amber-300">
+            Lưu ý: Server chưa cấu hình VAPID keys (<code>NEXT_PUBLIC_VAPID_PUBLIC_KEY</code> & <code>VAPID_PRIVATE_KEY</code>) nên chưa thể gửi Web Push.
+          </p>
+        )}
+
+        {pushMsg && (
+          <p
+            className={`mt-2.5 text-xs font-medium ${
+              pushMsg.type === "ok"
+                ? "text-emerald-700 dark:text-emerald-300"
+                : "text-rose-600 dark:text-rose-300"
+            }`}
+          >
+            {pushMsg.text}
           </p>
         )}
       </section>
