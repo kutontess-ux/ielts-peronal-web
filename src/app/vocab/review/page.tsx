@@ -23,7 +23,7 @@ import { ReviewOverview } from "./ReviewOverview";
 import { levelColor, type Word } from "@/lib/mock";
 import { notifyDueUpdated } from "@/lib/due-events";
 import { useMe } from "@/lib/use-me";
-import { speakWord as speakTts } from "@/lib/tts";
+import { speakVietnamese, speakWord as speakTts } from "@/lib/tts";
 import { VoiceSettingsButton } from "@/components/VoiceSettingsModal";
 import {
   checkRecallSoftMatch,
@@ -981,8 +981,18 @@ export default function Review() {
               <div className="text-xs font-semibold uppercase tracking-wider text-muted">
                 {card.pos ? `Từ loại: ${card.pos}` : "Hãy nhớ từ tiếng Anh tương ứng"}
               </div>
-              <div className="break-words text-2xl font-bold text-brand-hover sm:text-3xl">
-                {card.vi || card.en}
+              <div className="flex items-center justify-center gap-2 break-words text-2xl font-bold text-brand-hover sm:text-3xl">
+                <span>{card.vi || card.en}</span>
+                {card.vi && (
+                  <button
+                    type="button"
+                    title="Nghe nghĩa tiếng Việt"
+                    onClick={() => speakVietnamese(card.vi)}
+                    className="shrink-0 rounded-full p-1.5 text-brand-hover/80 transition hover:bg-bg/60 hover:text-ink"
+                  >
+                    <Volume2 size={18} strokeWidth={1.7} />
+                  </button>
+                )}
               </div>
               {card.vi && card.en && (
                 <div className="mx-auto max-w-xl break-words text-sm text-muted sm:text-base">
@@ -1200,7 +1210,19 @@ export default function Review() {
               ) : (
                 <div className="space-y-4">
                   <div className="rounded-2xl border border-line bg-bg/70 p-4">
-                    <div className="text-lg font-bold text-ink">{card.vi || card.en}</div>
+                    <div className="flex items-center justify-center gap-2 text-lg font-bold text-ink">
+                      <span>{card.vi || card.en}</span>
+                      {card.vi && (
+                        <button
+                          type="button"
+                          title="Nghe nghĩa tiếng Việt"
+                          onClick={() => speakVietnamese(card.vi)}
+                          className="shrink-0 rounded-full p-1 text-brand-hover/80 transition hover:bg-bg/60 hover:text-ink"
+                        >
+                          <Volume2 size={16} strokeWidth={1.7} />
+                        </button>
+                      )}
+                    </div>
                     {card.vi && card.en && (
                       <div className="mt-1 text-sm text-muted">{card.en}</div>
                     )}

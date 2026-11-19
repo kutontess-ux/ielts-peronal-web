@@ -293,6 +293,33 @@ export function VoiceSettingsModal({ isOpen, onClose }: VoiceSettingsModalProps)
             </div>
           </div>
 
+          {/* 4. Âm lượng (Boost) */}
+          <div>
+            <div className="mb-2 flex items-center justify-between">
+              <label className="text-xs font-bold uppercase tracking-wider text-muted">
+                4. Âm lượng phát âm (Boost)
+              </label>
+              <span className="rounded-md bg-bg px-2 py-0.5 text-xs font-bold tabular-nums text-brand-hover">
+                {Math.round(settings.volume * 100)}%
+              </span>
+            </div>
+            <input
+              type="range"
+              min="0.5"
+              max="3.0"
+              step="0.1"
+              value={settings.volume}
+              onChange={(e) => handleUpdate({ volume: parseFloat(e.target.value) })}
+              className="w-full accent-brand"
+            />
+            <div className="mt-1 flex justify-between text-[10px] text-muted">
+              <span>50%</span>
+              <span>100% (Chuẩn)</span>
+              <span>220% (Mặc định)</span>
+              <span>300% (To nhất)</span>
+            </div>
+          </div>
+
           {/* 5. Thử giọng & Kiểm tra trực tiếp */}
           <div className="rounded-xl border border-line bg-bg p-3 sm:p-3.5">
             <label className="mb-1.5 block text-xs font-bold text-muted">

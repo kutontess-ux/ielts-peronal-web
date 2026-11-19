@@ -32,7 +32,7 @@ import {
 } from "@/lib/daily-cache";
 import { useMe } from "@/lib/use-me";
 import ExportButton from "@/components/ExportPanel";
-import { speakWord } from "@/lib/tts";
+import { speakVietnamese, speakWord } from "@/lib/tts";
 import { VoiceSettingsButton } from "@/components/VoiceSettingsModal";
 import AddToStudySetModal from "./AddToStudySetModal";
 import type { DailyGroup, DailyWord } from "@/app/api/daily/route";
@@ -150,7 +150,17 @@ function DailyFlipCard({
               </div>
             </div>
 
-            <div className="mt-2 break-words text-sm font-semibold text-brand-hover">{w.vi}</div>
+            <div className="mt-2 flex items-center gap-1.5 break-words text-sm font-semibold text-brand-hover">
+              <span>{w.vi}</span>
+              <button
+                type="button"
+                onClick={() => speakVietnamese(w.vi)}
+                title="Nghe nghĩa tiếng Việt"
+                className="shrink-0 text-brand-hover/80 hover:text-ink"
+              >
+                <Volume2 size={14} />
+              </button>
+            </div>
             <div className="mt-1 break-words text-xs leading-relaxed text-muted">{w.en}</div>
             {(w.source_sentence || w.example) && (
               <div className="mt-2.5 rounded-lg bg-bg/60 p-2.5 text-xs italic leading-relaxed text-muted break-words">

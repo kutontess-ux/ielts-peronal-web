@@ -11,7 +11,7 @@ import { enrollWordsInSrs } from "@/lib/srs";
 import { notifyDueUpdated } from "@/lib/due-events";
 import { recordStudySetSession, type StudySetReviewResult } from "@/lib/study-sets";
 import { clearStudyDraft, loadStudyDraft, saveStudyDraft } from "@/lib/study-drafts";
-import { speakWord } from "@/lib/tts";
+import { speakVietnamese, speakWord } from "@/lib/tts";
 import { VoiceSettingsButton } from "@/components/VoiceSettingsModal";
 
 type HistoryStatus = "known" | "unknown" | "viewed";
@@ -348,7 +348,20 @@ export default function Flashcards({
 
   const frontContent = meaningFirst ? (
     <>
-      <div className="break-words text-center text-2xl font-bold text-brand-hover sm:text-3xl md:text-4xl">{card.vi}</div>
+      <div className="flex items-center justify-center gap-2 break-words text-center text-2xl font-bold text-brand-hover sm:text-3xl md:text-4xl">
+        <span>{card.vi}</span>
+        <button
+          type="button"
+          title="Nghe nghĩa tiếng Việt"
+          onClick={(e) => {
+            e.stopPropagation();
+            speakVietnamese(card.vi);
+          }}
+          className="shrink-0 rounded-full p-1.5 text-brand-hover/80 transition hover:bg-bg/60 hover:text-ink"
+        >
+          <Volume2 size={20} strokeWidth={1.7} />
+        </button>
+      </div>
       <div className="mt-3 max-w-lg break-words text-center text-sm text-muted sm:text-base">{card.en}</div>
     </>
   ) : (
@@ -375,7 +388,20 @@ export default function Flashcards({
     </div>
   ) : (
     <div className="min-w-0">
-      <div className="break-words text-2xl font-bold text-brand-hover sm:text-3xl">{card.vi}</div>
+      <div className="flex items-center gap-2 break-words text-2xl font-bold text-brand-hover sm:text-3xl">
+        <span>{card.vi}</span>
+        <button
+          type="button"
+          title="Nghe nghĩa tiếng Việt"
+          onClick={(e) => {
+            e.stopPropagation();
+            speakVietnamese(card.vi);
+          }}
+          className="shrink-0 rounded-full p-1.5 text-brand-hover/80 transition hover:bg-bg/60 hover:text-ink"
+        >
+          <Volume2 size={18} strokeWidth={1.7} />
+        </button>
+      </div>
       <div className="mt-3 break-words text-base sm:text-lg">{card.en}</div>
       {card.example && <div className="mt-5 rounded-xl bg-bg/60 p-4 text-sm italic leading-relaxed text-muted break-words">“{card.example}”</div>}
       {card.awl && <div className="mt-4 text-xs font-bold text-orange-600 dark:text-orange-300">Academic Word List</div>}
