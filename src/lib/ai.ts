@@ -23,14 +23,17 @@ export type Enriched = {
 
 const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-3.5-flash-lite";
 const GEMINI_MODEL_2 = process.env.GEMINI_MODEL_2 || "gemini-2.5-flash-lite";
+const GEMINI_MODEL_3 = process.env.GEMINI_MODEL_3 || "gemini-2.5-flash-lite";
+const GROQ_MODEL = process.env.GROQ_MODEL || "llama-3.3-70b-versatile";
 const OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-4o-mini";
 
-// Gọi Gemini #1 (chính) -> Gemini #2 (dự phòng miễn phí/rẻ) -> OpenAI (chỉ dùng khi cả 2 key Gemini đều lỗi).
+// Chuỗi ưu tiên: Gemini #1 -> Gemini #2 -> Gemini #3 -> Groq (nếu có) -> OpenAI (chốt chặn cuối cùng).
 export async function askJson<T>(system: string, user: string): Promise<T> {
   const errors: string[] = [];
   const geminiTargets = [
     { label: "Gemini #1", apiKey: process.env.GEMINI_API_KEY, model: GEMINI_MODEL },
     { label: "Gemini #2", apiKey: process.env.GEMINI_API_KEY_2, model: GEMINI_MODEL_2 },
+    { label: "Gemini #3", apiKey: process.env.GEMINI_API_KEY_3, model: GEMINI_MODEL_3 },
   ];
 
   for (const target of geminiTargets) {
@@ -46,11 +49,30 @@ export async function askJson<T>(system: string, user: string): Promise<T> {
     }
   }
 
-  // Cho phép tắt hoàn toàn fallback sang OpenAI nếu muốn 100% miễn phí (đặt DISABLE_OPENAI_FALLBACK=true)
+  // Dự phòng bằng Groq (nếu có cấu hình GROQ_API_KEY, hoàn toàn miễn phí & rất nhanh) trước khi gọi OpenAI
+  if (process.env.GROQ_API_KEY) {
+    try {
+      console.info(`[AI Info] Đang fallback sang Groq (${GROQ_MODEL})...`);
+      const res = await callOpenAiCompatibleJson<T>(
+        process.env.GROQ_BASE_URL || "https://api.groq.com/openai/v1",
+        process.env.GROQ_API_KEY,
+        GROQ_MODEL,
+        system,
+        user
+      );
+      return res;
+    } catch (e) {
+      const errMsg = (e as Error).message;
+      console.warn(`[AI Warning] Groq (${GROQ_MODEL}) thất bại (${errMsg}).`);
+      errors.push(`Groq: ${errMsg}`);
+    }
+  }
+
+  // Chốt chặn cuối cùng: Fallback sang OpenAI (chỉ dùng khi tất cả các key trên đều lỗi hoặc hết quota)
   const allowOpenAi = process.env.OPENAI_API_KEY && process.env.DISABLE_OPENAI_FALLBACK !== "true";
   if (allowOpenAi) {
     try {
-      console.info(`[AI Info] Cả 2 key Gemini đều lỗi, đang fallback sang OpenAI (${OPENAI_MODEL})...`);
+      console.info(`[AI Info] Tất cả key trước đều lỗi, đang fallback sang OpenAI (${OPENAI_MODEL})...`);
       const r = await fetch("https://api.openai.com/v1/chat/completions", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${process.env.OPENAI_API_KEY}` },
@@ -268,6 +290,7 @@ export async function askJsonWithVision<T>(
     const geminiTargets = [
       { label: "Gemini Vision #1", apiKey: process.env.GEMINI_API_KEY, model: GEMINI_MODEL },
       { label: "Gemini Vision #2", apiKey: process.env.GEMINI_API_KEY_2, model: GEMINI_MODEL_2 },
+      { label: "Gemini Vision #3", apiKey: process.env.GEMINI_API_KEY_3, model: GEMINI_MODEL_3 },
     ];
     for (const target of geminiTargets) {
       if (!target.apiKey) continue;
