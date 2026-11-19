@@ -702,7 +702,7 @@ function WritingStudioInner() {
           const bJson = await bRes.json().catch(() => ({}));
           dictBookCacheRef.current = Array.isArray(bJson.words) ? bJson.words : [];
         }
-        bookMatches = dictBookCacheRef.current
+        bookMatches = (dictBookCacheRef.current ?? [])
           .filter((w) => (w.word + " " + w.vi + " " + w.en).toLowerCase().includes(q))
           .slice(0, 20);
       }
