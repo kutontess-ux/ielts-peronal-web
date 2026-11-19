@@ -482,8 +482,23 @@ export function checkVietnameseMeaningMatch(
   };
 }
 
+function maskViWordFirstChar(word: string): string {
+  const chars = Array.from(word);
+  if (chars.length <= 1) return word;
+  return `${chars[0]}${"_".repeat(chars.length - 1)}`;
+}
+
+function maskViWordFirstAndLast(word: string): string {
+  const chars = Array.from(word);
+  if (chars.length <= 2) return maskViWordFirstChar(word);
+  return `${chars[0]}${"_".repeat(chars.length - 2)}${chars[chars.length - 1]}`;
+}
+
 /**
- * Tạo gợi ý 3 nấc cho nghĩa tiếng Việt (ví dụ "dao động" -> "d _ _   đ _ _ _ (2 từ)").
+ * Tạo gợi ý 3 nấc theo từng từ cho nghĩa tiếng Việt:
+ * - Nấc 1: chỉ hiện chữ cái đầu của mỗi tiếng (ví dụ "s___  l___ (2 từ)")
+ * - Nấc 2: mở khoảng 50% số từ đầu (ví dụ "sinh  l___ (2 từ)")
+ * - Nấc 3: mở gần hết các từ, giữ từ cuối (ví dụ "sinh  l_i (2 từ)" hoặc "mang lại lợi  n____ (4 từ)")
  */
 export function getVietnameseMeaningHint(
   meaningVi: string,
@@ -495,26 +510,25 @@ export function getVietnameseMeaningHint(
   const tokens = tokenizeVi(firstClause);
   if (tokens.length === 0) return "";
 
+  const total = tokens.length;
   const masked = tokens
-    .map((part) => {
-      const chars = Array.from(part);
-      if (chars.length <= 1) return part;
-      return chars
-        .map((ch, idx) => {
-          if (idx === 0) return ch;
-          if (level === 1) return "_";
-          if (level === 2) {
-            if (idx === chars.length - 1 && chars.length >= 4) return ch;
-            return idx % 2 === 0 ? ch : "_";
-          }
-          if (idx === chars.length - 1) return ch;
-          return idx % 4 !== 3 ? ch : "_";
-        })
-        .join(" ");
+    .map((part, idx) => {
+      if (level === 1) {
+        return maskViWordFirstChar(part);
+      }
+      if (level === 2) {
+        if (total === 1) return maskViWordFirstAndLast(part);
+        const revealCount = Math.max(1, Math.floor(total / 2));
+        return idx < revealCount ? part : maskViWordFirstChar(part);
+      }
+      // level === 3
+      if (total === 1) return maskViWordFirstAndLast(part);
+      if (idx < total - 1) return part;
+      return total === 2 ? maskViWordFirstAndLast(part) : maskViWordFirstChar(part);
     })
-    .join("   ");
+    .join("  ");
 
-  return `${masked} (${tokens.length} từ)`;
+  return `${masked} (${total} từ)`;
 }
 
 export type EnrollResult = {
