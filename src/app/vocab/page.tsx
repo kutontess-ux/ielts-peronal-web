@@ -1639,8 +1639,8 @@ export default function VocabLearn() {
         )}
       </section>
 
-      {/* Mục tự ôn lại tối đa 5 học phần học gần nhất (Admin thấy đủ chi tiết & cấu hình; User chỉ thấy học phần đến hạn) */}
-      {!activeFolder && studySets.length > 0 && (isAdmin || visibleQueue.length > 0 || loading) && (
+      {/* Mục tự ôn lại tối đa 5 học phần học gần nhất */}
+      {!activeFolder && studySets.length > 0 && (
         <section className="rounded-3xl bg-card p-5 shadow-lg shadow-slate-900/5 dark:shadow-black/25 sm:p-6">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="min-w-0">
@@ -1739,9 +1739,16 @@ export default function VocabLearn() {
               <p className="mt-2 text-xs font-medium text-muted">Đang tải học phần cần ôn...</p>
             </div>
           ) : visibleQueue.length === 0 ? (
-            <div className="mt-4 rounded-2xl bg-bg/70 px-4 py-4 text-xs text-muted">
-              Chưa có học phần nào được học gần đây. Hãy bấm <b>Lật thẻ</b> hoặc <b>Luyện tập</b> ở một học phần bên dưới — sau khi học xong hệ thống sẽ tự xếp lịch ôn lại tại đây.
-            </div>
+            recentQueue.length > 0 ? (
+              <div className="mt-4 flex items-center gap-2.5 rounded-2xl bg-emerald-500/10 px-4 py-3.5 text-sm font-semibold text-emerald-700 dark:text-emerald-300">
+                <CheckCircle2 size={18} className="shrink-0" />
+                <span>Chúc mừng, hôm nay chưa có học phần nào cần ôn cả!</span>
+              </div>
+            ) : (
+              <div className="mt-4 rounded-2xl bg-bg/70 px-4 py-4 text-xs text-muted">
+                Chưa có học phần nào được học gần đây. Hãy bấm <b>Lật thẻ</b> hoặc <b>Luyện tập</b> ở một học phần bên dưới — sau khi học xong hệ thống sẽ tự xếp lịch ôn lại tại đây.
+              </div>
+            )
           ) : (
             <div className="mt-4 space-y-2.5">
               {visibleQueue.map((s, index) => {
