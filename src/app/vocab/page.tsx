@@ -1231,6 +1231,7 @@ export default function VocabLearn() {
   const [activeFolderId, setActiveFolderId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"sets" | "folders">("sets");
   const [setFilter, setSetFilter] = useState<"all" | "unfoldered">("all");
+  const [setSearch, setSetSearch] = useState("");
   const [enrollingId, setEnrollingId] = useState<string | null>(null);
   const [srsBanner, setSrsBanner] = useState<{ text: string; isErr?: boolean } | null>(null);
   const [reviewCfgOpen, setReviewCfgOpen] = useState(false);
@@ -1398,14 +1399,22 @@ export default function VocabLearn() {
   );
 
   const visibleSets = useMemo(() => {
+    let base = studySets;
     if (activeFolder) {
-      return studySets.filter((s) => s.folderId === activeFolder.id);
+      base = studySets.filter((s) => s.folderId === activeFolder.id);
+    } else if (folders.length > 0 && setFilter === "unfoldered") {
+      base = unfolderedSets;
     }
-    if (folders.length > 0 && setFilter === "unfoldered") {
-      return unfolderedSets;
-    }
-    return studySets;
-  }, [activeFolder, studySets, folders.length, setFilter, unfolderedSets]);
+    const q = setSearch.trim().toLowerCase();
+    if (!q) return base;
+    return base.filter((s) => {
+      const folderName = s.folderId ? folderMap.get(s.folderId)?.name ?? "" : "";
+      return (
+        s.title.toLowerCase().includes(q) ||
+        folderName.toLowerCase().includes(q)
+      );
+    });
+  }, [activeFolder, studySets, folders.length, setFilter, unfolderedSets, setSearch, folderMap]);
 
   const handleEnrollSet = async (set: StudySet, setWords: Word[]) => {
     if (setWords.length === 0 || enrollingId) return;
@@ -1584,64 +1593,12 @@ export default function VocabLearn() {
         </>
       ) : (
         <>
-      {/* Thẻ tổng quan Cần ôn hôm nay */}
-      <section>
-        {loading ? (
-          <div className="flex w-full items-center justify-between gap-4 rounded-2xl bg-card px-5 py-4 shadow-md shadow-slate-900/5 dark:shadow-black/25">
-            <div className="flex items-center gap-3">
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-brand/10 text-brand-hover">
-                <Loader2 size={18} className="animate-spin" />
-              </span>
-              <div>
-                <div className="text-xs font-semibold text-muted">Ôn tập hôm nay</div>
-                <div className="text-sm font-bold text-ink">Đang kiểm tra từ đến hạn...</div>
-              </div>
-            </div>
-          </div>
-        ) : stats.dueCount > 0 ? (
-          <Link
-            href="/vocab/review"
-            className="flex w-full items-center justify-between gap-4 rounded-2xl bg-card px-5 py-4 shadow-md shadow-slate-900/5 transition hover:-translate-y-0.5 hover:shadow-lg dark:shadow-black/25"
-          >
-            <div className="flex items-center gap-3">
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand/10 text-brand-hover">
-                <Bell size={18} strokeWidth={1.9} />
-              </span>
-              <div>
-                <div className="text-xs font-semibold text-brand-hover">Cần ôn hôm nay</div>
-                <div className="text-xl font-bold text-ink sm:text-2xl">{stats.dueCount} từ</div>
-              </div>
-            </div>
-            <span className="shrink-0 rounded-full bg-brand px-4 py-2 text-xs font-bold text-white shadow-xs sm:text-sm">
-              Ôn ngay
-            </span>
-          </Link>
-        ) : (
-          <Link
-            href="/vocab/review"
-            className="flex w-full items-center justify-between gap-4 rounded-2xl bg-card px-5 py-4 shadow-md shadow-slate-900/5 transition hover:-translate-y-0.5 hover:shadow-lg dark:shadow-black/25"
-          >
-            <div className="flex items-center gap-3">
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
-                <CheckCircle2 size={18} strokeWidth={2} />
-              </span>
-              <div>
-                <div className="text-xs font-semibold text-emerald-700 dark:text-emerald-300">
-                  Ôn tập hôm nay · Đã hoàn thành
-                </div>
-                <div className="text-xs text-muted">Không có từ đến hạn · Xem biểu đồ 5 Level</div>
-              </div>
-            </div>
-            <span className="shrink-0 rounded-full bg-bg px-3.5 py-1.5 text-xs font-bold text-ink shadow-xs">
-              Xem 5 Level
-            </span>
-          </Link>
-        )}
-      </section>
-
       {/* Mục tự ôn lại tối đa 5 học phần học gần nhất */}
-      {!activeFolder && studySets.length > 0 && (
+      {!activeFolder && studySets.length > 0 && (() => {
+        const showOnlyCongrats = !loading && visibleQueue.length === 0 && recentQueue.length > 0;
+        return (
         <section className="rounded-3xl bg-card p-5 shadow-lg shadow-slate-900/5 dark:shadow-black/25 sm:p-6">
+          {!showOnlyCongrats && (
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
@@ -1677,8 +1634,9 @@ export default function VocabLearn() {
               </button>
             )}
           </div>
+          )}
 
-          {isAdmin && reviewCfgOpen && (
+          {!showOnlyCongrats && isAdmin && reviewCfgOpen && (
             <div className="mt-4 rounded-2xl bg-bg p-4 text-xs shadow-sm">
               <div className="font-bold text-ink">Cài đặt lịch tự ôn lại học phần</div>
               <div className="mt-2.5 flex flex-wrap items-center gap-2">
@@ -1740,7 +1698,7 @@ export default function VocabLearn() {
             </div>
           ) : visibleQueue.length === 0 ? (
             recentQueue.length > 0 ? (
-              <div className="mt-4 flex items-center gap-2.5 rounded-2xl bg-emerald-500/10 px-4 py-3.5 text-sm font-semibold text-emerald-700 dark:text-emerald-300">
+              <div className="flex items-center gap-2.5 rounded-2xl bg-emerald-500/10 px-4 py-3.5 text-sm font-semibold text-emerald-700 dark:text-emerald-300">
                 <CheckCircle2 size={18} className="shrink-0" />
                 <span>Chúc mừng, hôm nay chưa có học phần nào cần ôn cả!</span>
               </div>
@@ -1853,7 +1811,8 @@ export default function VocabLearn() {
             </div>
           )}
         </section>
-      )}
+        );
+      })()}
 
       <section>
         {activeFolder ? (
@@ -1954,8 +1913,27 @@ export default function VocabLearn() {
         )}
 
         {!activeFolder && (
-          <div className="mb-5 space-y-3">
-            <div className="flex items-center justify-between gap-2 border-b border-line">
+          <div className="mb-5 space-y-4">
+            {/* Thanh tạo học phần giống Quizlet */}
+            <div className="flex items-center justify-between gap-3 rounded-2xl border border-line/70 bg-card px-4 py-3 shadow-sm shadow-slate-900/5 dark:shadow-black/20">
+              <div className="flex min-w-0 items-center gap-3">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-brand/10 text-brand-hover">
+                  <Layers size={18} strokeWidth={1.8} />
+                </span>
+                <span className="truncate text-sm font-bold text-ink">
+                  Tạo bộ thẻ ghi nhớ
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setModalState({ open: true, editing: null })}
+                className="shrink-0 rounded-full bg-brand px-5 py-1.5 text-xs font-bold text-white shadow-xs transition hover:bg-brand-hover sm:text-sm"
+              >
+                Tạo
+              </button>
+            </div>
+
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line">
               <div className="flex items-center gap-5 sm:gap-6">
                 <button
                   type="button"
@@ -1983,20 +1961,47 @@ export default function VocabLearn() {
                 </button>
               </div>
 
-              <div ref={actionsMenuRef} className="relative pb-2">
-                <button
-                  type="button"
-                  aria-label="Thao tác học phần và thư mục"
-                  aria-expanded={actionsMenuOpen}
-                  onClick={() => setActionsMenuOpen((v) => !v)}
-                  className={`inline-flex h-8 w-8 items-center justify-center rounded-full border transition ${
-                    actionsMenuOpen
-                      ? "border-brand bg-brand/10 text-brand-hover"
-                      : "border-line bg-card text-muted hover:border-brand-hover hover:text-ink"
-                  }`}
-                >
-                  <MoreVertical size={16} />
-                </button>
+              <div className="flex items-center gap-2 pb-2">
+                {activeTab === "sets" && (
+                  <div className="relative flex items-center">
+                    <Search
+                      size={14}
+                      className="pointer-events-none absolute left-3 text-muted"
+                    />
+                    <input
+                      type="text"
+                      value={setSearch}
+                      onChange={(e) => setSetSearch(e.target.value)}
+                      placeholder="Tìm kiếm thẻ ghi nhớ"
+                      className="h-8 w-44 rounded-full border border-line bg-card pl-8 pr-7 text-xs text-ink outline-none transition placeholder:text-muted focus:border-brand sm:w-60"
+                    />
+                    {setSearch && (
+                      <button
+                        type="button"
+                        aria-label="Xoá tìm kiếm"
+                        onClick={() => setSetSearch("")}
+                        className="absolute right-2 rounded-full p-0.5 text-muted hover:text-ink"
+                      >
+                        <X size={13} />
+                      </button>
+                    )}
+                  </div>
+                )}
+
+                <div ref={actionsMenuRef} className="relative">
+                  <button
+                    type="button"
+                    aria-label="Thao tác học phần và thư mục"
+                    aria-expanded={actionsMenuOpen}
+                    onClick={() => setActionsMenuOpen((v) => !v)}
+                    className={`inline-flex h-8 w-8 items-center justify-center rounded-full border transition ${
+                      actionsMenuOpen
+                        ? "border-brand bg-brand/10 text-brand-hover"
+                        : "border-line bg-card text-muted hover:border-brand-hover hover:text-ink"
+                    }`}
+                  >
+                    <MoreVertical size={16} />
+                  </button>
 
                 {actionsMenuOpen && (
                   <div className="absolute right-0 top-10 z-30 w-52 rounded-2xl border border-line bg-card p-1.5 shadow-xl">
@@ -2029,6 +2034,7 @@ export default function VocabLearn() {
                     </Link>
                   </div>
                 )}
+                </div>
               </div>
             </div>
 
@@ -2231,7 +2237,7 @@ export default function VocabLearn() {
                           <span className="shrink-0 whitespace-nowrap">{setWords.length} thuật ngữ</span>
                           <span aria-hidden="true" className="shrink-0 opacity-60">·</span>
                           {setFolder ? (
-                            <span className="inline-flex min-w-0 items-center gap-1 font-semibold text-brand-hover">
+                            <span className="inline-flex min-w-0 items-center gap-1 text-muted">
                               <Folder size={11} className="shrink-0" />
                               <span className="truncate">{setFolder.name}</span>
                             </span>
