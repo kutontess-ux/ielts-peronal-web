@@ -20,10 +20,10 @@ export async function POST(req: Request) {
     const db = ctx.db;
 
     const body = (await req.json().catch(() => ({}))) as { count?: number };
-    // Mặc định nạp lô 30 từ mỗi lần bấm để fit hoàn hảo với hạn mức 15 RPM của Gemini Free
-    const count = Math.min(50, Math.max(10, body.count ?? 30));
+    // Hỗ trợ nạp tối đa 200 từ/lượt khi đã gắn key trả phí
+    const count = Math.min(200, Math.max(10, body.count ?? 150));
 
-    // 1. Quét các từ đã có trong sách book-5000
+    // 1. Quét các từ đã có trong bất kỳ bộ sách (book-*) nào để không nạp trùng
     const haveBookKeys = new Set<string>();
     const allKeys = WORD_LIST.map((x) => normKey(x.word));
     for (let i = 0; i < allKeys.length; i += 500) {
@@ -32,7 +32,7 @@ export async function POST(req: Request) {
         .from("words")
         .select("norm_key")
         .in("norm_key", slice)
-        .eq("source", BOOK_ID);
+        .like("source", "book-%");
       for (const r of existingRows ?? []) {
         if (r.norm_key) haveBookKeys.add(r.norm_key as string);
       }

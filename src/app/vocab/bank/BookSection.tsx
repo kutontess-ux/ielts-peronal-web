@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
   BookMarked,
@@ -107,6 +107,8 @@ export default function BookSection({
   // Nạp 30 từ (cho The Oxford 3000 - chỉ Admin)
   const [oxLevel, setOxLevel] = useState("Tất cả");
   const [seedBusy, setSeedBusy] = useState(false);
+  const [autoSeeding, setAutoSeeding] = useState(false);
+  const autoSeedStopRef = useRef(false);
 
   const { badges, saveBadge } = useCardBadges();
   const [editingBadge, setEditingBadge] = useState<{ key: string; title: string } | null>(null);
@@ -345,6 +347,60 @@ export default function BookSection({
     } catch (e) {
       setErr((e as Error).message);
     } finally {
+      setSeedBusy(false);
+    }
+  };
+
+  const seed5000Auto = async (batchCount = 150) => {
+    if (!isAdmin) return;
+    if (autoSeeding) {
+      autoSeedStopRef.current = true;
+      return;
+    }
+    autoSeedStopRef.current = false;
+    setAutoSeeding(true);
+    setSeedBusy(true);
+    setErr("");
+    setMsg("");
+
+    let sessionAdded = 0;
+    let round = 0;
+    try {
+      while (!autoSeedStopRef.current) {
+        round += 1;
+        setActivityLabel(
+          "/api/books/collegiate-5000",
+          `Đợt ${round}: Đang nạp ${batchCount} từ & AI phân loại cấp độ/chủ đề...`
+        );
+        const r = await fetch("/api/books/collegiate-5000", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ count: batchCount }),
+        });
+        const j = await r.json();
+        if (!r.ok) throw new Error(j.error || `Lỗi HTTP ${r.status}`);
+
+        sessionAdded += Number(j.added ?? 0);
+        const remaining = Number(j.remaining ?? 0);
+        setMsg(
+          `Đang nạp tự động (đợt ${round}): đã thêm +${sessionAdded} từ trong phiên này · Còn lại ${remaining} từ chưa nạp.`
+        );
+
+        if (remaining <= 0 || Number(j.added ?? 0) === 0) {
+          setMsg(`Hoàn tất! Đã nạp xong toàn bộ sách 5000 Collegiate (+${sessionAdded} từ mới).`);
+          break;
+        }
+      }
+      if (autoSeedStopRef.current) {
+        setMsg(`Đã tạm dừng nạp tự động. Phiên này đã thêm +${sessionAdded} từ (bấm lại để nạp tiếp).`);
+      }
+      await onReload();
+      notifyDueUpdated();
+    } catch (e) {
+      setErr(`Dừng ở đợt ${round} (đã lưu ${sessionAdded} từ trước đó): ${(e as Error).message}`);
+      await onReload().catch(() => {});
+    } finally {
+      setAutoSeeding(false);
       setSeedBusy(false);
     }
   };
@@ -688,15 +744,30 @@ export default function BookSection({
                     </>
                   )}
                   {activeBook.id === "book-5000" && (
-                    <button
-                      onClick={() => seed5000(30)}
-                      disabled={seedBusy}
-                      title="Nạp 30 từ mỗi lần để tối ưu cho 2 key Gemini Free (15 RPM)"
-                      className="inline-flex items-center gap-2 rounded-full bg-brand px-5 py-2 text-sm font-bold text-white hover:bg-brand-hover hover:text-bg disabled:opacity-40"
-                    >
-                      {seedBusy ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} strokeWidth={2} />}
-                      {seedBusy ? "Đang nạp & dịch..." : "Nạp 30 từ 5000 Collegiate (Free AI)"}
-                    </button>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        onClick={() => void seed5000Auto(150)}
+                        disabled={seedBusy && !autoSeeding}
+                        title="Tự động chạy liên tục từng lô 150 từ cho đến khi hết 5000 từ (có thể tạm dừng bất cứ lúc nào)"
+                        className={`inline-flex items-center gap-2 rounded-full px-5 py-2 text-sm font-bold text-white transition disabled:opacity-40 ${
+                          autoSeeding
+                            ? "bg-rose-500 hover:bg-rose-400"
+                            : "bg-brand hover:bg-brand-hover hover:text-bg"
+                        }`}
+                      >
+                        {autoSeeding ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
+                        {autoSeeding ? "Dừng nạp tự động" : "Nạp tự động toàn bộ (150 từ/lượt)"}
+                      </button>
+                      <button
+                        onClick={() => void seed5000(150)}
+                        disabled={seedBusy}
+                        title="Nạp thử 1 lô 150 từ"
+                        className="inline-flex items-center gap-2 rounded-full border border-line bg-bg px-4 py-2 text-sm font-semibold text-ink hover:border-brand-hover disabled:opacity-40"
+                      >
+                        {seedBusy && !autoSeeding ? <Loader2 size={15} className="animate-spin" /> : <Plus size={15} />}
+                        Nạp 150 từ
+                      </button>
+                    </div>
                   )}
                   {bookFiltered.length > 0 && (
                     <ExportButton words={bookFiltered} filename={activeBook.id} label={`Xuất ${bookFiltered.length} từ`} />
