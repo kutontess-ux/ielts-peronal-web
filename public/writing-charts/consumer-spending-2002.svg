@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 320" font-family="system-ui, -apple-system, sans-serif">
+  <rect width="760" height="320" fill="#ffffff" rx="12"/>
+  <text x="380" y="34" text-anchor="middle" font-size="15" font-weight="700" fill="#0f172a">Percentage of National Consumer Expenditure by Category (2002)</text>
+  <g transform="translate(40, 60)" font-size="13">
+    <rect x="0" y="0" width="680" height="40" fill="#1e293b" rx="6"/>
+    <text x="20" y="25" fill="#ffffff" font-weight="700">Country</text>
+    <text x="230" y="25" fill="#ffffff" font-weight="700" text-anchor="middle">Food / Drinks / Tobacco</text>
+    <text x="440" y="25" fill="#ffffff" font-weight="700" text-anchor="middle">Clothing / Footwear</text>
+    <text x="605" y="25" fill="#ffffff" font-weight="700" text-anchor="middle">Leisure / Education</text>
+
+    
+      <rect x="0" y="42" width="680" height="42" fill="#f8fafc" stroke="#e2e8f0"/>
+      <text x="20" y="68" fill="#0f172a" font-weight="600">Ireland</text>
+      <text x="230" y="68" fill="#334155" text-anchor="middle">28.91%</text>
+      <text x="440" y="68" fill="#334155" text-anchor="middle">6.43%</text>
+      <text x="605" y="68" fill="#334155" text-anchor="middle">2.21%</text>
+      <rect x="0" y="84" width="680" height="42" fill="#ffffff" stroke="#e2e8f0"/>
+      <text x="20" y="110" fill="#0f172a" font-weight="600">Italy</text>
+      <text x="230" y="110" fill="#334155" text-anchor="middle">16.36%</text>
+      <text x="440" y="110" fill="#334155" text-anchor="middle">9.00%</text>
+      <text x="605" y="110" fill="#334155" text-anchor="middle">3.20%</text>
+      <rect x="0" y="126" width="680" height="42" fill="#f8fafc" stroke="#e2e8f0"/>
+      <text x="20" y="152" fill="#0f172a" font-weight="600">Spain</text>
+      <text x="230" y="152" fill="#334155" text-anchor="middle">18.80%</text>
+      <text x="440" y="152" fill="#334155" text-anchor="middle">6.51%</text>
+      <text x="605" y="152" fill="#334155" text-anchor="middle">1.98%</text>
+      <rect x="0" y="168" width="680" height="42" fill="#ffffff" stroke="#e2e8f0"/>
+      <text x="20" y="194" fill="#0f172a" font-weight="600">Sweden</text>
+      <text x="230" y="194" fill="#334155" text-anchor="middle">15.77%</text>
+      <text x="440" y="194" fill="#334155" text-anchor="middle">5.40%</text>
+      <text x="605" y="194" fill="#334155" text-anchor="middle">3.22%</text>
+      <rect x="0" y="210" width="680" height="42" fill="#f8fafc" stroke="#e2e8f0"/>
+      <text x="20" y="236" fill="#0f172a" font-weight="600">Turkey</text>
+      <text x="230" y="236" fill="#334155" text-anchor="middle">32.14%</text>
+      <text x="440" y="236" fill="#334155" text-anchor="middle">6.63%</text>
+      <text x="605" y="236" fill="#334155" text-anchor="middle">4.35%</text>
+  </g>
+</svg>

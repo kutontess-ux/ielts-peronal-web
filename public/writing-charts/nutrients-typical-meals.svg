@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 360" font-family="system-ui, -apple-system, sans-serif">
+  <rect width="760" height="360" fill="#ffffff" rx="12"/>
+  <text x="380" y="32" text-anchor="middle" font-size="15" font-weight="700" fill="#0f172a">Average Percentages of Three Nutrients in Typical USA Meals</text>
+  <text x="140" y="68" text-anchor="middle" font-size="13" font-weight="700" fill="#334155">Sodium</text>
+  <text x="380" y="68" text-anchor="middle" font-size="13" font-weight="700" fill="#334155">Saturated Fat</text>
+  <text x="620" y="68" text-anchor="middle" font-size="13" font-weight="700" fill="#334155">Added Sugar</text>
+  <path d="M 140 175 L 140.0 87.0 A 88 88 0 0 1 207.8 118.9 Z" fill="#38bdf8" stroke="#ffffff" stroke-width="2"/><text x="164.4" y="123.2" text-anchor="middle" dominant-baseline="middle" font-size="11" font-weight="700" fill="#ffffff">14%</text>
+<path d="M 140 175 L 207.8 118.9 A 88 88 0 0 1 177.5 254.6 Z" fill="#fbbf24" stroke="#ffffff" stroke-width="2"/><text x="195.8" y="187.5" text-anchor="middle" dominant-baseline="middle" font-size="11" font-weight="700" fill="#ffffff">29%</text>
+<path d="M 140 175 L 177.5 254.6 A 88 88 0 0 1 72.2 118.9 Z" fill="#ef4444" stroke="#ffffff" stroke-width="2"/><text x="94.8" y="210.1" text-anchor="middle" dominant-baseline="middle" font-size="11" font-weight="700" fill="#ffffff">43%</text>
+<path d="M 140 175 L 72.2 118.9 A 88 88 0 0 1 140.0 87.0 Z" fill="#22c55e" stroke="#ffffff" stroke-width="2"/><text x="115.6" y="123.2" text-anchor="middle" dominant-baseline="middle" font-size="11" font-weight="700" fill="#ffffff">14%</text>
+  <path d="M 380 175 L 380.0 87.0 A 88 88 0 0 1 454.3 127.8 Z" fill="#38bdf8" stroke="#ffffff" stroke-width="2"/><text x="407.6" y="124.9" text-anchor="middle" dominant-baseline="middle" font-size="11" font-weight="700" fill="#ffffff">16%</text>
+<path d="M 380 175 L 454.3 127.8 A 88 88 0 0 1 422.4 252.1 Z" fill="#fbbf24" stroke="#ffffff" stroke-width="2"/><text x="435.4" y="189.2" text-anchor="middle" dominant-baseline="middle" font-size="11" font-weight="700" fill="#ffffff">26%</text>
+<path d="M 380 175 L 422.4 252.1 A 88 88 0 0 1 294.8 153.1 Z" fill="#ef4444" stroke="#ffffff" stroke-width="2"/><text x="344.9" y="220.2" text-anchor="middle" dominant-baseline="middle" font-size="11" font-weight="700" fill="#ffffff">37%</text>
+<path d="M 380 175 L 294.8 153.1 A 88 88 0 0 1 380.0 87.0 Z" fill="#22c55e" stroke="#ffffff" stroke-width="2"/><text x="344.9" y="129.8" text-anchor="middle" dominant-baseline="middle" font-size="11" font-weight="700" fill="#ffffff">21%</text>
+  <path d="M 620 175 L 620.0 87.0 A 88 88 0 0 1 694.3 127.8 Z" fill="#38bdf8" stroke="#ffffff" stroke-width="2"/><text x="647.6" y="124.9" text-anchor="middle" dominant-baseline="middle" font-size="11" font-weight="700" fill="#ffffff">16%</text>
+<path d="M 620 175 L 694.3 127.8 A 88 88 0 0 1 691.2 226.7 Z" fill="#fbbf24" stroke="#ffffff" stroke-width="2"/><text x="677.2" y="176.8" text-anchor="middle" dominant-baseline="middle" font-size="11" font-weight="700" fill="#ffffff">19%</text>
+<path d="M 620 175 L 691.2 226.7 A 88 88 0 0 1 577.6 252.1 Z" fill="#ef4444" stroke="#ffffff" stroke-width="2"/><text x="632.5" y="230.8" text-anchor="middle" dominant-baseline="middle" font-size="11" font-weight="700" fill="#ffffff">23%</text>
+<path d="M 620 175 L 577.6 252.1 A 88 88 0 0 1 620.0 87.0 Z" fill="#22c55e" stroke="#ffffff" stroke-width="2"/><text x="564.6" y="160.8" text-anchor="middle" dominant-baseline="middle" font-size="11" font-weight="700" fill="#ffffff">42%</text>
+  <g transform="translate(155, 305)" font-size="12" fill="#1e293b">
+    <rect x="0" y="0" width="14" height="14" rx="3" fill="#38bdf8"/><text x="20" y="11">Breakfast</text>
+    <rect x="120" y="0" width="14" height="14" rx="3" fill="#fbbf24"/><text x="140" y="11">Lunch</text>
+    <rect x="220" y="0" width="14" height="14" rx="3" fill="#ef4444"/><text x="240" y="11">Dinner</text>
+    <rect x="320" y="0" width="14" height="14" rx="3" fill="#22c55e"/><text x="340" y="11">Snacks</text>
+  </g>
+</svg>

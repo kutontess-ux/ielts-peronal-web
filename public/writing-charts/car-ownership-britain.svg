@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 440" font-family="system-ui, -apple-system, sans-serif">
+  <rect width="760" height="440" fill="#ffffff" rx="12"/>
+  <text x="380" y="34" text-anchor="middle" font-size="16" font-weight="700" fill="#0f172a">Car Ownership in Great Britain (1971–2007)</text>
+  <text x="380" y="54" text-anchor="middle" font-size="12" fill="#64748b">Percentage of households (%)</text>
+
+  <!-- Grid -->
+  <g stroke="#e2e8f0" stroke-width="1">
+    <line x1="80" y1="80" x2="620" y2="80"/>
+    <line x1="80" y1="136" x2="620" y2="136"/>
+    <line x1="80" y1="192" x2="620" y2="192"/>
+    <line x1="80" y1="248" x2="620" y2="248"/>
+    <line x1="80" y1="304" x2="620" y2="304"/>
+    <line x1="80" y1="360" x2="620" y2="360" stroke="#94a3b8"/>
+  </g>
+  <g font-size="11" fill="#475569" text-anchor="end">
+    <text x="70" y="84">50%</text>
+    <text x="70" y="140">40%</text>
+    <text x="70" y="196">30%</text>
+    <text x="70" y="252">20%</text>
+    <text x="70" y="308">10%</text>
+    <text x="70" y="364">0%</text>
+  </g>
+  <g font-size="11" fill="#475569" text-anchor="middle">
+    <text x="90" y="382">1971</text>
+    <text x="235" y="382">1981</text>
+    <text x="380" y="382">1991</text>
+    <text x="525" y="382">2001</text>
+    <text x="610" y="382">2007</text>
+  </g>
+
+  <!-- Y scale: 0%=360, 50%=80 => 5.6px per 1% -->
+  <!-- No car: 50% (80) -> 39% (141.6) -> 33% (175.2) -> 27% (208.8) -> 25% (220) -->
+  <polyline fill="none" stroke="#e11d48" stroke-width="3" points="90,80 235,142 380,175 525,209 610,220"/>
+  <!-- 1 car: 44% (113.6) -> 45% (108) -> 45% (108) -> 45% (108) -> 44% (113.6) -->
+  <polyline fill="none" stroke="#2563eb" stroke-width="3" points="90,114 235,108 380,108 525,108 610,114"/>
+  <!-- 2 cars: 7% (320.8) -> 13% (287.2) -> 19% (253.6) -> 24% (225.6) -> 26% (214.4) -->
+  <polyline fill="none" stroke="#16a34a" stroke-width="3" points="90,321 235,287 380,254 525,226 610,214"/>
+  <!-- 3+ cars: 2% (348.8) -> 3% (343.2) -> 4% (337.6) -> 5% (332) -> 5% (332) -->
+  <polyline fill="none" stroke="#d97706" stroke-width="3" points="90,349 235,343 380,338 525,332 610,332"/>
+
+  <!-- Endpoints labels -->
+  <g font-size="11" font-weight="600">
+    <circle cx="90" cy="80" r="4" fill="#e11d48"/><circle cx="610" cy="220" r="4" fill="#e11d48"/>
+    <circle cx="90" cy="114" r="4" fill="#2563eb"/><circle cx="610" cy="114" r="4" fill="#2563eb"/>
+    <circle cx="90" cy="321" r="4" fill="#16a34a"/><circle cx="610" cy="214" r="4" fill="#16a34a"/>
+    <circle cx="90" cy="349" r="4" fill="#d97706"/><circle cx="610" cy="332" r="4" fill="#d97706"/>
+  </g>
+
+  <!-- Legend -->
+  <g transform="translate(635, 110)" font-size="12" fill="#1e293b">
+    <line x1="0" y1="0" x2="18" y2="0" stroke="#2563eb" stroke-width="3"/><text x="24" y="4">1 car (~44%)</text>
+    <line x1="0" y1="28" x2="18" y2="28" stroke="#e11d48" stroke-width="3"/><text x="24" y="32">No car (50%→25%)</text>
+    <line x1="0" y1="56" x2="18" y2="56" stroke="#16a34a" stroke-width="3"/><text x="24" y="60">2 cars (7%→26%)</text>
+    <line x1="0" y1="84" x2="18" y2="84" stroke="#d97706" stroke-width="3"/><text x="24" y="88">3+ cars (2%→5%)</text>
+  </g>
+</svg>

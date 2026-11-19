@@ -33,6 +33,7 @@ export async function POST() {
       source_name: item.source_name,
       topic: item.topic,
       prompt_text: item.prompt_text,
+      image_data_url: item.image_data_url,
       chart_notes: item.chart_notes,
       status: "queued" as const,
     }));
