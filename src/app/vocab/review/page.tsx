@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CharacterLoader } from "@/components/CharacterLoader";
 import {
+  ArrowLeft,
   ArrowLeftRight,
   ArrowRight,
   Check,
@@ -21,6 +22,7 @@ import {
   X,
   XCircle,
 } from "lucide-react";
+import { ReviewOverview } from "./ReviewOverview";
 import { levelColor, type Word } from "@/lib/mock";
 import { notifyDueUpdated } from "@/lib/due-events";
 import { useMe } from "@/lib/use-me";
@@ -145,6 +147,8 @@ export default function Review() {
   const [settings, setSettings] = useState<UserSettings>(DEFAULT_USER_SETTINGS);
 
   const [loading, setLoading] = useState(true);
+  const [viewMode, setViewMode] = useState<"overview" | "session">("overview");
+  const [startingSession, setStartingSession] = useState(false);
   const [saving, setSaving] = useState(false);
   const [clearing, setClearing] = useState(false);
   const [errMsg, setErrMsg] = useState("");
@@ -256,6 +260,7 @@ export default function Review() {
 
   useEffect(() => {
     if (
+      viewMode === "session" &&
       card &&
       !feedback &&
       answerMode === "type" &&
@@ -263,7 +268,27 @@ export default function Review() {
     ) {
       inputRef.current?.focus();
     }
-  }, [card, feedback, answerMode, promptSide, selfGradeMode]);
+  }, [viewMode, card, feedback, answerMode, promptSide, selfGradeMode]);
+
+  const startSession = useCallback(async () => {
+    if (startingSession) return;
+    if (queue.length > 0) {
+      setViewMode("session");
+      return;
+    }
+    setStartingSession(true);
+    try {
+      await load();
+      setViewMode("session");
+    } finally {
+      setStartingSession(false);
+    }
+  }, [startingSession, queue.length, load]);
+
+  const backToOverview = useCallback(() => {
+    setViewMode("overview");
+    void load();
+  }, [load]);
 
   const speakWord = useCallback((word: string) => {
     speakTts(word);
@@ -477,7 +502,7 @@ export default function Review() {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (settingsOpen || e.isComposing) return;
+      if (viewMode !== "session" || settingsOpen || e.isComposing) return;
       if (feedback) {
         if (e.key === "Enter") {
           e.preventDefault();
@@ -513,6 +538,7 @@ export default function Review() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [
+    viewMode,
     settingsOpen,
     feedback,
     goNext,
@@ -729,6 +755,35 @@ export default function Review() {
     </div>
   );
 
+  if (viewMode === "overview") {
+    return (
+      <>
+        {settingsModal}
+        {errMsg && (
+          <div className="mx-auto mb-4 max-w-2xl rounded-xl bg-rose-500/15 px-4 py-2.5 text-sm text-rose-700 dark:bg-rose-400/15 dark:text-rose-300">
+            {errMsg}
+          </div>
+        )}
+        <ReviewOverview
+          enrolledCount={enrolledCount}
+          totalWords={totalWords}
+          dueCount={dueCount}
+          totalOverdueCount={totalOverdueCount}
+          reviewedToday={reviewedToday}
+          dailyReviewLimit={dailyReviewLimit}
+          dailyLimitRemaining={dailyLimitRemaining}
+          levelCounts={levelCounts}
+          startingSession={startingSession}
+          onStartSession={startSession}
+          onOpenSettings={() => {
+            setDraftSettings(settings);
+            setSettingsOpen(true);
+          }}
+        />
+      </>
+    );
+  }
+
   if (!card) {
     const hasMoreToday = dailyLimitRemaining > 0 && totalOverdueCount > 0;
     const hitDailyLimit = dailyLimitRemaining === 0 && totalOverdueCount > 0;
@@ -754,7 +809,7 @@ export default function Review() {
                 : "Hiện tại không có từ nào đến hạn ôn. Hãy học thêm học phần hoặc quay lại sau."}
         </p>
 
-        {isAdmin && enrolledCount > 0 && (
+        {enrolledCount > 0 && (
           <div className="mt-5 flex flex-wrap justify-center gap-1.5 text-xs">
             {([1, 2, 3, 4, 5] as LeitnerLevel[]).map((lv) => (
               <span key={lv} className={`rounded-full px-2.5 py-1 font-semibold ${LEITNER_BADGE[lv].cls}`}>
@@ -776,6 +831,13 @@ export default function Review() {
           )}
           <button
             type="button"
+            onClick={backToOverview}
+            className="inline-flex items-center gap-1.5 rounded-full bg-line px-5 py-3 text-sm font-bold hover:bg-card-hover"
+          >
+            <ArrowLeft size={15} /> Xem biểu đồ 5 Level
+          </button>
+          <button
+            type="button"
             onClick={() => {
               setDraftSettings(settings);
               setSettingsOpen(true);
@@ -786,9 +848,6 @@ export default function Review() {
           </button>
           <Link href="/vocab" className="rounded-full bg-line px-6 py-3 text-sm font-bold hover:bg-card-hover">
             Đi tới Thẻ ghi nhớ
-          </Link>
-          <Link href="/vocab/bank" className="rounded-full bg-line px-6 py-3 text-sm font-bold hover:bg-card-hover">
-            Xem Kho từ vựng
           </Link>
         </div>
       </div>
@@ -805,6 +864,13 @@ export default function Review() {
       {/* Header */}
       <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
         <div>
+          <button
+            type="button"
+            onClick={backToOverview}
+            className="mb-1.5 inline-flex items-center gap-1.5 text-xs font-bold text-muted transition hover:text-ink"
+          >
+            <ArrowLeft size={14} /> Quay lại tổng quan 5 Level
+          </button>
           <h1 className="flex items-center gap-2 text-2xl font-bold">
             <Repeat size={24} strokeWidth={1.6} className="text-brand-hover" />{" "}
             {isAdmin ? "Ôn tập Leitner (Active Recall)" : "Ôn tập từ vựng"}
