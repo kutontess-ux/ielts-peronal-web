@@ -336,26 +336,31 @@ export default function Notifications() {
       ) : (
         <section className="space-y-3">
           {items.map((n) => (
-            <div key={n.title} className="flex flex-wrap items-center gap-4 rounded-2xl bg-card p-4">
-              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-bg text-brand-hover">
-                <n.icon size={21} strokeWidth={1.6} />
+            <div
+              key={n.title}
+              className="flex flex-col gap-3.5 rounded-2xl bg-card p-4 sm:flex-row sm:items-center sm:justify-between sm:gap-4"
+            >
+              <div className="flex min-w-0 flex-1 items-start gap-3.5">
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-bg text-brand-hover">
+                  <n.icon size={21} strokeWidth={1.6} />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="break-words font-bold">{n.title}</div>
+                  <div className="mt-0.5 break-words text-sm text-muted">{n.sub}</div>
+                </div>
               </div>
-              <div className="min-w-0 flex-1">
-                <div className="font-bold">{n.title}</div>
-                <div className="text-sm text-muted">{n.sub}</div>
-              </div>
-              <div className="flex items-center gap-2">
+              <div className="flex shrink-0 items-center justify-end gap-2 sm:justify-start">
                 <button
                   type="button"
                   disabled={savingKey === n.key}
                   onClick={() => updateSettings({ [n.key]: false }, n.key)}
-                  className="rounded-full border border-line px-3.5 py-2 text-xs font-semibold text-muted transition hover:border-rose-400/50 hover:text-rose-500 disabled:opacity-50"
+                  className="whitespace-nowrap rounded-full border border-line px-3.5 py-2 text-xs font-semibold text-muted transition hover:border-rose-400/50 hover:text-rose-500 disabled:opacity-50"
                 >
                   Ngừng nhận
                 </button>
                 <Link
                   href={n.href}
-                  className="rounded-full bg-brand px-5 py-2 text-sm font-bold text-white hover:bg-brand-hover hover:text-bg"
+                  className="whitespace-nowrap rounded-full bg-brand px-5 py-2 text-sm font-bold text-white hover:bg-brand-hover hover:text-bg"
                 >
                   {n.cta}
                 </Link>

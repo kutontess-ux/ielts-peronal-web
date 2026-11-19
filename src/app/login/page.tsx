@@ -63,8 +63,8 @@ function LoginCard() {
   const missingAdminEmail = status !== null && !status.adminEmailsConfigured;
 
   return (
-    <div className="flex min-h-[75vh] items-center justify-center px-4">
-      <div className="w-full max-w-md rounded-3xl border border-line bg-card p-8 text-center shadow-2xl">
+    <div className="flex min-h-[75vh] items-center justify-center sm:px-4">
+      <div className="w-full max-w-md rounded-3xl border border-line bg-card p-5 text-center shadow-2xl sm:p-8">
         <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-brand/10">
           <OwlIcon className="h-12 w-12" />
         </div>
@@ -78,20 +78,21 @@ function LoginCard() {
 
         {(missingEnv || missingMigration || missingAdminEmail) && (
           <div className="mt-4 space-y-1.5 rounded-2xl border border-amber-500/40 bg-amber-500/10 p-3.5 text-left text-xs text-amber-800 dark:text-amber-200">
-            <div className="flex items-center gap-1.5 font-bold">
-              <AlertTriangle size={14} /> Cần hoàn tất cấu hình 1 lần (dữ liệu cũ vẫn an toàn):
+            <div className="flex items-start gap-1.5 font-bold">
+              <AlertTriangle size={14} className="mt-0.5 shrink-0" />
+              <span>Cần hoàn tất cấu hình 1 lần (dữ liệu cũ vẫn an toàn):</span>
             </div>
-            <ul className="list-disc space-y-1 pl-4">
+            <ul className="list-disc space-y-1 pl-4 [overflow-wrap:anywhere]">
               {missingEnv && (
                 <li>
-                  Thiếu biến môi trường <code className="font-bold">NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY</code> (hoặc{" "}
-                  <code className="font-bold">NEXT_PUBLIC_SUPABASE_ANON_KEY</code>) trên Vercel/env.
+                  Thiếu biến môi trường <code className="break-all font-bold">NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY</code> (hoặc{" "}
+                  <code className="break-all font-bold">NEXT_PUBLIC_SUPABASE_ANON_KEY</code>) trên Vercel/env.
                 </li>
               )}
               {missingMigration && (
                 <li>
                   Chưa chạy (hoặc Supabase chưa làm mới cache) file SQL{" "}
-                  <code className="font-bold">supabase/migrations/20261118_multi_user_admin.sql</code>.
+                  <code className="break-all font-bold">supabase/migrations/20261118_multi_user_admin.sql</code>.
                   {status?.migrationError ? (
                     <span className="mt-0.5 block opacity-80">Chi tiết: {status.migrationError}</span>
                   ) : null}
@@ -99,7 +100,7 @@ function LoginCard() {
               )}
               {missingAdminEmail && (
                 <li>
-                  Chưa đặt <code className="font-bold">ADMIN_EMAILS</code> (email Google của bạn để làm Admin và giữ toàn bộ dữ liệu cũ).
+                  Chưa đặt <code className="break-all font-bold">ADMIN_EMAILS</code> (email Google của bạn để làm Admin và giữ toàn bộ dữ liệu cũ).
                 </li>
               )}
             </ul>

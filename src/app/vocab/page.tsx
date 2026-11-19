@@ -1751,8 +1751,9 @@ export default function VocabLearn() {
                             </span>
                           ) : null}
                           {setFolder && (
-                            <span className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full bg-card px-2 py-0.5 text-[10px] font-semibold text-muted">
-                              <Folder size={10} /> {setFolder.name}
+                            <span className="inline-flex max-w-full items-center gap-1 rounded-full bg-card px-2 py-0.5 text-[10px] font-semibold text-muted">
+                              <Folder size={10} className="shrink-0" />
+                              <span className="truncate">{setFolder.name}</span>
                             </span>
                           )}
                         </div>

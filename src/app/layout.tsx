@@ -22,15 +22,13 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#f0f2f8" },
-    { media: "(prefers-color-scheme: dark)", color: "#0a092d" },
-  ],
+  themeColor: "#0a092d",
   width: "device-width",
   initialScale: 1,
+  viewportFit: "cover",
 };
 
-const THEME_INIT_SCRIPT = `(function(){try{var t=localStorage.getItem("ielts_theme_v1");var d=t==="light"?"light":"dark";var r=document.documentElement;r.classList.toggle("dark",d==="dark");r.classList.toggle("light",d==="light");r.setAttribute("data-theme",d);}catch(e){}})();`;
+const THEME_INIT_SCRIPT = `(function(){try{var t=localStorage.getItem("ielts_theme_v1");var d=t==="light"?"light":"dark";var r=document.documentElement;r.classList.toggle("dark",d==="dark");r.classList.toggle("light",d==="light");r.setAttribute("data-theme",d);var m=document.querySelector('meta[name="theme-color"]');if(m){m.setAttribute("content",d==="light"?"#f0f2f8":"#0a092d");}}catch(e){}})();`;
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (

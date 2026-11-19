@@ -272,17 +272,18 @@ export default function Sidebar() {
   return (
     <>
       {/* Header trên điện thoại */}
-      <header className="sticky top-0 z-30 flex items-center justify-between border-b border-line bg-bg/95 px-4 py-3 backdrop-blur md:hidden">
-        <Link href="/" className="text-lg font-bold tracking-tight">
-          <BrandLogo iconClassName="w-7 h-7" textClassName="text-inherit" />
+      <header className="sticky top-0 z-30 flex items-center justify-between gap-2 border-b border-line bg-bg/95 px-3 py-2.5 backdrop-blur sm:px-4 sm:py-3 md:hidden">
+        <Link href="/" className="min-w-0 shrink text-base font-bold tracking-tight sm:text-lg">
+          <BrandLogo iconClassName="h-6 w-6 sm:h-7 sm:w-7" textClassName="text-inherit" />
         </Link>
-        <div className="flex items-center gap-2">
+        <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
           {meLoaded && !me && (
             <Link
               href="/login"
-              className="inline-flex items-center gap-1 rounded-xl bg-brand px-2.5 py-1.5 text-xs font-bold text-white"
+              className="inline-flex items-center gap-1 whitespace-nowrap rounded-xl bg-brand px-2 py-1.5 text-[11px] font-bold text-white sm:px-2.5 sm:text-xs"
             >
-              <LogIn size={14} /> Đăng nhập
+              <LogIn size={13} />
+              <span>Đăng nhập</span>
             </Link>
           )}
           <ThemeToggle variant="icon" />
@@ -355,7 +356,7 @@ export default function Sidebar() {
       )}
 
       {/* Thanh điều hướng dưới cùng trên điện thoại */}
-      <nav className="fixed inset-x-0 bottom-0 z-30 grid w-full max-w-[100vw] grid-cols-5 border-t border-line bg-bg/95 px-1 pt-1.5 pb-[max(0.375rem,env(safe-area-inset-bottom))] backdrop-blur md:hidden">
+      <nav className="fixed inset-x-0 bottom-0 z-30 grid w-full max-w-[100vw] grid-cols-5 border-t border-line bg-bg px-1 pt-1.5 pb-[max(0.5rem,env(safe-area-inset-bottom))] md:hidden">
         {MOBILE_TABS.map((tab) => {
           const active = tab.exact ? path === tab.href : path.startsWith(tab.href);
           const Icon = tab.icon;
