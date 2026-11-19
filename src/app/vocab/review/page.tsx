@@ -581,7 +581,7 @@ export default function Review() {
 
   if (loading) {
     return (
-      <div className="flex justify-center py-12">
+      <div className="flex min-h-[70vh] items-center justify-center">
         <CharacterLoader mode="reading" indicator="dots" size="md" />
       </div>
     );
