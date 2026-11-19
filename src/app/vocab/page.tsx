@@ -1220,6 +1220,9 @@ export default function VocabLearn() {
   } | null>(null);
   const [bookWords, setBookWords] = useState<Word[]>([]);
   const [bookLoading, setBookLoading] = useState(false);
+  const [savedBookSetId, setSavedBookSetId] = useState<string | null>(null);
+  const [bookFolderModalOpen, setBookFolderModalOpen] = useState(false);
+  const [newBookFolderName, setNewBookFolderName] = useState("");
   const [selectedSetId, setSelectedSetId] = useState<string | null>(null);
   const [openMenuSetId, setOpenMenuSetId] = useState<string | null>(null);
   const [moveFolderSet, setMoveFolderSet] = useState<StudySet | null>(null);
@@ -1346,6 +1349,30 @@ export default function VocabLearn() {
   }, []);
 
   const wordMap = useMemo(() => new Map(words.map((w) => [w.id, w])), [words]);
+  const combinedWordMap = useMemo(() => {
+    if (bookWords.length === 0) return wordMap;
+    const m = new Map(wordMap);
+    for (const w of bookWords) {
+      if (!m.has(w.id)) m.set(w.id, w);
+    }
+    return m;
+  }, [wordMap, bookWords]);
+  const bookFallbackFetchedRef = useRef(false);
+  useEffect(() => {
+    if (loading || bookFallbackFetchedRef.current || bookWords.length > 0) return;
+    const hasMissing = studySets.some((s) => s.wordIds.some((id) => !wordMap.has(id)));
+    if (!hasMissing) return;
+    bookFallbackFetchedRef.current = true;
+    fetch("/api/words?scope=books", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((bJson) => {
+        if (bJson?.words) setBookWords(bJson.words as Word[]);
+      })
+      .catch(() => {
+        // bỏ qua
+      });
+  }, [loading, bookWords.length, studySets, wordMap]);
+
   const folderMap = useMemo(() => new Map(folders.map((f) => [f.id, f])), [folders]);
   const activeFolder = activeFolderId ? folderMap.get(activeFolderId) ?? null : null;
 
@@ -1384,6 +1411,60 @@ export default function VocabLearn() {
       words: slice,
     };
   }, [bookModuleQuery, bookWords]);
+
+  const existingSavedBookSet = useMemo(() => {
+    if (!virtualBookModule) return null;
+    if (savedBookSetId) {
+      const byId = studySets.find((s) => s.id === savedBookSetId);
+      if (byId) return byId;
+    }
+    const targetIds = virtualBookModule.words.map((w) => w.id);
+    return (
+      studySets.find(
+        (s) =>
+          s.title === virtualBookModule.studySet.title &&
+          s.wordIds.length === targetIds.length &&
+          s.wordIds.every((id, idx) => id === targetIds[idx])
+      ) ?? null
+    );
+  }, [virtualBookModule, savedBookSetId, studySets]);
+
+  const handleSaveBookModuleToPersonal = useCallback(
+    (folderId?: string | null) => {
+      if (!virtualBookModule || virtualBookModule.words.length === 0) return;
+      if (existingSavedBookSet) {
+        if (folderId !== undefined) {
+          moveStudySetToFolder(existingSavedBookSet.id, folderId);
+          const folderName = folderId ? folderMap.get(folderId)?.name : null;
+          setSrsBanner({
+            text: folderName
+              ? `Đã chuyển “${existingSavedBookSet.title}” vào thư mục “${folderName}”.`
+              : `Đã cập nhật thư mục cho “${existingSavedBookSet.title}”.`,
+          });
+        } else {
+          setSrsBanner({
+            text: `Học phần “${existingSavedBookSet.title}” đã được lưu trong Học phần của bạn.`,
+          });
+        }
+        return;
+      }
+
+      const created = createStudySet({
+        title: virtualBookModule.studySet.title,
+        desc: virtualBookModule.studySet.desc,
+        wordIds: virtualBookModule.words.map((w) => w.id),
+        folderId: folderId ?? null,
+      });
+      setSavedBookSetId(created.id);
+      const folderName = folderId ? folderMap.get(folderId)?.name : null;
+      setSrsBanner({
+        text: folderName
+          ? `Đã lưu “${created.title}” vào học phần cá nhân & thư mục “${folderName}”.`
+          : `Đã lưu “${created.title}” vào Học phần của bạn.`,
+      });
+    },
+    [virtualBookModule, existingSavedBookSet, folderMap]
+  );
 
   const deepLinkAppliedRef = useRef(false);
   useEffect(() => {
@@ -1580,7 +1661,7 @@ export default function VocabLearn() {
 
   const selectedSetWords = selectedSet
     ? selectedSet.wordIds
-        .map((id) => wordMap.get(id))
+        .map((id) => combinedWordMap.get(id))
         .filter((w): w is Word => !!w)
     : [];
   const selectedSetFolder =
@@ -1618,7 +1699,20 @@ export default function VocabLearn() {
             words={activeDetailWords}
             enrolling={enrollingId === activeDetailSet.id}
             readOnly={isVirtualBook}
-            onBack={() => (isVirtualBook ? router.push("/vocab/bank") : setSelectedSetId(null))}
+            savedToPersonal={Boolean(existingSavedBookSet)}
+            onSaveToPersonal={() => handleSaveBookModuleToPersonal()}
+            onSaveToFolder={() => {
+              setNewBookFolderName("");
+              setBookFolderModalOpen(true);
+            }}
+            onBack={() =>
+              isVirtualBook
+                ? router.push(
+                    `/vocab/bank?tab=book&book=${encodeURIComponent(bookModuleQuery!.source)}`,
+                    { scroll: false }
+                  )
+                : setSelectedSetId(null)
+            }
             onOpenFolder={(fId) => {
               setSelectedSetId(null);
               setActiveFolderId(fId);
@@ -2463,6 +2557,94 @@ export default function VocabLearn() {
           folders={folders}
           onClose={() => setMoveFolderSet(null)}
         />
+      )}
+
+      {bookFolderModalOpen && virtualBookModule && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs"
+          onClick={() => setBookFolderModalOpen(false)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-md overflow-hidden rounded-3xl border border-line bg-card shadow-2xl"
+          >
+            <div className="flex items-center justify-between border-b border-line px-5 py-4">
+              <div>
+                <div className="text-base font-bold">Thêm vào thư mục</div>
+                <div className="mt-0.5 line-clamp-1 text-xs text-muted">
+                  {virtualBookModule.studySet.title}
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setBookFolderModalOpen(false)}
+                className="rounded-full p-1.5 text-muted hover:bg-bg hover:text-ink"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="max-h-72 space-y-2 overflow-y-auto p-5">
+              {folders.length === 0 ? (
+                <div className="rounded-xl bg-bg p-3 text-center text-xs text-muted">
+                  Bạn chưa có thư mục nào. Hãy tạo thư mục mới bên dưới.
+                </div>
+              ) : (
+                folders.map((f) => {
+                  const isCurrent = existingSavedBookSet?.folderId === f.id;
+                  return (
+                    <button
+                      key={f.id}
+                      type="button"
+                      onClick={() => {
+                        handleSaveBookModuleToPersonal(f.id);
+                        setBookFolderModalOpen(false);
+                      }}
+                      className={`flex w-full items-center justify-between rounded-xl border px-3.5 py-2.5 text-left text-sm font-semibold transition ${
+                        isCurrent
+                          ? "border-brand bg-brand/10 text-ink"
+                          : "border-line bg-bg text-ink hover:border-brand-hover hover:bg-card-hover"
+                      }`}
+                    >
+                      <span className="flex min-w-0 items-center gap-2">
+                        <Folder size={15} className="shrink-0 text-brand-hover" />
+                        <span className="truncate">{f.name}</span>
+                      </span>
+                      {isCurrent && <Check size={15} className="shrink-0 text-brand-hover" />}
+                    </button>
+                  );
+                })
+              )}
+
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  const name = newBookFolderName.trim();
+                  if (!name) return;
+                  const createdFolder = createStudyFolder({ name });
+                  handleSaveBookModuleToPersonal(createdFolder.id);
+                  setNewBookFolderName("");
+                  setBookFolderModalOpen(false);
+                }}
+                className="flex items-center gap-2 border-t border-line pt-3"
+              >
+                <input
+                  value={newBookFolderName}
+                  onChange={(e) => setNewBookFolderName(e.target.value)}
+                  placeholder="Hoặc tạo thư mục mới..."
+                  className="min-w-0 flex-1 rounded-full border border-line bg-bg px-3.5 py-2 text-xs outline-none focus:border-brand-hover"
+                />
+                <button
+                  type="submit"
+                  disabled={!newBookFolderName.trim()}
+                  className="inline-flex shrink-0 items-center gap-1 rounded-full bg-brand px-3.5 py-2 text-xs font-bold text-white hover:bg-brand-hover hover:text-bg disabled:opacity-40"
+                >
+                  <FolderPlus size={14} /> Tạo &amp; Lưu
+                </button>
+              </form>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

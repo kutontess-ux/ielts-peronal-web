@@ -86,14 +86,23 @@ export default function BookSection({
   onReload,
   WordGrid,
   isAdmin = false,
+  selectedBookId,
+  onSelectBook,
 }: {
   words: Word[];
   onReload: () => Promise<void>;
   WordGrid: React.ComponentType<{ list: Word[] }>;
   isAdmin?: boolean;
+  selectedBookId?: string | null;
+  onSelectBook?: (bookId: string | null) => void;
 }) {
   const [customBooks, setCustomBooks] = useState<BookMeta[]>([]);
-  const [activeBookId, setActiveBookId] = useState<string | null>(null);
+  const [internalBookId, setInternalBookId] = useState<string | null>(null);
+  const activeBookId = selectedBookId !== undefined ? selectedBookId : internalBookId;
+  const setActiveBookId = (id: string | null) => {
+    if (onSelectBook) onSelectBook(id);
+    else setInternalBookId(id);
+  };
   const [creating, setCreating] = useState(false);
   const [newTitle, setNewTitle] = useState("");
   const [newDesc, setNewDesc] = useState("");
@@ -1130,9 +1139,10 @@ export default function BookSection({
               ) : (
                 <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                   {studyModules.map((m) => (
-                    <div
+                    <Link
                       key={m.id}
-                      className="group flex flex-col justify-between rounded-2xl border border-line bg-card p-5 transition hover:border-brand-hover hover:shadow-lg hover:shadow-slate-900/5 dark:hover:shadow-black/20"
+                      href={`/vocab?source=${encodeURIComponent(activeBook.id)}&tier=${encodeURIComponent(m.tier)}&topic=${encodeURIComponent(m.topic)}&part=${m.part}`}
+                      className="group flex cursor-pointer touch-manipulation flex-col justify-between rounded-2xl border border-line bg-card p-5 transition hover:border-brand-hover hover:bg-card-hover hover:shadow-lg hover:shadow-slate-900/5 active:scale-[0.99] dark:hover:shadow-black/20"
                     >
                       <div>
                         <div className="flex items-center justify-between gap-2">
@@ -1151,15 +1161,12 @@ export default function BookSection({
                         </div>
                       </div>
                       <div className="mt-4 flex items-center justify-between border-t border-line/60 pt-3">
-                        <Link
-                          href={`/vocab?source=${encodeURIComponent(activeBook.id)}&tier=${encodeURIComponent(m.tier)}&topic=${encodeURIComponent(m.topic)}&part=${m.part}`}
-                          className="inline-flex items-center gap-1 text-xs font-bold text-brand-hover hover:underline"
-                        >
+                        <span className="inline-flex items-center gap-1 text-xs font-bold text-brand-hover group-hover:underline">
                           Học Flashcards →
-                        </Link>
+                        </span>
                         <span className="text-[11px] text-muted">{m.words[0]?.level}</span>
                       </div>
-                    </div>
+                    </Link>
                   ))}
                 </div>
               )}

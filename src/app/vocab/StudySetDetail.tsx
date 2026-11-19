@@ -5,8 +5,11 @@ import {
   ArrowLeft,
   ArrowLeftRight,
   ArrowRight,
+  BookmarkCheck,
+  BookmarkPlus,
   ClipboardCheck,
   FolderInput,
+  FolderPlus,
   Layers,
   LayoutGrid,
   Lightbulb,
@@ -35,6 +38,7 @@ export default function StudySetDetail({
   words,
   enrolling = false,
   readOnly = false,
+  savedToPersonal = false,
   onBack,
   onStartFlashcards,
   onStartLearn,
@@ -44,12 +48,15 @@ export default function StudySetDetail({
   onMoveFolder,
   onEnroll,
   onDelete,
+  onSaveToPersonal,
+  onSaveToFolder,
 }: {
   studySet: StudySet;
   folder?: StudyFolder | null;
   words: Word[];
   enrolling?: boolean;
   readOnly?: boolean;
+  savedToPersonal?: boolean;
   onBack: () => void;
   onOpenFolder?: (folderId: string) => void;
   onStartFlashcards: () => void;
@@ -60,6 +67,8 @@ export default function StudySetDetail({
   onMoveFolder: () => void;
   onEnroll: () => void;
   onDelete: () => void;
+  onSaveToPersonal?: () => void;
+  onSaveToFolder?: () => void;
 }) {
   const [shuffledIds, setShuffledIds] = useState<number[] | null>(null);
   const [idx, setIdx] = useState(0);
@@ -218,95 +227,159 @@ export default function StudySetDetail({
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">
-      {/* Top bar (Quizlet-style: Back on left, 3-dot menu on right) */}
-      <div className="flex items-center justify-between gap-3">
+      {/* Top bar (Quizlet-style: Back on left, actions + 3-dot menu on right) */}
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <button
           type="button"
           onClick={onBack}
-          className="inline-flex items-center gap-1.5 rounded-full border border-line bg-card px-3.5 py-1.5 text-xs font-bold text-muted transition hover:border-brand-hover hover:text-ink"
+          className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-line bg-card px-3.5 py-1.5 text-xs font-bold text-muted transition hover:border-brand-hover hover:text-ink"
         >
-          <ArrowLeft size={14} /> Học phần của bạn
+          <ArrowLeft size={14} /> {readOnly ? "Quay lại Bộ sách" : "Học phần của bạn"}
         </button>
 
-        <div className="relative" onClick={(e) => e.stopPropagation()}>
-          <button
-            type="button"
-            aria-label="Tuỳ chọn học phần"
-            onClick={() => setMenuOpen((o) => !o)}
-            className="rounded-full border border-line bg-card p-2 text-muted transition hover:border-brand-hover hover:text-ink"
-          >
-            <MoreVertical size={17} />
-          </button>
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          {readOnly && onSaveToPersonal && (
+            <button
+              type="button"
+              onClick={onSaveToPersonal}
+              disabled={savedToPersonal}
+              className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-bold transition ${
+                savedToPersonal
+                  ? "border-emerald-500/30 bg-emerald-500/15 text-emerald-700 dark:text-emerald-300"
+                  : "border-line bg-card text-ink hover:border-brand-hover hover:text-brand-hover"
+              }`}
+            >
+              {savedToPersonal ? <BookmarkCheck size={14} /> : <BookmarkPlus size={14} />}
+              <span className="hidden sm:inline">
+                {savedToPersonal ? "Đã lưu vào cá nhân" : "Thêm vào học phần cá nhân"}
+              </span>
+              <span className="sm:hidden">
+                {savedToPersonal ? "Đã lưu" : "Lưu cá nhân"}
+              </span>
+            </button>
+          )}
+          {readOnly && onSaveToFolder && (
+            <button
+              type="button"
+              onClick={onSaveToFolder}
+              className="inline-flex items-center gap-1.5 rounded-full border border-line bg-card px-3 py-1.5 text-xs font-bold text-ink transition hover:border-brand-hover hover:text-brand-hover"
+            >
+              <FolderPlus size={14} />
+              <span className="hidden sm:inline">Thêm vào thư mục</span>
+              <span className="sm:hidden">Thư mục</span>
+            </button>
+          )}
 
-          {menuOpen && (
-            <div className="absolute right-0 top-11 z-30 w-56 overflow-hidden rounded-2xl border border-line bg-card p-1.5 shadow-xl">
-              {words.length > 0 && (
+          <div className="relative" onClick={(e) => e.stopPropagation()}>
+            <button
+              type="button"
+              aria-label="Tuỳ chọn học phần"
+              onClick={() => setMenuOpen((o) => !o)}
+              className="rounded-full border border-line bg-card p-2 text-muted transition hover:border-brand-hover hover:text-ink"
+            >
+              <MoreVertical size={17} />
+            </button>
+
+            {menuOpen && (
+              <div className="absolute right-0 top-11 z-30 w-56 overflow-hidden rounded-2xl border border-line bg-card p-1.5 shadow-xl">
+                {readOnly && onSaveToPersonal && (
+                  <button
+                    type="button"
+                    disabled={savedToPersonal}
+                    onClick={() => {
+                      setMenuOpen(false);
+                      onSaveToPersonal();
+                    }}
+                    className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-xs font-semibold text-ink transition hover:bg-bg disabled:opacity-60"
+                  >
+                    {savedToPersonal ? (
+                      <BookmarkCheck size={14} className="text-emerald-600 dark:text-emerald-400" />
+                    ) : (
+                      <BookmarkPlus size={14} className="text-muted" />
+                    )}
+                    {savedToPersonal ? "Đã lưu vào học phần cá nhân" : "Thêm vào học phần cá nhân"}
+                  </button>
+                )}
+                {readOnly && onSaveToFolder && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMenuOpen(false);
+                      onSaveToFolder();
+                    }}
+                    className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-xs font-semibold text-ink transition hover:bg-bg"
+                  >
+                    <FolderPlus size={14} className="text-muted" /> Thêm vào thư mục
+                  </button>
+                )}
+                {words.length > 0 && (
+                  <button
+                    type="button"
+                    disabled={enrolling}
+                    onClick={() => {
+                      setMenuOpen(false);
+                      onEnroll();
+                    }}
+                    className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-xs font-semibold text-ink transition hover:bg-bg disabled:opacity-50"
+                  >
+                    {enrolling ? (
+                      <Loader2 size={14} className="animate-spin text-muted" />
+                    ) : (
+                      <Repeat size={14} className="text-muted" />
+                    )}
+                    {enrolling ? "Đang chuyển vào ôn tập..." : "Chuyển vào ôn tập"}
+                  </button>
+                )}
                 <button
                   type="button"
-                  disabled={enrolling}
                   onClick={() => {
                     setMenuOpen(false);
-                    onEnroll();
+                    setPreviewNotice(
+                      "Tính năng Chia sẻ học phần sẽ được phát triển ở bước tiếp theo."
+                    );
                   }}
-                  className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-xs font-semibold text-ink transition hover:bg-bg disabled:opacity-50"
+                  className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-xs font-semibold text-ink transition hover:bg-bg"
                 >
-                  {enrolling ? (
-                    <Loader2 size={14} className="animate-spin text-muted" />
-                  ) : (
-                    <Repeat size={14} className="text-muted" />
-                  )}
-                  {enrolling ? "Đang chuyển vào ôn tập..." : "Chuyển vào ôn tập"}
+                  <Share2 size={14} className="text-muted" /> Chia sẻ học phần
                 </button>
-              )}
-              <button
-                type="button"
-                onClick={() => {
-                  setMenuOpen(false);
-                  setPreviewNotice(
-                    "Tính năng Chia sẻ học phần sẽ được phát triển ở bước tiếp theo."
-                  );
-                }}
-                className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-xs font-semibold text-ink transition hover:bg-bg"
-              >
-                <Share2 size={14} className="text-muted" /> Chia sẻ học phần
-              </button>
-              {!readOnly && (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setMenuOpen(false);
-                      onEdit();
-                    }}
-                    className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-xs font-semibold text-ink transition hover:bg-bg"
-                  >
-                    <Pencil size={14} className="text-muted" /> Chỉnh sửa học phần
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setMenuOpen(false);
-                      onMoveFolder();
-                    }}
-                    className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-xs font-semibold text-ink transition hover:bg-bg"
-                  >
-                    <FolderInput size={14} className="text-muted" /> Chuyển thư mục
-                  </button>
-                  <div className="my-1 border-t border-line" />
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setMenuOpen(false);
-                      onDelete();
-                    }}
-                    className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-xs font-semibold text-rose-600 transition hover:bg-rose-500/10 dark:text-rose-400"
-                  >
-                    <Trash2 size={14} /> Xoá học phần
-                  </button>
-                </>
-              )}
-            </div>
-          )}
+                {!readOnly && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMenuOpen(false);
+                        onEdit();
+                      }}
+                      className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-xs font-semibold text-ink transition hover:bg-bg"
+                    >
+                      <Pencil size={14} className="text-muted" /> Chỉnh sửa học phần
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMenuOpen(false);
+                        onMoveFolder();
+                      }}
+                      className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-xs font-semibold text-ink transition hover:bg-bg"
+                    >
+                      <FolderInput size={14} className="text-muted" /> Chuyển thư mục
+                    </button>
+                    <div className="my-1 border-t border-line" />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMenuOpen(false);
+                        onDelete();
+                      }}
+                      className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-xs font-semibold text-rose-600 transition hover:bg-rose-500/10 dark:text-rose-400"
+                    >
+                      <Trash2 size={14} /> Xoá học phần
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       </div>
 

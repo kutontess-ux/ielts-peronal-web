@@ -1,6 +1,7 @@
 "use client";
 
-import { createElement, useCallback, useEffect, useMemo, useState } from "react";
+import { createElement, Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { CharacterLoader } from "@/components/CharacterLoader";
 import { ArrowLeft, BookMarked, Bot, Check, ChevronDown, ChevronLeft, ChevronRight, Loader2, Package, Repeat, RotateCcw, Search, Trash2, Upload, Volume2 } from "lucide-react";
 import { LEVEL_INFO, levelColor, type Word } from "@/lib/mock";
@@ -487,12 +488,18 @@ function ImportPanel({ onSaved }: { onSaved: () => void }) {
   );
 }
 
-export default function Bank() {
+function BankContent() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const urlTab = searchParams.get("tab");
+  const urlBook = searchParams.get("book");
+  const tab: Tab =
+    urlTab === "topic" || urlTab === "level" || urlTab === "book" ? urlTab : "all";
+
   const [words, setWords] = useState<Word[]>([]);
   const [bookWords, setBookWords] = useState<Word[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadErr, setLoadErr] = useState("");
-  const [tab, setTab] = useState<Tab>("all");
   const [sel, setSel] = useState<Sel>(null);
   const [importing, setImporting] = useState(false);
   const { isAdmin } = useMe();
@@ -696,10 +703,11 @@ export default function Bank() {
   };
 
   const changeTab = (t: Tab) => {
-    setTab(t);
     openSel(null);
     setSelectMode(false);
     setSelectedIds(new Set());
+    const nextUrl = t === "all" ? "/vocab/bank" : `/vocab/bank?tab=${t}`;
+    router.push(nextUrl, { scroll: false });
   };
 
   return (
@@ -958,6 +966,15 @@ export default function Bank() {
               words={bookWords}
               onReload={load}
               isAdmin={isAdmin}
+              selectedBookId={urlBook}
+              onSelectBook={(bookId) =>
+                router.push(
+                  bookId
+                    ? `/vocab/bank?tab=book&book=${encodeURIComponent(bookId)}`
+                    : "/vocab/bank?tab=book",
+                  { scroll: false }
+                )
+              }
               WordGrid={({ list }) => (
                 <WordGrid list={list} onDelete={isAdmin ? deleteBookWord : undefined} />
               )}
@@ -966,5 +983,19 @@ export default function Bank() {
         </>
       )}
     </div>
+  );
+}
+
+export default function Bank() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex justify-center py-10">
+          <CharacterLoader mode="reading" indicator="dots" size="md" />
+        </div>
+      }
+    >
+      <BankContent />
+    </Suspense>
   );
 }
