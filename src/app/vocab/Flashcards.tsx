@@ -413,20 +413,22 @@ export default function Flashcards({
               <Sparkles size={13} /> Luyện tập
             </button>
           )}
-          <span
-            title={`Chưa biết: ${unknownList.length}`}
-            aria-label={`Chưa biết: ${unknownList.length}`}
-            className="inline-flex min-w-[1.75rem] items-center justify-center rounded-full bg-orange-500/10 px-2 py-0.5 tabular-nums text-orange-500 dark:bg-orange-400/10 dark:text-orange-300/80"
-          >
-            {unknownList.length}
-          </span>
-          <span
-            title={`Đã biết: ${knownList.length}`}
-            aria-label={`Đã biết: ${knownList.length}`}
-            className="inline-flex min-w-[1.75rem] items-center justify-center rounded-full bg-emerald-500/10 px-2 py-0.5 tabular-nums text-emerald-500 dark:bg-emerald-400/10 dark:text-emerald-300/80"
-          >
-            {knownList.length}
-          </span>
+          <div className="inline-flex shrink-0 items-center gap-1.5">
+            <span
+              title={`Chưa biết: ${unknownList.length}`}
+              aria-label={`Chưa biết: ${unknownList.length}`}
+              className="inline-flex min-w-[1.75rem] items-center justify-center rounded-full bg-orange-500/10 px-2 py-0.5 tabular-nums text-orange-500 dark:bg-orange-400/10 dark:text-orange-300/80"
+            >
+              {unknownList.length}
+            </span>
+            <span
+              title={`Đã biết: ${knownList.length}`}
+              aria-label={`Đã biết: ${knownList.length}`}
+              className="inline-flex min-w-[1.75rem] items-center justify-center rounded-full bg-emerald-500/10 px-2 py-0.5 tabular-nums text-emerald-500 dark:bg-emerald-400/10 dark:text-emerald-300/80"
+            >
+              {knownList.length}
+            </span>
+          </div>
         </div>
       </div>
 
