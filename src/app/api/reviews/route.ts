@@ -63,6 +63,11 @@ async function loadUserSettings(
   };
 }
 
+function isMissingRecoveryLevelError(err: { message?: string } | null | undefined): boolean {
+  const msg = (err?.message ?? "").toLowerCase();
+  return msg.includes("recovery_level") && (msg.includes("does not exist") || msg.includes("schema cache"));
+}
+
 // Lấy danh sách từ đến hạn ôn tập theo thứ tự ưu tiên: level ASC, next_review_at ASC
 export async function GET() {
   try {
@@ -76,29 +81,51 @@ export async function GET() {
     const nowIso = new Date(nowMs).toISOString();
     const { startIso } = getVnDayBounds(nowMs);
 
-    const [settings, dueRes, statsRes, totalPersonalWords, reviewedTodayRes] = await Promise.all([
-      loadUserSettings(db, userId),
-      db
-        .from("reviews")
-        .select(
-          "word_id,level,next_review_at,level5_streak,recovery_level,lapses,words!inner(id,lemma,ipa,pos,meaning_vi,definition_en,example,cefr_level,topic,is_awl,synonyms,status)"
-        )
-        .eq("user_id", userId)
-        .eq("words.status", "approved")
-        .lte("next_review_at", nowIso)
-        .order("level", { ascending: true })
-        .order("next_review_at", { ascending: true })
-        .limit(200),
-      db.from("reviews").select("level").eq("user_id", userId),
-      countUserWords(db, userId),
-      db
-        .from("reviews")
-        .select("word_id", { count: "exact", head: true })
-        .eq("user_id", userId)
-        .gte("last_reviewed_at", startIso),
-    ]);
+    const [settings, initialDueRes, statsRes, totalPersonalWords, reviewedTodayRes] =
+      await Promise.all([
+        loadUserSettings(db, userId),
+        db
+          .from("reviews")
+          .select(
+            "word_id,level,next_review_at,level5_streak,recovery_level,lapses,words!inner(id,lemma,ipa,pos,meaning_vi,definition_en,example,cefr_level,topic,is_awl,synonyms,status)"
+          )
+          .eq("user_id", userId)
+          .eq("words.status", "approved")
+          .lte("next_review_at", nowIso)
+          .order("level", { ascending: true })
+          .order("next_review_at", { ascending: true })
+          .limit(200),
+        db.from("reviews").select("level").eq("user_id", userId),
+        countUserWords(db, userId),
+        db
+          .from("reviews")
+          .select("word_id", { count: "exact", head: true })
+          .eq("user_id", userId)
+          .gte("last_reviewed_at", startIso),
+      ]);
 
-    if (dueRes.error) throw new Error(dueRes.error.message);
+    let dueData = initialDueRes.data as
+      | Array<Record<string, unknown>>
+      | null;
+    if (initialDueRes.error) {
+      if (isMissingRecoveryLevelError(initialDueRes.error)) {
+        const fallbackDueRes = await db
+          .from("reviews")
+          .select(
+            "word_id,level,next_review_at,level5_streak,lapses,words!inner(id,lemma,ipa,pos,meaning_vi,definition_en,example,cefr_level,topic,is_awl,synonyms,status)"
+          )
+          .eq("user_id", userId)
+          .eq("words.status", "approved")
+          .lte("next_review_at", nowIso)
+          .order("level", { ascending: true })
+          .order("next_review_at", { ascending: true })
+          .limit(200);
+        if (fallbackDueRes.error) throw new Error(fallbackDueRes.error.message);
+        dueData = (fallbackDueRes.data ?? []) as Array<Record<string, unknown>>;
+      } else {
+        throw new Error(initialDueRes.error.message);
+      }
+    }
     if (statsRes.error) throw new Error(statsRes.error.message);
 
     const { count: overdueExactCount, error: overdueErr } = await db
@@ -110,7 +137,7 @@ export async function GET() {
 
     if (overdueErr) throw new Error(overdueErr.message);
 
-    const totalOverdueCount = overdueExactCount ?? (dueRes.data?.length ?? 0);
+    const totalOverdueCount = overdueExactCount ?? (dueData?.length ?? 0);
     const reviewedToday = reviewedTodayRes.count ?? 0;
     const dailyLimitRemaining = Math.max(0, settings.daily_review_limit - reviewedToday);
     const dueCount = Math.min(totalOverdueCount, dailyLimitRemaining);
@@ -122,8 +149,23 @@ export async function GET() {
       levelCounts[lv] += 1;
     }
 
-    const words: ReviewWord[] = (dueRes.data ?? []).slice(0, sessionLimit).map((row) => {
-      const w = Array.isArray(row.words) ? row.words[0] : row.words;
+    type RawJoinedWord = {
+      id: number;
+      lemma: string;
+      ipa: string | null;
+      pos: string | null;
+      meaning_vi: string | null;
+      definition_en: string | null;
+      example: string | null;
+      cefr_level: string | null;
+      topic: string | null;
+      is_awl: boolean;
+      synonyms?: string[] | null;
+    };
+
+    const words: ReviewWord[] = (dueData ?? []).slice(0, sessionLimit).map((row) => {
+      const rawWords = row.words as RawJoinedWord | RawJoinedWord[];
+      const w = Array.isArray(rawWords) ? rawWords[0] : rawWords;
       return {
         id: w.id,
         word: w.lemma,
@@ -136,7 +178,7 @@ export async function GET() {
         topic: w.topic ?? "Other",
         awl: Boolean(w.is_awl),
         synonyms: Array.isArray(w.synonyms) ? w.synonyms : [],
-        level_srs: clampLevel(row.level ?? 1),
+        level_srs: clampLevel(Number(row.level ?? 1)),
         level5_streak: Number(row.level5_streak ?? 0),
         recovery_level:
           row.recovery_level != null ? clampLevel(Number(row.recovery_level)) : null,
@@ -337,12 +379,28 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Dữ liệu không hợp lệ" }, { status: 400 });
     }
 
-    const { data: existing } = await db
+    let existing: Record<string, unknown> | null = null;
+    const exRes = await db
       .from("reviews")
       .select("level,level5_streak,recovery_level,lapses")
       .eq("user_id", userId)
       .eq("word_id", wordId)
       .maybeSingle();
+
+    if (exRes.error && isMissingRecoveryLevelError(exRes.error)) {
+      const fbEx = await db
+        .from("reviews")
+        .select("level,level5_streak,lapses")
+        .eq("user_id", userId)
+        .eq("word_id", wordId)
+        .maybeSingle();
+      if (fbEx.error) throw new Error(fbEx.error.message);
+      existing = (fbEx.data as Record<string, unknown> | null) ?? null;
+    } else if (exRes.error) {
+      throw new Error(exRes.error.message);
+    } else {
+      existing = (exRes.data as Record<string, unknown> | null) ?? null;
+    }
 
     const prevLapses = Number(existing?.lapses ?? 0);
     const next = computeLeitnerReview(
@@ -358,21 +416,32 @@ export async function POST(req: Request) {
 
     const now = Date.now();
     const nextReviewAt = new Date(now + next.delayMs).toISOString();
+    const baseUpsertPayload = {
+      user_id: userId,
+      word_id: wordId,
+      level: next.level,
+      next_review_at: nextReviewAt,
+      level5_streak: next.level5_streak,
+      lapses: prevLapses + next.lapsesDelta,
+      last_reviewed_at: new Date(now).toISOString(),
+    };
 
-    const { error } = await db.from("reviews").upsert(
-      {
-        user_id: userId,
-        word_id: wordId,
-        level: next.level,
-        next_review_at: nextReviewAt,
-        level5_streak: next.level5_streak,
-        recovery_level: next.recovery_level,
-        lapses: prevLapses + next.lapsesDelta,
-        last_reviewed_at: new Date(now).toISOString(),
-      },
-      { onConflict: "user_id,word_id" }
-    );
-    if (error) throw new Error(error.message);
+    const upRes = await db
+      .from("reviews")
+      .upsert(
+        { ...baseUpsertPayload, recovery_level: next.recovery_level },
+        { onConflict: "user_id,word_id" }
+      );
+    if (upRes.error) {
+      if (isMissingRecoveryLevelError(upRes.error)) {
+        const fbUp = await db
+          .from("reviews")
+          .upsert(baseUpsertPayload, { onConflict: "user_id,word_id" });
+        if (fbUp.error) throw new Error(fbUp.error.message);
+      } else {
+        throw new Error(upRes.error.message);
+      }
+    }
 
     return NextResponse.json({
       ok: true,
