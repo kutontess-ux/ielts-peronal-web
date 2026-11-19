@@ -35,10 +35,10 @@ export type BookMeta = {
 
 const DEFAULT_BOOK: BookMeta = {
   id: "book-3000",
-  title: "The Oxford 3000 (Chuẩn CEFR)",
-  desc: "Danh sách từ vựng cốt lõi chuẩn từ Oxford Learner's Dictionaries, lọc trùng kho",
-  band: "Band 6.5",
-  target: 3000,
+  title: "The Oxford 3000 & 5000 (Chuẩn CEFR)",
+  desc: "Danh sách từ vựng cốt lõi chuẩn Oxford 3000 + Oxford 5000 (CEFR A2–C1), tự động lọc trùng kho",
+  band: "Band 6.5–7.5",
+  target: 5000,
 };
 
 const COLLEGIATE_BOOK: BookMeta = {
