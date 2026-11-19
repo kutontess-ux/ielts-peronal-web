@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { CharacterLoader } from "@/components/CharacterLoader";
 import {
   AlertTriangle,
   ArrowLeft,
@@ -192,8 +193,8 @@ export default function VocabStatsPage() {
       )}
 
       {loading ? (
-        <div className="flex items-center gap-2 rounded-2xl bg-card p-8 text-muted">
-          <Loader2 className="animate-spin" size={18} /> Đang tổng hợp số liệu...
+        <div className="flex justify-center rounded-2xl bg-card p-8">
+          <CharacterLoader mode="reading" indicator="bar" size="md" />
         </div>
       ) : data ? (
         <>

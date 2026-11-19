@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
+import { CharacterLoader } from "@/components/CharacterLoader";
 import {
   AlertTriangle,
   Check,
@@ -125,8 +126,8 @@ export default function AdminPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center gap-2 py-12 text-muted">
-        <Loader2 className="animate-spin" size={18} /> Đang tải trang quản trị...
+      <div className="flex justify-center py-12">
+        <CharacterLoader mode="reading" indicator="bar" size="md" />
       </div>
     );
   }

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { CharacterLoader } from "@/components/CharacterLoader";
 import {
   AlertTriangle,
   ArrowLeft,
@@ -161,8 +162,8 @@ export default function WritingStatsPage() {
       )}
 
       {loading ? (
-        <div className="rounded-2xl border border-line bg-card p-10 text-center text-sm text-muted">
-          Đang tải thống kê Writing...
+        <div className="rounded-2xl border border-line bg-card p-10 flex justify-center">
+          <CharacterLoader mode="writing" indicator="bar" size="md" />
         </div>
       ) : (
         <>

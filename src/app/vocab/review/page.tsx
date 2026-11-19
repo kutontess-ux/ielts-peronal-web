@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { CharacterLoader } from "@/components/CharacterLoader";
 import {
   ArrowLeftRight,
   ArrowRight,
@@ -549,9 +550,8 @@ export default function Review() {
 
   if (loading) {
     return (
-      <div className="flex items-center gap-2 py-12 text-muted">
-        <Loader2 className="animate-spin" size={18} />{" "}
-        {isAdmin ? "Đang tải phiên ôn tập Leitner..." : "Đang tải phiên ôn tập..."}
+      <div className="flex justify-center py-12">
+        <CharacterLoader mode="reading" indicator="bar" size="md" />
       </div>
     );
   }

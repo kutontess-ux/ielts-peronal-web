@@ -12,6 +12,7 @@ import { cleanTerm, normKey, possibleLemmas } from "@/lib/normalize";
 import { speakWord } from "@/lib/tts";
 import { useMe } from "@/lib/use-me";
 import { createStudySet, updateStudySet, useStudySets } from "@/lib/study-sets";
+import { CharacterLoader } from "@/components/CharacterLoader";
 
 type Passage = {
   id: number;
@@ -2571,8 +2572,8 @@ export default function ReadingDetailPage() {
   return (
     <Suspense
       fallback={
-        <div className="rounded-2xl border border-line bg-card p-10 text-center text-sm text-muted">
-          Đang mở bài đọc...
+        <div className="rounded-2xl border border-line bg-card p-10 flex justify-center">
+          <CharacterLoader mode="reading" indicator="bar" size="md" />
         </div>
       }
     >

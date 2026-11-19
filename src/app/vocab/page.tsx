@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { CharacterLoader } from "@/components/CharacterLoader";
 import {
   ArrowLeft, BarChart3, Bell, Bot, CalendarClock, Check, CheckCircle2, ChevronDown, ChevronUp, Clock, Folder, FolderInput, FolderOpen, FolderPlus, Layers, ListChecks, Loader2, MoreVertical, Pencil, PenLine, Plus, Repeat, Search, Settings2, Sparkles, Trash2, X,
 } from "lucide-react";
@@ -2116,8 +2117,8 @@ export default function VocabLearn() {
             </div>
           )
         ) : loading ? (
-          <div className="flex items-center gap-2 py-8 text-muted">
-            <Loader2 className="animate-spin" size={18} /> Đang tải học phần...
+          <div className="flex justify-center py-8">
+            <CharacterLoader mode="reading" indicator="bar" size="md" />
           </div>
         ) : activeFolder && visibleSets.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-line bg-card p-10 text-center">

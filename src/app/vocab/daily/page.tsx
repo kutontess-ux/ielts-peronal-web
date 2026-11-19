@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { CharacterLoader } from "@/components/CharacterLoader";
 import {
   Bell,
   BellOff,
@@ -834,18 +835,8 @@ export default function Daily() {
       </div>
 
       {loading && (
-        <div className="flex items-center gap-3 rounded-2xl bg-card p-8 text-muted">
-          <Loader2 className="animate-spin text-brand-hover" size={22} />
-          <div>
-            <div className="font-bold text-ink">
-              {generating ? "Đang tạo 10 từ vựng hôm nay..." : "Đang tải dữ liệu..."}
-            </div>
-            <div className="text-sm">
-              {generating
-                ? "Agent đang đọc RSS báo BBC/Guardian, lọc trùng theo lịch sử của bạn và bổ sung nghĩa (tính 1 lượt AI trong ngày)."
-                : "Đang lấy danh sách từ đã lưu từ Supabase."}
-            </div>
-          </div>
+        <div className="flex justify-center rounded-2xl bg-card p-8">
+          <CharacterLoader mode="reading" indicator="bar" size="md" />
         </div>
       )}
 

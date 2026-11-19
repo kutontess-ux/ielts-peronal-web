@@ -1,6 +1,7 @@
 "use client";
 
 import { createElement, useCallback, useEffect, useMemo, useState } from "react";
+import { CharacterLoader } from "@/components/CharacterLoader";
 import { ArrowLeft, BookMarked, Bot, Check, ChevronDown, ChevronLeft, ChevronRight, Loader2, Package, Repeat, RotateCcw, Search, Trash2, Upload, Volume2 } from "lucide-react";
 import { LEVEL_INFO, levelColor, type Word } from "@/lib/mock";
 import { topicIcon } from "@/lib/icons";
@@ -720,7 +721,11 @@ export default function Bank() {
 
       {importing && <ImportPanel onSaved={load} />}
 
-      {loading && <div className="flex items-center gap-2 py-10 text-muted"><Loader2 className="animate-spin" size={18} /> Đang tải kho từ vựng...</div>}
+      {loading && (
+        <div className="flex justify-center py-10">
+          <CharacterLoader mode="reading" indicator="bar" size="md" />
+        </div>
+      )}
       {loadErr && <div className="rounded-xl bg-rose-500/15 p-4 text-sm text-rose-700 dark:bg-rose-400/15 dark:text-rose-300">Không tải được kho: {loadErr}</div>}
 
       {!loading && !loadErr && words.length === 0 && tab !== "book" && (

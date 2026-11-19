@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import {
   BookOpen, Calendar, CheckCircle2, FileText, Plus, Search, Trash2, X,
 } from "lucide-react";
+import { CharacterLoader } from "@/components/CharacterLoader";
 
 type PassageSummary = {
   id: number;
@@ -166,8 +167,8 @@ export default function ReadingHistoryPage() {
 
       {/* Danh sách lịch sử bài đọc */}
       {loading ? (
-        <div className="rounded-2xl border border-line bg-card p-8 text-center text-sm text-muted">
-          Đang tải lịch sử bài đọc...
+        <div className="rounded-2xl border border-line bg-card p-8 flex justify-center">
+          <CharacterLoader mode="reading" indicator="bar" size="md" />
         </div>
       ) : filtered.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-line bg-card/40 p-10 text-center">

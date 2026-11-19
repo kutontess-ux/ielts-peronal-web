@@ -4,6 +4,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
+import { CharacterLoader } from "@/components/CharacterLoader";
 import {
   AlertTriangle,
   BarChart3,
@@ -1072,8 +1073,8 @@ export default function WritingHubPage() {
             )}
 
             {loading ? (
-              <div className="rounded-2xl border border-line bg-card p-10 text-center text-sm text-muted">
-                Đang tải Kho đề chờ luyện...
+              <div className="rounded-2xl border border-line bg-card p-10 flex justify-center">
+                <CharacterLoader mode="writing" indicator="bar" size="md" />
               </div>
             ) : filteredPrompts.length === 0 ? (
               <div className="rounded-2xl border border-line bg-card p-10 text-center">

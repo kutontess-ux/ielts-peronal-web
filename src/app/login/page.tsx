@@ -4,6 +4,7 @@ import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { AlertTriangle, BookOpenCheck, Loader2, ShieldCheck } from "lucide-react";
 import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
+import { CharacterLoader } from "@/components/CharacterLoader";
 
 type AuthStatus = {
   authConfigured: boolean;
@@ -154,8 +155,8 @@ export default function LoginPage() {
   return (
     <Suspense
       fallback={
-        <div className="flex min-h-[70vh] items-center justify-center text-sm text-muted">
-          <Loader2 size={18} className="mr-2 animate-spin" /> Đang tải trang đăng nhập...
+        <div className="flex min-h-[70vh] items-center justify-center">
+          <CharacterLoader mode="reading" indicator="bar" size="md" />
         </div>
       }
     >
