@@ -3,7 +3,6 @@ import { supabaseAdmin } from "@/lib/supabase";
 import { DEFAULT_NOTIFICATION_SETTINGS, DEFAULT_USER_SETTINGS } from "@/lib/srs";
 import { isWebPushConfigured, sendPushNotification, type StoredPushSubscription } from "@/lib/web-push";
 
-export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 const VN_OFFSET_MS = 7 * 60 * 60 * 1000;

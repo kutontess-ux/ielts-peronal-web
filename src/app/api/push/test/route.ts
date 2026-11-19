@@ -3,8 +3,6 @@ import { requireAuth } from "@/lib/supabase-server";
 import { DEFAULT_USER_SETTINGS } from "@/lib/srs";
 import { isWebPushConfigured, sendPushNotification } from "@/lib/web-push";
 
-export const dynamic = "force-dynamic";
-
 const VN_OFFSET_MS = 7 * 60 * 60 * 1000;
 
 function getVnDayStartIso(nowMs = Date.now()): string {

@@ -2,8 +2,6 @@ import { NextResponse } from "next/server";
 import { requireAuth } from "@/lib/supabase-server";
 import { getVapidPublicKey, isWebPushConfigured } from "@/lib/web-push";
 
-export const dynamic = "force-dynamic";
-
 type SubscribeBody = {
   endpoint?: string;
   keys?: {
