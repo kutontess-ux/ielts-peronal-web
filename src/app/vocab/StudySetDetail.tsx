@@ -6,14 +6,13 @@ import {
   ArrowLeftRight,
   ArrowRight,
   ClipboardCheck,
-  Folder,
   FolderInput,
   Layers,
   LayoutGrid,
   Lightbulb,
   Loader2,
   Maximize2,
-  MoreHorizontal,
+  MoreVertical,
   Pause,
   Pencil,
   Play,
@@ -33,11 +32,9 @@ import { VoiceSettingsButton } from "@/components/VoiceSettingsModal";
 
 export default function StudySetDetail({
   studySet,
-  folder,
   words,
   enrolling = false,
   onBack,
-  onOpenFolder,
   onStartFlashcards,
   onStartLearn,
   onStartTest,
@@ -48,7 +45,7 @@ export default function StudySetDetail({
   onDelete,
 }: {
   studySet: StudySet;
-  folder: StudyFolder | null;
+  folder?: StudyFolder | null;
   words: Word[];
   enrolling?: boolean;
   onBack: () => void;
@@ -206,216 +203,105 @@ export default function StudySetDetail({
     return parts.join(" · ") || "Lật thẻ để xem định nghĩa chi tiết";
   }, [currentCard, meaningFirst]);
 
+  const createdLabel = useMemo(() => {
+    if (!studySet.createdAt) return "";
+    const d = new Date(studySet.createdAt);
+    if (!Number.isFinite(d.getTime())) return "";
+    return d.toLocaleDateString("vi-VN", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+    });
+  }, [studySet.createdAt]);
+
   return (
     <div className="mx-auto max-w-4xl space-y-6">
-      {/* Top breadcrumb & action bar */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex min-w-0 flex-wrap items-center gap-2">
+      {/* Top bar (Quizlet-style: Back on left, 3-dot menu on right) */}
+      <div className="flex items-center justify-between gap-3">
+        <button
+          type="button"
+          onClick={onBack}
+          className="inline-flex items-center gap-1.5 rounded-full border border-line bg-card px-3.5 py-1.5 text-xs font-bold text-muted transition hover:border-brand-hover hover:text-ink"
+        >
+          <ArrowLeft size={14} /> Học phần của bạn
+        </button>
+
+        <div className="relative" onClick={(e) => e.stopPropagation()}>
           <button
             type="button"
-            onClick={onBack}
-            className="inline-flex items-center gap-1.5 rounded-full border border-line bg-card px-3.5 py-1.5 text-xs font-bold text-muted transition hover:border-brand-hover hover:text-ink"
-          >
-            <ArrowLeft size={14} /> Học phần của bạn
-          </button>
-          {folder && (
-            <button
-              type="button"
-              onClick={() => onOpenFolder?.(folder.id)}
-              className="inline-flex items-center gap-1.5 rounded-full bg-brand/10 px-3 py-1.5 text-xs font-semibold text-brand-hover transition hover:bg-brand/20"
-            >
-              <Folder size={13} /> {folder.name}
-            </button>
-          )}
-        </div>
-
-        <div className="flex items-center gap-2">
-          {words.length > 0 && (
-            <button
-              type="button"
-              disabled={enrolling}
-              onClick={onEnroll}
-              className="inline-flex items-center gap-1.5 rounded-full border border-line bg-card px-3.5 py-1.5 text-xs font-bold text-ink transition hover:border-brand-hover disabled:opacity-50"
-            >
-              {enrolling ? (
-                <Loader2 size={13} className="animate-spin" />
-              ) : (
-                <Repeat size={13} />
-              )}
-              <span className="hidden sm:inline">
-                {enrolling ? "Đang chuyển..." : "Chuyển vào ôn tập"}
-              </span>
-              <span className="sm:hidden">Ôn tập</span>
-            </button>
-          )}
-
-          <button
-            type="button"
-            title="Chia sẻ học phần"
-            onClick={() =>
-              setPreviewNotice(
-                "Tính năng Chia sẻ học phần sẽ được phát triển ở bước tiếp theo."
-              )
-            }
+            aria-label="Tuỳ chọn học phần"
+            onClick={() => setMenuOpen((o) => !o)}
             className="rounded-full border border-line bg-card p-2 text-muted transition hover:border-brand-hover hover:text-ink"
           >
-            <Share2 size={15} />
+            <MoreVertical size={17} />
           </button>
 
-          <button
-            type="button"
-            title="Chỉnh sửa học phần"
-            onClick={onEdit}
-            className="inline-flex items-center gap-1.5 rounded-full border border-line bg-card px-3.5 py-1.5 text-xs font-bold text-ink transition hover:border-brand-hover"
-          >
-            <Pencil size={13} />
-            <span className="hidden sm:inline">Chỉnh sửa</span>
-          </button>
-
-          <div className="relative" onClick={(e) => e.stopPropagation()}>
-            <button
-              type="button"
-              aria-label="Tuỳ chọn học phần"
-              onClick={() => setMenuOpen((o) => !o)}
-              className="rounded-full border border-line bg-card p-2 text-muted transition hover:border-brand-hover hover:text-ink"
-            >
-              <MoreHorizontal size={16} />
-            </button>
-
-            {menuOpen && (
-              <div className="absolute right-0 top-11 z-30 w-52 overflow-hidden rounded-2xl border border-line bg-card p-1.5 shadow-xl">
+          {menuOpen && (
+            <div className="absolute right-0 top-11 z-30 w-56 overflow-hidden rounded-2xl border border-line bg-card p-1.5 shadow-xl">
+              {words.length > 0 && (
                 <button
                   type="button"
+                  disabled={enrolling}
                   onClick={() => {
                     setMenuOpen(false);
-                    onEdit();
+                    onEnroll();
                   }}
-                  className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-xs font-semibold text-ink transition hover:bg-bg"
+                  className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-xs font-semibold text-ink transition hover:bg-bg disabled:opacity-50"
                 >
-                  <Pencil size={14} className="text-muted" /> Chỉnh sửa học phần
+                  {enrolling ? (
+                    <Loader2 size={14} className="animate-spin text-muted" />
+                  ) : (
+                    <Repeat size={14} className="text-muted" />
+                  )}
+                  {enrolling ? "Đang chuyển vào ôn tập..." : "Chuyển vào ôn tập"}
                 </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setMenuOpen(false);
-                    onMoveFolder();
-                  }}
-                  className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-xs font-semibold text-ink transition hover:bg-bg"
-                >
-                  <FolderInput size={14} className="text-muted" /> Chuyển thư mục
-                </button>
-                {words.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setMenuOpen(false);
-                      onEnroll();
-                    }}
-                    className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-xs font-semibold text-ink transition hover:bg-bg"
-                  >
-                    <Repeat size={14} className="text-muted" /> Chuyển vào ôn tập
-                  </button>
-                )}
-                <div className="my-1 border-t border-line" />
-                <button
-                  type="button"
-                  onClick={() => {
-                    setMenuOpen(false);
-                    onDelete();
-                  }}
-                  className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-xs font-semibold text-rose-600 transition hover:bg-rose-500/10 dark:text-rose-400"
-                >
-                  <Trash2 size={14} /> Xoá học phần
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Study set title & count */}
-      <div>
-        <h1 className="break-words text-2xl font-extrabold tracking-tight text-ink sm:text-3xl">
-          {studySet.title}
-        </h1>
-        <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs font-medium text-muted sm:text-sm">
-          <span>{words.length} thuật ngữ</span>
-          {studySet.desc && (
-            <>
-              <span>·</span>
-              <span className="break-words">{studySet.desc}</span>
-            </>
+              )}
+              <button
+                type="button"
+                onClick={() => {
+                  setMenuOpen(false);
+                  setPreviewNotice(
+                    "Tính năng Chia sẻ học phần sẽ được phát triển ở bước tiếp theo."
+                  );
+                }}
+                className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-xs font-semibold text-ink transition hover:bg-bg"
+              >
+                <Share2 size={14} className="text-muted" /> Chia sẻ học phần
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setMenuOpen(false);
+                  onEdit();
+                }}
+                className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-xs font-semibold text-ink transition hover:bg-bg"
+              >
+                <Pencil size={14} className="text-muted" /> Chỉnh sửa học phần
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setMenuOpen(false);
+                  onMoveFolder();
+                }}
+                className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-xs font-semibold text-ink transition hover:bg-bg"
+              >
+                <FolderInput size={14} className="text-muted" /> Chuyển thư mục
+              </button>
+              <div className="my-1 border-t border-line" />
+              <button
+                type="button"
+                onClick={() => {
+                  setMenuOpen(false);
+                  onDelete();
+                }}
+                className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-xs font-semibold text-rose-600 transition hover:bg-rose-500/10 dark:text-rose-400"
+              >
+                <Trash2 size={14} /> Xoá học phần
+              </button>
+            </div>
           )}
         </div>
-      </div>
-
-      {/* Study modes row (Quizlet-style) */}
-      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4 sm:gap-3">
-        <button
-          type="button"
-          disabled={words.length === 0}
-          onClick={onStartFlashcards}
-          className="group flex items-center gap-3 rounded-2xl border border-line bg-card px-4 py-3.5 text-left transition hover:border-brand-hover hover:bg-card-hover disabled:opacity-45"
-        >
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-brand/15 text-brand-hover">
-            <Layers size={18} />
-          </div>
-          <div className="min-w-0">
-            <div className="text-sm font-bold text-ink">Thẻ ghi nhớ</div>
-            <div className="text-[11px] text-muted">Lật thẻ toàn màn hình</div>
-          </div>
-        </button>
-
-        <button
-          type="button"
-          disabled={words.length === 0}
-          onClick={onStartLearn}
-          className="group flex items-center gap-3 rounded-2xl border border-line bg-card px-4 py-3.5 text-left transition hover:border-brand-hover hover:bg-card-hover disabled:opacity-45"
-        >
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-brand/15 text-brand-hover">
-            <Sparkles size={18} />
-          </div>
-          <div className="min-w-0">
-            <div className="text-sm font-bold text-ink">Học</div>
-            <div className="text-[11px] text-muted">Trắc nghiệm & gõ từ</div>
-          </div>
-        </button>
-
-        <button
-          type="button"
-          disabled={words.length === 0}
-          onClick={onStartTest}
-          className="group flex items-center gap-3 rounded-2xl border border-line bg-card px-4 py-3.5 text-left transition hover:border-brand-hover hover:bg-card-hover disabled:opacity-45"
-        >
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-brand/15 text-brand-hover">
-            <ClipboardCheck size={18} />
-          </div>
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-1.5">
-              <span className="text-sm font-bold text-ink">Kiểm tra</span>
-            </div>
-            <div className="text-[11px] text-muted">Đúng/Sai, Trắc nghiệm, Tự luận</div>
-          </div>
-        </button>
-
-        <button
-          type="button"
-          disabled={words.length < 2}
-          onClick={onStartMatch}
-          className="group flex items-center gap-3 rounded-2xl border border-line bg-card px-4 py-3.5 text-left transition hover:border-brand-hover hover:bg-card-hover disabled:opacity-45"
-        >
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-brand/15 text-brand-hover">
-            <LayoutGrid size={18} />
-          </div>
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-1.5">
-              <span className="text-sm font-bold text-ink">Ghép thẻ</span>
-            </div>
-            <div className="text-[11px] text-muted">
-              {words.length < 2 ? "Cần ít nhất 2 từ" : "Ghép từ với định nghĩa"}
-            </div>
-          </div>
-        </button>
       </div>
 
       {previewNotice && (
@@ -431,7 +317,7 @@ export default function StudySetDetail({
         </div>
       )}
 
-      {/* Main interactive Flashcard viewer */}
+      {/* 1. Main interactive Flashcard viewer (First, like Quizlet) */}
       {words.length === 0 ? (
         <div className="rounded-3xl border border-dashed border-line bg-card p-10 text-center">
           <Layers size={36} className="mx-auto text-muted" />
@@ -633,6 +519,93 @@ export default function StudySetDetail({
           </div>
         </div>
       ) : null}
+
+      {/* 2. Study set title, created date & term count (below card, Quizlet-style) */}
+      <div>
+        <h1 className="break-words text-2xl font-extrabold tracking-tight text-ink sm:text-3xl">
+          {studySet.title}
+        </h1>
+        <div className="mt-1.5 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs font-medium text-muted sm:text-sm">
+          <span>{words.length} thuật ngữ</span>
+          {createdLabel && (
+            <>
+              <span>·</span>
+              <span>Ngày tạo: {createdLabel}</span>
+            </>
+          )}
+          {studySet.desc && (
+            <>
+              <span>·</span>
+              <span className="break-words">{studySet.desc}</span>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* 3. Study modes (below title & card, Quizlet-style) */}
+      <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 sm:gap-3">
+        <button
+          type="button"
+          disabled={words.length === 0}
+          onClick={onStartFlashcards}
+          className="group flex items-center gap-3.5 rounded-2xl border border-line bg-card px-4 py-3.5 text-left transition hover:border-brand-hover hover:bg-card-hover disabled:opacity-45"
+        >
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-brand/15 text-brand-hover">
+            <Layers size={18} />
+          </div>
+          <div className="min-w-0">
+            <div className="text-sm font-bold text-ink">Thẻ ghi nhớ</div>
+            <div className="text-[11px] text-muted">Lật thẻ toàn màn hình</div>
+          </div>
+        </button>
+
+        <button
+          type="button"
+          disabled={words.length === 0}
+          onClick={onStartLearn}
+          className="group flex items-center gap-3.5 rounded-2xl border border-line bg-card px-4 py-3.5 text-left transition hover:border-brand-hover hover:bg-card-hover disabled:opacity-45"
+        >
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-brand/15 text-brand-hover">
+            <Sparkles size={18} />
+          </div>
+          <div className="min-w-0">
+            <div className="text-sm font-bold text-ink">Học</div>
+            <div className="text-[11px] text-muted">Trắc nghiệm & gõ từ</div>
+          </div>
+        </button>
+
+        <button
+          type="button"
+          disabled={words.length === 0}
+          onClick={onStartTest}
+          className="group flex items-center gap-3.5 rounded-2xl border border-line bg-card px-4 py-3.5 text-left transition hover:border-brand-hover hover:bg-card-hover disabled:opacity-45"
+        >
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-brand/15 text-brand-hover">
+            <ClipboardCheck size={18} />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="text-sm font-bold text-ink">Kiểm tra</div>
+            <div className="text-[11px] text-muted">Đúng/Sai, Trắc nghiệm, Tự luận</div>
+          </div>
+        </button>
+
+        <button
+          type="button"
+          disabled={words.length < 2}
+          onClick={onStartMatch}
+          className="group flex items-center gap-3.5 rounded-2xl border border-line bg-card px-4 py-3.5 text-left transition hover:border-brand-hover hover:bg-card-hover disabled:opacity-45"
+        >
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-brand/15 text-brand-hover">
+            <LayoutGrid size={18} />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="text-sm font-bold text-ink">Ghép thẻ</div>
+            <div className="text-[11px] text-muted">
+              {words.length < 2 ? "Cần ít nhất 2 từ" : "Ghép từ với định nghĩa"}
+            </div>
+          </div>
+        </button>
+      </div>
 
       {/* Term list below (Quizlet-style) */}
       {words.length > 0 && (
