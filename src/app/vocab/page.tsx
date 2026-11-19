@@ -1586,35 +1586,55 @@ export default function VocabLearn() {
         <>
       {/* Thẻ tổng quan Cần ôn hôm nay */}
       <section>
-        {stats.dueCount > 0 ? (
+        {loading ? (
+          <div className="flex w-full items-center justify-between gap-4 rounded-2xl bg-card px-5 py-4 shadow-md shadow-slate-900/5 dark:shadow-black/25">
+            <div className="flex items-center gap-3">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-brand/10 text-brand-hover">
+                <Loader2 size={18} className="animate-spin" />
+              </span>
+              <div>
+                <div className="text-xs font-semibold text-muted">Ôn tập hôm nay</div>
+                <div className="text-sm font-bold text-ink">Đang kiểm tra từ đến hạn...</div>
+              </div>
+            </div>
+          </div>
+        ) : stats.dueCount > 0 ? (
           <Link
             href="/vocab/review"
-            className="inline-flex w-full max-w-xs flex-col justify-between rounded-2xl bg-card p-4 shadow-md shadow-slate-900/5 transition hover:-translate-y-0.5 hover:shadow-lg dark:shadow-black/25"
+            className="flex w-full items-center justify-between gap-4 rounded-2xl bg-card px-5 py-4 shadow-md shadow-slate-900/5 transition hover:-translate-y-0.5 hover:shadow-lg dark:shadow-black/25"
           >
-            <div className="flex items-center justify-between gap-2 text-xs font-semibold text-brand-hover">
-              <span className="inline-flex items-center gap-1.5">
-                <Bell size={14} strokeWidth={1.9} /> Cần ôn hôm nay
+            <div className="flex items-center gap-3">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand/10 text-brand-hover">
+                <Bell size={18} strokeWidth={1.9} />
               </span>
+              <div>
+                <div className="text-xs font-semibold text-brand-hover">Cần ôn hôm nay</div>
+                <div className="text-xl font-bold text-ink sm:text-2xl">{stats.dueCount} từ</div>
+              </div>
             </div>
-            <div className="mt-2 flex items-baseline justify-between gap-3">
-              <span className="text-2xl font-bold text-ink">{stats.dueCount} từ</span>
-              <span className="rounded-full bg-brand px-3 py-1 text-xs font-bold text-white shadow-xs">
-                Ôn ngay
-              </span>
-            </div>
+            <span className="shrink-0 rounded-full bg-brand px-4 py-2 text-xs font-bold text-white shadow-xs sm:text-sm">
+              Ôn ngay
+            </span>
           </Link>
         ) : (
           <Link
             href="/vocab/review"
-            className="inline-flex w-full max-w-xs flex-col justify-between rounded-2xl bg-card p-4 shadow-md shadow-slate-900/5 transition hover:-translate-y-0.5 hover:shadow-lg dark:shadow-black/25"
+            className="flex w-full items-center justify-between gap-4 rounded-2xl bg-card px-5 py-4 shadow-md shadow-slate-900/5 transition hover:-translate-y-0.5 hover:shadow-lg dark:shadow-black/25"
           >
-            <div className="flex items-center gap-1.5 text-xs font-semibold text-emerald-700 dark:text-emerald-300">
-              <CheckCircle2 size={14} strokeWidth={2} /> Ôn tập hôm nay
+            <div className="flex items-center gap-3">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+                <CheckCircle2 size={18} strokeWidth={2} />
+              </span>
+              <div>
+                <div className="text-xs font-semibold text-emerald-700 dark:text-emerald-300">
+                  Ôn tập hôm nay · Đã hoàn thành
+                </div>
+                <div className="text-xs text-muted">Không có từ đến hạn · Xem biểu đồ 5 Level</div>
+              </div>
             </div>
-            <div className="mt-1.5 text-base font-bold text-emerald-700 dark:text-emerald-300">
-              Đã hoàn thành
-            </div>
-            <div className="text-[11px] text-muted">Không có từ đến hạn · Xem 5 Level</div>
+            <span className="shrink-0 rounded-full bg-bg px-3.5 py-1.5 text-xs font-bold text-ink shadow-xs">
+              Xem 5 Level
+            </span>
           </Link>
         )}
       </section>
@@ -2103,9 +2123,20 @@ export default function VocabLearn() {
             </div>
           )
         ) : loading ? (
-          <div className="flex justify-center py-8">
-            <CharacterLoader mode="reading" indicator="dots" size="md" />
-          </div>
+          !activeFolder && studySets.length > 0 ? (
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              {[0, 1, 2].map((i) => (
+                <div
+                  key={i}
+                  className="h-20 animate-pulse rounded-2xl bg-card/70 p-4 shadow-sm shadow-slate-900/5 dark:shadow-black/20"
+                />
+              ))}
+            </div>
+          ) : (
+            <div className="flex justify-center py-8">
+              <CharacterLoader mode="reading" indicator="dots" size="md" />
+            </div>
+          )
         ) : activeFolder && visibleSets.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-line bg-card p-10 text-center">
             <FolderOpen size={40} strokeWidth={1.3} className="mx-auto text-brand-hover" />
