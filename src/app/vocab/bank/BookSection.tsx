@@ -2,7 +2,22 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, BookMarked, Bot, Check, ChevronDown, ChevronUp, Loader2, Plus, Repeat, Search, Sparkles, Trash2 } from "lucide-react";
+import {
+  ArrowLeft,
+  BookMarked,
+  Bot,
+  Check,
+  ChevronDown,
+  ChevronUp,
+  Layers,
+  LayoutGrid,
+  Loader2,
+  Plus,
+  Repeat,
+  Search,
+  Sparkles,
+  Trash2,
+} from "lucide-react";
 import { levelColor, type Word } from "@/lib/mock";
 import { enrollWordsInSrs } from "@/lib/srs";
 import { notifyDueUpdated } from "@/lib/due-events";
@@ -24,6 +39,14 @@ const DEFAULT_BOOK: BookMeta = {
   desc: "Danh sách từ vựng cốt lõi chuẩn từ Oxford Learner's Dictionaries, lọc trùng kho",
   band: "Band 6.5",
   target: 3000,
+};
+
+const COLLEGIATE_BOOK: BookMeta = {
+  id: "book-5000",
+  title: "5000 Collegiate Words (IELTS Prep)",
+  desc: "Bộ 5000 từ vựng học thuật chuyên sâu chia theo từng cấp độ & chủ đề kiểu Quizlet",
+  band: "Band 7.0+",
+  target: 5000,
 };
 
 const STORAGE_KEY = "ielts_custom_books_v1";
@@ -119,6 +142,7 @@ export default function BookSection({
   const books = useMemo(() => {
     const map = new Map<string, BookMeta>();
     map.set(DEFAULT_BOOK.id, DEFAULT_BOOK);
+    map.set(COLLEGIATE_BOOK.id, COLLEGIATE_BOOK);
     if (isAdmin) {
       for (const b of customBooks) {
         map.set(b.id, {
@@ -208,6 +232,10 @@ export default function BookSection({
     }
   };
 
+  // Bộ lọc theo cấp độ chuẩn Quizlet (Tất cả / Beginner / Intermediate / Advanced)
+  const [tierFilter, setTierFilter] = useState<"all" | "beginner" | "intermediate" | "advanced">("all");
+  const [viewMode, setViewMode] = useState<"modules" | "all">("modules");
+
   const bookWords = useMemo(
     () => (activeBook ? words.filter((w) => w.source === activeBook.id) : []),
     [words, activeBook]
@@ -220,16 +248,57 @@ export default function BookSection({
     () => LEVELS.filter((l) => bookWords.some((w) => w.level === l)),
     [bookWords]
   );
+
   const bookFiltered = useMemo(
     () =>
-      bookWords.filter(
-        (w) =>
-          (bookTopic === "Tất cả" || w.topic === bookTopic) &&
-          (bookLevels.length === 0 || bookLevels.includes(w.level)) &&
-          (w.word + w.vi + w.en).toLowerCase().includes(bookSearch.toLowerCase())
-      ),
-    [bookWords, bookTopic, bookLevels, bookSearch]
+      bookWords.filter((w) => {
+        if (bookTopic !== "Tất cả" && w.topic !== bookTopic) return false;
+        if (bookLevels.length > 0 && !bookLevels.includes(w.level)) return false;
+        if (tierFilter === "beginner" && !["A2", "B1"].includes(w.level)) return false;
+        if (tierFilter === "intermediate" && w.level !== "B2") return false;
+        if (tierFilter === "advanced" && !["C1", "C2"].includes(w.level)) return false;
+        if (bookSearch && !(w.word + w.vi + w.en).toLowerCase().includes(bookSearch.toLowerCase())) {
+          return false;
+        }
+        return true;
+      }),
+    [bookWords, bookTopic, bookLevels, tierFilter, bookSearch]
   );
+
+  // Nhóm thành các học phần ~65 từ theo Chủ đề & Cấp độ giống Quizlet
+  const studyModules = useMemo(() => {
+    const CHUNK_SIZE = 65;
+    const groups = new Map<string, Word[]>();
+    for (const w of bookFiltered) {
+      const tierLabel = ["C1", "C2"].includes(w.level)
+        ? "Advanced"
+        : w.level === "B2"
+        ? "Intermediate"
+        : "Beginner";
+      const key = `${tierLabel} · ${w.topic || "General"}`;
+      const list = groups.get(key) ?? [];
+      list.push(w);
+      groups.set(key, list);
+    }
+
+    const modules: { id: string; title: string; tier: string; topic: string; words: Word[] }[] = [];
+    for (const [key, wordList] of groups.entries()) {
+      const [tier, topic] = key.split(" · ");
+      const totalParts = Math.ceil(wordList.length / CHUNK_SIZE);
+      for (let i = 0; i < totalParts; i++) {
+        const slice = wordList.slice(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE);
+        const title = totalParts > 1 ? `${topic} – Phần ${i + 1}` : topic;
+        modules.push({
+          id: `${key}-p${i + 1}`,
+          title: `IELTS: ${tier} ${title}`,
+          tier,
+          topic,
+          words: slice,
+        });
+      }
+    }
+    return modules;
+  }, [bookFiltered]);
 
   const toggleLevel = (l: string) =>
     setBookLevels((prev) => (prev.includes(l) ? prev.filter((x) => x !== l) : [...prev, l]));
@@ -247,6 +316,30 @@ export default function BookSection({
       const j = await r.json();
       if (!r.ok) throw new Error(j.error);
       setMsg(`Đã nạp thêm ${j.added} từ mới vào sách (tự động loại trùng với kho).`);
+      await onReload();
+      notifyDueUpdated();
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setSeedBusy(false);
+    }
+  };
+
+  const seed5000 = async (batchCount = 30) => {
+    if (!isAdmin) return;
+    setSeedBusy(true); setErr(""); setMsg("");
+    try {
+      setActivityLabel("/api/books/collegiate-5000", `Đang nạp ${batchCount} từ 5000 Collegiate & nhờ AI tra phiên âm, nghĩa Việt...`);
+      const r = await fetch("/api/books/collegiate-5000", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ count: batchCount }),
+      });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.error);
+      setMsg(
+        `Đã nạp thêm ${j.added} từ mới vào sách 5000 Collegiate (Tổng trong sách: ${j.totalInBook ?? "?"} từ, còn lại: ${j.remaining ?? "?"} từ).`
+      );
       await onReload();
       notifyDueUpdated();
     } catch (e) {
@@ -594,6 +687,17 @@ export default function BookSection({
                       </button>
                     </>
                   )}
+                  {activeBook.id === "book-5000" && (
+                    <button
+                      onClick={() => seed5000(30)}
+                      disabled={seedBusy}
+                      title="Nạp 30 từ mỗi lần để tối ưu cho 2 key Gemini Free (15 RPM)"
+                      className="inline-flex items-center gap-2 rounded-full bg-brand px-5 py-2 text-sm font-bold text-white hover:bg-brand-hover hover:text-bg disabled:opacity-40"
+                    >
+                      {seedBusy ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} strokeWidth={2} />}
+                      {seedBusy ? "Đang nạp & dịch..." : "Nạp 30 từ 5000 Collegiate (Free AI)"}
+                    </button>
+                  )}
                   {bookFiltered.length > 0 && (
                     <ExportButton words={bookFiltered} filename={activeBook.id} label={`Xuất ${bookFiltered.length} từ`} />
                   )}
@@ -699,17 +803,114 @@ export default function BookSection({
         <div className="rounded-2xl bg-card/60 p-10 text-center text-muted">
           {isAdmin ? (
             <>
-              Bộ sách này chưa có từ nào. Hãy dùng khung <b className="text-ink">“Nhờ Agent tìm từ”</b> ở trên{activeBook.id === "book-3000" ? " hoặc bấm “Nạp 30 từ Oxford 3000”" : ""} để thêm từ!
+              Bộ sách này chưa có từ nào. Hãy dùng khung <b className="text-ink">“Nhờ Agent tìm từ”</b> ở trên{activeBook.id === "book-3000" ? " hoặc bấm “Nạp 30 từ Oxford 3000”" : activeBook.id === "book-5000" ? " hoặc bấm “Nạp 30 từ 5000 Collegiate”" : ""} để thêm từ!
             </>
           ) : (
             "Bộ sách này hiện chưa có từ vựng nào."
           )}
         </div>
       ) : (
-        <>
-          <div className="text-sm text-muted">Hiển thị {bookFiltered.length} / {bookWords.length} từ trong sách</div>
-          <WordGrid list={bookFiltered} />
-        </>
+        <div className="space-y-6">
+          {/* Thanh phân loại cấp độ & chế độ xem kiểu Quizlet */}
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex flex-wrap items-center gap-2">
+                {[
+                  { key: "all", label: "Tất cả" },
+                  { key: "beginner", label: "Beginner Vocabulary (A2–B1)" },
+                  { key: "intermediate", label: "Intermediate (B2)" },
+                  { key: "advanced", label: "Advanced (C1–C2)" },
+                ].map((t) => {
+                  const on = tierFilter === t.key;
+                  return (
+                    <button
+                      key={t.key}
+                      onClick={() => setTierFilter(t.key as typeof tierFilter)}
+                      className={`rounded-full px-4 py-2 text-xs font-bold transition sm:text-sm ${
+                        on
+                          ? "bg-brand text-white shadow-md shadow-brand/20"
+                          : "border border-line bg-card text-muted hover:border-brand-hover hover:text-ink"
+                      }`}
+                    >
+                      {t.label}
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div className="flex items-center gap-1 rounded-full border border-line bg-card p-1">
+                <button
+                  type="button"
+                  onClick={() => setViewMode("modules")}
+                  className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold transition ${
+                    viewMode === "modules" ? "bg-brand text-white" : "text-muted hover:text-ink"
+                  }`}
+                >
+                  <Layers size={13} /> Học phần
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setViewMode("all")}
+                  className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold transition ${
+                    viewMode === "all" ? "bg-brand text-white" : "text-muted hover:text-ink"
+                  }`}
+                >
+                  <LayoutGrid size={13} /> Danh sách từ ({bookFiltered.length})
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Chế độ 1: Danh sách học phần chia nhỏ ~65 từ theo Chủ đề kiểu Quizlet */}
+          {viewMode === "modules" ? (
+            <div className="space-y-4">
+              <div className="text-xs font-bold uppercase tracking-wider text-muted">
+                Gợi ý cho bạn · {studyModules.length} học phần theo chủ đề
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {studyModules.map((m) => (
+                  <div
+                    key={m.id}
+                    className="group flex flex-col justify-between rounded-2xl border border-line bg-card p-5 transition hover:border-brand-hover hover:shadow-lg hover:shadow-slate-900/5 dark:hover:shadow-black/20"
+                  >
+                    <div>
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand/15 text-brand-hover">
+                          <Layers size={18} />
+                        </div>
+                        <span className="rounded-full bg-line px-2.5 py-0.5 text-[11px] font-semibold text-muted">
+                          {m.tier}
+                        </span>
+                      </div>
+                      <div className="mt-3 font-bold text-ink group-hover:text-brand-hover">
+                        {m.title}
+                      </div>
+                      <div className="mt-1 text-xs text-muted">
+                        {m.words.length} thẻ · Tác giả: IELTS Personal
+                      </div>
+                    </div>
+                    <div className="mt-4 flex items-center justify-between border-t border-line/60 pt-3">
+                      <Link
+                        href={`/vocab?source=${encodeURIComponent(activeBook.id)}&topic=${encodeURIComponent(m.topic)}`}
+                        className="inline-flex items-center gap-1 text-xs font-bold text-brand-hover hover:underline"
+                      >
+                        Học Flashcards →
+                      </Link>
+                      <span className="text-[11px] text-muted">{m.words[0]?.level}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <>
+              <div className="text-sm text-muted">
+                Hiển thị {bookFiltered.length} / {bookWords.length} từ trong sách
+              </div>
+              <WordGrid list={bookFiltered} />
+            </>
+          )}
+        </div>
       )}
     </div>
   );
