@@ -335,7 +335,7 @@ export default function StudySetDetail({
         </div>
       ) : currentCard ? (
         <div className="space-y-3.5">
-          <div className="flex min-h-[290px] flex-col justify-between rounded-3xl border border-line bg-card p-5 shadow-sm transition sm:min-h-[340px] sm:p-7">
+          <div className="flex min-h-[290px] flex-col justify-between rounded-3xl border border-line bg-card p-5 shadow-[0_10px_28px_-6px_rgba(15,23,42,0.14)] transition dark:shadow-[0_10px_28px_-6px_rgba(0,0,0,0.5)] sm:min-h-[340px] sm:p-7">
             {/* Inside card top controls */}
             <div className="flex items-center justify-between gap-2">
               <button
@@ -548,62 +548,48 @@ export default function StudySetDetail({
           type="button"
           disabled={words.length === 0}
           onClick={onStartFlashcards}
-          className="group flex items-center gap-3.5 rounded-2xl border border-line bg-card px-4 py-3.5 text-left transition hover:border-brand-hover hover:bg-card-hover disabled:opacity-45"
+          className="group flex items-center gap-3.5 rounded-2xl border border-line bg-card px-4 py-3.5 text-left shadow-[0_4px_14px_-3px_rgba(15,23,42,0.1)] transition hover:border-brand-hover hover:bg-card-hover disabled:opacity-45 dark:shadow-[0_4px_14px_-3px_rgba(0,0,0,0.4)]"
         >
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-brand/15 text-brand-hover">
             <Layers size={18} />
           </div>
-          <div className="min-w-0">
-            <div className="text-sm font-bold text-ink">Thẻ ghi nhớ</div>
-            <div className="text-[11px] text-muted">Lật thẻ toàn màn hình</div>
-          </div>
+          <div className="min-w-0 text-sm font-bold text-ink">Thẻ ghi nhớ</div>
         </button>
 
         <button
           type="button"
           disabled={words.length === 0}
           onClick={onStartLearn}
-          className="group flex items-center gap-3.5 rounded-2xl border border-line bg-card px-4 py-3.5 text-left transition hover:border-brand-hover hover:bg-card-hover disabled:opacity-45"
+          className="group flex items-center gap-3.5 rounded-2xl border border-line bg-card px-4 py-3.5 text-left shadow-[0_4px_14px_-3px_rgba(15,23,42,0.1)] transition hover:border-brand-hover hover:bg-card-hover disabled:opacity-45 dark:shadow-[0_4px_14px_-3px_rgba(0,0,0,0.4)]"
         >
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-brand/15 text-brand-hover">
             <Sparkles size={18} />
           </div>
-          <div className="min-w-0">
-            <div className="text-sm font-bold text-ink">Học</div>
-            <div className="text-[11px] text-muted">Trắc nghiệm & gõ từ</div>
-          </div>
+          <div className="min-w-0 text-sm font-bold text-ink">Học</div>
         </button>
 
         <button
           type="button"
           disabled={words.length === 0}
           onClick={onStartTest}
-          className="group flex items-center gap-3.5 rounded-2xl border border-line bg-card px-4 py-3.5 text-left transition hover:border-brand-hover hover:bg-card-hover disabled:opacity-45"
+          className="group flex items-center gap-3.5 rounded-2xl border border-line bg-card px-4 py-3.5 text-left shadow-[0_4px_14px_-3px_rgba(15,23,42,0.1)] transition hover:border-brand-hover hover:bg-card-hover disabled:opacity-45 dark:shadow-[0_4px_14px_-3px_rgba(0,0,0,0.4)]"
         >
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-brand/15 text-brand-hover">
             <ClipboardCheck size={18} />
           </div>
-          <div className="min-w-0 flex-1">
-            <div className="text-sm font-bold text-ink">Kiểm tra</div>
-            <div className="text-[11px] text-muted">Đúng/Sai, Trắc nghiệm, Tự luận</div>
-          </div>
+          <div className="min-w-0 flex-1 text-sm font-bold text-ink">Kiểm tra</div>
         </button>
 
         <button
           type="button"
           disabled={words.length < 2}
           onClick={onStartMatch}
-          className="group flex items-center gap-3.5 rounded-2xl border border-line bg-card px-4 py-3.5 text-left transition hover:border-brand-hover hover:bg-card-hover disabled:opacity-45"
+          className="group flex items-center gap-3.5 rounded-2xl border border-line bg-card px-4 py-3.5 text-left shadow-[0_4px_14px_-3px_rgba(15,23,42,0.1)] transition hover:border-brand-hover hover:bg-card-hover disabled:opacity-45 dark:shadow-[0_4px_14px_-3px_rgba(0,0,0,0.4)]"
         >
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-brand/15 text-brand-hover">
             <LayoutGrid size={18} />
           </div>
-          <div className="min-w-0 flex-1">
-            <div className="text-sm font-bold text-ink">Ghép thẻ</div>
-            <div className="text-[11px] text-muted">
-              {words.length < 2 ? "Cần ít nhất 2 từ" : "Ghép từ với định nghĩa"}
-            </div>
-          </div>
+          <div className="min-w-0 flex-1 text-sm font-bold text-ink">Ghép thẻ</div>
         </button>
       </div>
 
