@@ -75,7 +75,7 @@ export function ReviewOverview({
       <div className="mb-6 flex flex-wrap items-center justify-between gap-2">
         <Link
           href="/vocab/stats"
-          className="inline-flex items-center gap-1.5 rounded-full border border-line bg-card px-3.5 py-1.5 text-xs font-bold text-muted transition hover:border-brand hover:text-ink"
+          className="inline-flex items-center gap-1.5 rounded-full bg-card px-3.5 py-1.5 text-xs font-bold text-muted shadow-sm shadow-slate-900/5 transition hover:text-ink hover:shadow-md dark:shadow-black/25"
         >
           <BarChart3 size={14} /> Thống kê chi tiết
         </Link>
@@ -84,7 +84,7 @@ export function ReviewOverview({
           <button
             type="button"
             onClick={onOpenSettings}
-            className="inline-flex items-center gap-1.5 rounded-full border border-line bg-card px-3.5 py-1.5 text-xs font-bold transition hover:bg-card-hover"
+            className="inline-flex items-center gap-1.5 rounded-full bg-card px-3.5 py-1.5 text-xs font-bold shadow-sm shadow-slate-900/5 transition hover:bg-card-hover hover:shadow-md dark:shadow-black/25"
           >
             <Settings2 size={14} /> Cài đặt
           </button>
@@ -92,9 +92,9 @@ export function ReviewOverview({
       </div>
 
       {/* Khung tổng quan chính theo phong cách MochiVocab */}
-      <div className="flex flex-col items-center rounded-3xl border border-line bg-card px-5 py-8 shadow-xl sm:px-10 sm:py-10">
+      <div className="flex flex-col items-center rounded-3xl bg-card px-5 py-8 shadow-xl shadow-slate-900/5 dark:shadow-black/30 sm:px-10 sm:py-10">
         {/* Pill tổng số từ trong sổ tay */}
-        <div className="inline-flex items-center gap-3 rounded-full border border-line bg-bg/80 py-1.5 pl-1.5 pr-5 shadow-xs">
+        <div className="inline-flex items-center gap-3 rounded-full bg-bg/90 py-1.5 pl-1.5 pr-5 shadow-sm shadow-slate-900/5 dark:shadow-black/25">
           <span className="flex h-9 w-9 items-center justify-center rounded-full bg-card shadow-xs">
             <BookOpen size={18} className="text-rose-500" strokeWidth={2.1} />
           </span>

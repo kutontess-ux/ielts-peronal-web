@@ -263,7 +263,7 @@ export default function Notifications() {
               },
               {
                 key: "notify_review_due",
-                label: "Nhắc ôn tập ngắt quãng (SRS)",
+                label: "Nhắc ôn tập (SRS)",
                 desc: "Hiện thông báo và chấm đỏ khi có từ đến hạn ôn",
               },
               {

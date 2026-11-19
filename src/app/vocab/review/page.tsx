@@ -587,7 +587,7 @@ export default function Review() {
       <div className="mx-auto max-w-xl rounded-3xl bg-card p-8 text-center sm:p-10">
         <Repeat size={44} strokeWidth={1.3} className="mx-auto text-brand-hover" />
         <h1 className="mt-4 text-2xl font-bold">Chưa có từ nào trong kho</h1>
-        <p className="mt-2 text-muted">Hãy nạp từ vựng vào kho và tạo học phần trước khi ôn tập ngắt quãng.</p>
+        <p className="mt-2 text-muted">Hãy nạp từ vựng vào kho và tạo học phần trước khi ôn tập.</p>
         <Link href="/vocab/bank" className="mt-6 inline-block rounded-full bg-brand px-6 py-3 font-bold text-white hover:bg-brand-hover hover:text-bg">
           Đi tới Kho từ vựng
         </Link>
@@ -599,10 +599,10 @@ export default function Review() {
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
       <form
         onSubmit={handleSaveSettings}
-        className="w-full max-w-md rounded-3xl border border-line bg-card p-6 shadow-2xl"
+        className="w-full max-w-md rounded-3xl bg-card p-6 shadow-2xl"
       >
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-bold">Cài đặt ôn tập ngắt quãng</h2>
+          <h2 className="text-lg font-bold">Cài đặt ôn tập</h2>
           <button
             type="button"
             onClick={() => setSettingsOpen(false)}
@@ -789,7 +789,7 @@ export default function Review() {
     const hitDailyLimit = dailyLimitRemaining === 0 && totalOverdueCount > 0;
 
     return (
-      <div className="mx-auto max-w-xl rounded-3xl border border-line bg-card p-8 text-center sm:p-10">
+      <div className="mx-auto max-w-xl rounded-3xl bg-card p-8 text-center shadow-xl shadow-slate-900/5 dark:shadow-black/30 sm:p-10">
         {settingsModal}
         <PartyPopper size={52} strokeWidth={1.2} className="mx-auto text-brand-hover" />
         <h1 className="mt-4 text-2xl font-bold">
@@ -894,7 +894,7 @@ export default function Review() {
               setDraftSettings(settings);
               setSettingsOpen(true);
             }}
-            className="inline-flex items-center gap-1.5 rounded-full border border-line bg-card px-3.5 py-1.5 text-xs font-bold hover:bg-card-hover"
+            className="inline-flex items-center gap-1.5 rounded-full bg-card px-3.5 py-1.5 text-xs font-bold shadow-sm shadow-slate-900/5 transition hover:bg-card-hover hover:shadow-md dark:shadow-black/25"
           >
             <Settings2 size={14} /> Cài đặt
           </button>
@@ -930,7 +930,7 @@ export default function Review() {
       </div>
 
       {/* Thẻ Active Recall */}
-      <div className="rounded-3xl border border-line bg-card p-6 shadow-xl sm:p-8">
+      <div className="rounded-3xl bg-card p-6 shadow-xl shadow-slate-900/5 dark:shadow-black/30 sm:p-8">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex flex-wrap items-center gap-2">
             {isAdmin && (

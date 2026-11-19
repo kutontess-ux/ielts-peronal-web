@@ -129,8 +129,8 @@ export default function Flashcards({
         res.enrolled > 0
           ? isAdmin && res.deferred > 0
             ? `Đã chuyển ${res.enrolled} từ vào Ôn tập (${res.deferred} từ mới được dời sang từ ${res.scheduledFromDay ?? "ngày sau"} vì hôm nay đã đủ chỉ tiêu — nên ôn hết từ cũ trước)`
-            : `Đã chuyển ${res.enrolled} từ mới vào Ôn tập ngắt quãng`
-          : "Các từ trong học phần này đã nằm sẵn trong Ôn tập ngắt quãng"
+            : `Đã chuyển ${res.enrolled} từ mới vào Ôn tập`
+          : "Các từ trong học phần này đã nằm sẵn trong Ôn tập"
       );
     } catch {
       // bỏ qua nếu chưa kết nối DB
@@ -313,7 +313,7 @@ export default function Flashcards({
             href="/vocab/review"
             className="inline-flex items-center gap-2 rounded-full bg-emerald-500/15 px-6 py-3 text-sm font-bold text-emerald-700 hover:bg-emerald-500/25 dark:bg-emerald-400/15 dark:text-emerald-300"
           >
-            <Repeat size={16} /> Đi ôn tập ngắt quãng
+            <Repeat size={16} /> Đi ôn tập
           </Link>
           {starredWords.length > 0 && (
             <button

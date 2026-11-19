@@ -131,7 +131,7 @@ export default function Home() {
 
   const JUMP: { title: string; sub: string; badge: string; href: string; icon: LucideIcon; cta: string }[] = [
     {
-      title: "Ôn tập ngắt quãng",
+      title: "Ôn tập",
       sub:
         dueCount === null
           ? "Đang kiểm tra..."

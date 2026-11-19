@@ -1420,8 +1420,8 @@ export default function VocabLearn() {
           res.enrolled > 0
             ? isAdmin && res.deferred > 0
               ? `Đã chuyển ${res.enrolled} từ từ “${set.title}” (${res.deferred} từ được dời lịch sang từ ${res.scheduledFromDay ?? "ngày sau"} do hôm nay đã đủ chỉ tiêu).`
-              : `Đã chuyển ${res.enrolled} từ mới từ “${set.title}” vào Ôn tập ngắt quãng.`
-            : `Các từ trong “${set.title}” đã nằm sẵn trong Ôn tập ngắt quãng.`,
+              : `Đã chuyển ${res.enrolled} từ mới từ “${set.title}” vào Ôn tập.`
+            : `Các từ trong “${set.title}” đã nằm sẵn trong Ôn tập.`,
       });
     } catch (e) {
       setSrsBanner({ text: (e as Error).message, isErr: true });
@@ -1520,7 +1520,7 @@ export default function VocabLearn() {
               </span>
               {!srsBanner.isErr && (
                 <Link href="/vocab/review" className="text-xs font-bold underline">
-                  Mở Ôn tập ngắt quãng →
+                  Mở Ôn tập →
                 </Link>
               )}
             </div>
@@ -1584,61 +1584,44 @@ export default function VocabLearn() {
         </>
       ) : (
         <>
-      {/* Khung tổng quan 4 thẻ lướt ngang trên mobile, 4 cột gọn trên desktop */}
+      {/* Thẻ tổng quan Cần ôn hôm nay */}
       <section>
-        <div className="flex snap-x snap-mandatory gap-2.5 overflow-x-auto pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:grid md:grid-cols-4 md:overflow-visible md:pb-0">
-          {stats.dueCount > 0 ? (
-            <Link
-              href="/vocab/review"
-              className="flex w-[210px] shrink-0 snap-start flex-col justify-between rounded-2xl border border-transparent bg-brand/5 p-3.5 transition hover:border-brand/50 hover:bg-brand/10 md:w-auto"
-            >
-              <div className="flex items-center justify-between gap-2 text-xs font-semibold text-brand-hover">
-                <span className="inline-flex items-center gap-1.5">
-                  <Bell size={14} strokeWidth={1.9} /> Cần ôn hôm nay
-                </span>
-              </div>
-              <div className="mt-1.5 flex items-baseline justify-between gap-2">
-                <span className="text-xl font-bold text-ink">{stats.dueCount} từ</span>
-                <span className="rounded-full bg-brand px-2.5 py-0.5 text-[11px] font-bold text-white">
-                  Ôn ngay
-                </span>
-              </div>
-            </Link>
-          ) : (
-            <div className="flex w-[210px] shrink-0 snap-start flex-col justify-between rounded-2xl border border-transparent bg-transparent p-3.5 transition hover:border-line hover:bg-card/70 md:w-auto">
-              <div className="flex items-center gap-1.5 text-xs font-semibold text-emerald-700 dark:text-emerald-300">
-                <CheckCircle2 size={14} strokeWidth={2} /> Ôn tập hôm nay
-              </div>
-              <div className="mt-1.5 text-sm font-bold text-emerald-700 dark:text-emerald-300">
-                Đã hoàn thành
-              </div>
-              <div className="text-[11px] text-muted">Không có từ đến hạn</div>
+        {stats.dueCount > 0 ? (
+          <Link
+            href="/vocab/review"
+            className="inline-flex w-full max-w-xs flex-col justify-between rounded-2xl bg-card p-4 shadow-md shadow-slate-900/5 transition hover:-translate-y-0.5 hover:shadow-lg dark:shadow-black/25"
+          >
+            <div className="flex items-center justify-between gap-2 text-xs font-semibold text-brand-hover">
+              <span className="inline-flex items-center gap-1.5">
+                <Bell size={14} strokeWidth={1.9} /> Cần ôn hôm nay
+              </span>
             </div>
-          )}
-
-          {[
-            ["Học phần đã tạo", `${studySets.length} học phần`, "text-brand-hover"],
-            [
-              isAdmin ? "Đã thuộc (≥ 7 ngày)" : "Từ đã thành thạo",
-              `${stats.masteredCount} từ`,
-              "text-emerald-600 dark:text-emerald-300",
-            ],
-            ["Tổng từ trong kho", `${stats.totalWords} từ`, "text-orange-600 dark:text-orange-300"],
-          ].map(([label, val, color]) => (
-            <div
-              key={label}
-              className="flex w-[165px] shrink-0 snap-start flex-col justify-between rounded-2xl border border-transparent bg-transparent p-3.5 transition hover:border-line hover:bg-card/70 md:w-auto"
-            >
-              <div className="text-xs text-muted">{label}</div>
-              <div className={`mt-1.5 text-xl font-bold ${color}`}>{val}</div>
+            <div className="mt-2 flex items-baseline justify-between gap-3">
+              <span className="text-2xl font-bold text-ink">{stats.dueCount} từ</span>
+              <span className="rounded-full bg-brand px-3 py-1 text-xs font-bold text-white shadow-xs">
+                Ôn ngay
+              </span>
             </div>
-          ))}
-        </div>
+          </Link>
+        ) : (
+          <Link
+            href="/vocab/review"
+            className="inline-flex w-full max-w-xs flex-col justify-between rounded-2xl bg-card p-4 shadow-md shadow-slate-900/5 transition hover:-translate-y-0.5 hover:shadow-lg dark:shadow-black/25"
+          >
+            <div className="flex items-center gap-1.5 text-xs font-semibold text-emerald-700 dark:text-emerald-300">
+              <CheckCircle2 size={14} strokeWidth={2} /> Ôn tập hôm nay
+            </div>
+            <div className="mt-1.5 text-base font-bold text-emerald-700 dark:text-emerald-300">
+              Đã hoàn thành
+            </div>
+            <div className="text-[11px] text-muted">Không có từ đến hạn · Xem 5 Level</div>
+          </Link>
+        )}
       </section>
 
       {/* Mục tự ôn lại tối đa 5 học phần học gần nhất (Admin thấy đủ chi tiết & cấu hình; User chỉ thấy học phần đến hạn) */}
-      {!activeFolder && studySets.length > 0 && (isAdmin || visibleQueue.length > 0) && (
-        <section className="rounded-3xl border border-line bg-card p-5 sm:p-6">
+      {!activeFolder && studySets.length > 0 && (isAdmin || visibleQueue.length > 0 || loading) && (
+        <section className="rounded-3xl bg-card p-5 shadow-lg shadow-slate-900/5 dark:shadow-black/25 sm:p-6">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
@@ -1665,7 +1648,7 @@ export default function VocabLearn() {
               <button
                 type="button"
                 onClick={() => setReviewCfgOpen((v) => !v)}
-                className="inline-flex items-center gap-1.5 rounded-full border border-line bg-bg px-3.5 py-1.5 text-xs font-bold text-muted transition hover:border-brand-hover hover:text-ink"
+                className="inline-flex items-center gap-1.5 rounded-full bg-bg px-3.5 py-1.5 text-xs font-bold text-muted shadow-xs transition hover:text-ink"
               >
                 <Settings2 size={14} />
                 {reviewConfig.mode === "srs"
@@ -1676,7 +1659,7 @@ export default function VocabLearn() {
           </div>
 
           {isAdmin && reviewCfgOpen && (
-            <div className="mt-4 rounded-2xl border border-line bg-bg p-4 text-xs">
+            <div className="mt-4 rounded-2xl bg-bg p-4 text-xs shadow-sm">
               <div className="font-bold text-ink">Cài đặt lịch tự ôn lại học phần</div>
               <div className="mt-2.5 flex flex-wrap items-center gap-2">
                 <button
@@ -1730,7 +1713,12 @@ export default function VocabLearn() {
             </div>
           )}
 
-          {visibleQueue.length === 0 ? (
+          {loading ? (
+            <div className="mt-4 flex flex-col items-center justify-center rounded-2xl bg-bg/60 py-6">
+              <CharacterLoader mode="reading" indicator="dots" size="sm" />
+              <p className="mt-2 text-xs font-medium text-muted">Đang tải học phần cần ôn...</p>
+            </div>
+          ) : visibleQueue.length === 0 ? (
             <div className="mt-4 rounded-2xl bg-bg/70 px-4 py-4 text-xs text-muted">
               Chưa có học phần nào được học gần đây. Hãy bấm <b>Lật thẻ</b> hoặc <b>Luyện tập</b> ở một học phần bên dưới — sau khi học xong hệ thống sẽ tự xếp lịch ôn lại tại đây.
             </div>
@@ -1745,10 +1733,8 @@ export default function VocabLearn() {
                 return (
                   <div
                     key={s.id}
-                    className={`flex flex-col gap-3 rounded-2xl border px-4 py-3.5 transition sm:flex-row sm:items-center sm:justify-between ${
-                      status.isDue
-                        ? "border-brand/50 bg-brand/5"
-                        : "border-line/70 bg-bg/60"
+                    className={`flex flex-col gap-3 rounded-2xl px-4 py-3.5 shadow-sm shadow-slate-900/5 transition hover:shadow-md dark:shadow-black/20 sm:flex-row sm:items-center sm:justify-between ${
+                      status.isDue ? "bg-brand/5" : "bg-bg/70"
                     }`}
                   >
                     <div className="flex min-w-0 flex-1 items-start gap-3">
@@ -1810,7 +1796,7 @@ export default function VocabLearn() {
                             words: setWords,
                           })
                         }
-                        className={`inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-full px-4 py-2 text-xs font-bold transition disabled:opacity-40 ${
+                        className={`inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-full px-4 py-2 text-xs font-bold shadow-xs transition disabled:opacity-40 ${
                           status.isDue
                             ? "bg-brand text-white hover:bg-brand-hover hover:text-bg"
                             : "bg-card text-ink hover:bg-brand hover:text-white"
@@ -1829,7 +1815,7 @@ export default function VocabLearn() {
                             words: setWords,
                           })
                         }
-                        className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-full border border-line bg-card px-3.5 py-2 text-xs font-bold text-muted transition hover:border-brand-hover hover:text-ink disabled:opacity-40"
+                        className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-full bg-card px-3.5 py-2 text-xs font-bold text-muted shadow-xs transition hover:text-ink hover:shadow-sm disabled:opacity-40"
                       >
                         <Layers size={13} /> Lật thẻ
                       </button>
@@ -1853,7 +1839,7 @@ export default function VocabLearn() {
               <ArrowLeft size={15} /> Tất cả học phần & thư mục
             </button>
 
-            <div className="flex flex-wrap items-start justify-between gap-4 rounded-3xl border border-line bg-card p-5 sm:p-6">
+            <div className="flex flex-wrap items-start justify-between gap-4 rounded-3xl bg-card p-5 shadow-md shadow-slate-900/5 dark:shadow-black/25 sm:p-6">
               <div className="flex min-w-0 items-start gap-3.5">
                 <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-brand/15 text-brand-hover">
                   <FolderOpen size={24} strokeWidth={1.75} />
@@ -1871,14 +1857,14 @@ export default function VocabLearn() {
                 <button
                   type="button"
                   onClick={() => setFolderSetsModalOpen(true)}
-                  className="inline-flex items-center gap-1.5 rounded-full border border-line bg-bg px-4 py-2 text-xs font-bold text-ink transition hover:border-brand-hover"
+                  className="inline-flex items-center gap-1.5 rounded-full bg-bg px-4 py-2 text-xs font-bold text-ink shadow-xs transition hover:shadow-sm"
                 >
                   <FolderInput size={14} /> Thêm học phần có sẵn
                 </button>
                 <button
                   type="button"
                   onClick={() => setModalState({ open: true, editing: null })}
-                  className="inline-flex items-center gap-1.5 rounded-full bg-brand px-4 py-2 text-xs font-bold text-white hover:bg-brand-hover hover:text-bg"
+                  className="inline-flex items-center gap-1.5 rounded-full bg-brand px-4 py-2 text-xs font-bold text-white shadow-xs hover:bg-brand-hover hover:text-bg"
                 >
                   <Plus size={14} strokeWidth={2.2} /> Tạo học phần mới
                 </button>
@@ -1886,7 +1872,7 @@ export default function VocabLearn() {
                   type="button"
                   title="Chỉnh sửa thư mục"
                   onClick={() => setFolderModal({ open: true, editing: activeFolder })}
-                  className="rounded-full border border-line bg-bg p-2 text-muted hover:text-ink"
+                  className="rounded-full bg-bg p-2 text-muted shadow-xs hover:text-ink"
                 >
                   <Pencil size={14} />
                 </button>
@@ -1903,7 +1889,7 @@ export default function VocabLearn() {
                       setActiveFolderId(null);
                     }
                   }}
-                  className="rounded-full border border-line bg-bg p-2 text-muted hover:bg-rose-500/15 hover:text-rose-600 dark:hover:text-rose-300"
+                  className="rounded-full bg-bg p-2 text-muted shadow-xs hover:bg-rose-500/15 hover:text-rose-600 dark:hover:text-rose-300"
                 >
                   <Trash2 size={14} />
                 </button>
@@ -1915,7 +1901,7 @@ export default function VocabLearn() {
             <h2 className="text-[32px] font-bold leading-tight">Học phần của bạn</h2>
             {isAdmin && (
               <p className="mt-0.5 text-xs text-muted">
-                Sắp xếp học phần theo thư mục giống Quizlet để luyện Flashcards và chuyển vào Ôn tập ngắt quãng.
+                Sắp xếp học phần theo thư mục giống Quizlet để luyện Flashcards và chuyển vào Ôn tập.
               </p>
             )}
           </div>
@@ -1934,7 +1920,7 @@ export default function VocabLearn() {
             </span>
             {!srsBanner.isErr && (
               <Link href="/vocab/review" className="text-xs font-bold underline">
-                Mở Ôn tập ngắt quãng →
+                Mở Ôn tập →
               </Link>
             )}
           </div>

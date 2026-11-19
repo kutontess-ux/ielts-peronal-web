@@ -399,8 +399,8 @@ function ImportPanel({ onSaved }: { onSaved: () => void }) {
         res.enrolled > 0
           ? res.deferred > 0
             ? `Đã chuyển ${res.enrolled} từ có sẵn vào Ôn tập (${res.deferred} từ được dời lịch sang từ ${res.scheduledFromDay ?? "ngày sau"} do hôm nay đã đủ chỉ tiêu).`
-            : `Đã chuyển ${res.enrolled} từ có sẵn vào Ôn tập ngắt quãng (không tốn lượt AI).`
-          : "Các từ có sẵn này đều đã nằm trong hàng đợi Ôn tập ngắt quãng của bạn."
+            : `Đã chuyển ${res.enrolled} từ có sẵn vào Ôn tập (không tốn lượt AI).`
+          : "Các từ có sẵn này đều đã nằm trong hàng đợi Ôn tập của bạn."
       );
     } catch (e) {
       setErr((e as Error).message);
@@ -573,8 +573,8 @@ export default function Bank() {
           res.enrolled > 0
             ? res.deferred > 0
               ? `Đã chuyển ${res.enrolled} từ vào Ôn tập (${res.deferred} từ được dời lịch sang từ ${res.scheduledFromDay ?? "ngày sau"} do hôm nay đã đủ chỉ tiêu).`
-              : `Đã chuyển ${res.enrolled} từ mới vào Ôn tập ngắt quãng.`
-            : "Các từ đã chọn đều đã nằm sẵn trong Ôn tập ngắt quãng.",
+              : `Đã chuyển ${res.enrolled} từ mới vào Ôn tập.`
+            : "Các từ đã chọn đều đã nằm sẵn trong Ôn tập.",
       });
     } catch (e) {
       setBankMsg({ text: (e as Error).message, isErr: true });

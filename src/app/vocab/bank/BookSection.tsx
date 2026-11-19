@@ -317,8 +317,8 @@ export default function BookSection({
         res.enrolled > 0
           ? res.deferred > 0
             ? `Đã chuyển ${res.enrolled} từ vào Ôn tập & Kho cá nhân (${res.deferred} từ được dời lịch sang từ ${res.scheduledFromDay ?? "ngày sau"} do hôm nay đã đủ chỉ tiêu).`
-            : `Đã chuyển ${res.enrolled} từ mới vào Ôn tập ngắt quãng & Kho cá nhân.`
-          : "Các từ này đã nằm sẵn trong Ôn tập ngắt quãng của bạn."
+            : `Đã chuyển ${res.enrolled} từ mới vào Ôn tập & Kho cá nhân.`
+          : "Các từ này đã nằm sẵn trong Ôn tập của bạn."
       );
     } catch (e) {
       setErr((e as Error).message);

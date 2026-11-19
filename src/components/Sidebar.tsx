@@ -254,7 +254,7 @@ export default function Sidebar() {
 
   const LIBRARY: Item[] = [
     { href: "/vocab", label: "Thẻ ghi nhớ", icon: Layers, exact: true },
-    { href: "/vocab/review", label: "Ôn tập ngắt quãng", icon: Repeat, badge: dueCount },
+    { href: "/vocab/review", label: "Ôn tập", icon: Repeat, badge: dueCount },
     { href: "/vocab/bank", label: "Kho từ vựng", icon: Package },
     { href: "/vocab/daily", label: "Từ hằng ngày", icon: Newspaper },
     { href: "/vocab/stats", label: "Thống kê", icon: BarChart3 },

@@ -371,8 +371,8 @@ export default function StudySetLearn({
           notifyDueUpdated();
           setSrsMsg(
             res.enrolled > 0
-              ? `Đã đồng bộ thêm ${res.enrolled} từ mới vào Ôn tập ngắt quãng`
-              : "Các từ đã được đồng bộ với Ôn tập ngắt quãng"
+              ? `Đã đồng bộ thêm ${res.enrolled} từ mới vào Ôn tập`
+              : "Các từ đã được đồng bộ với Ôn tập"
           );
         })
         .catch(() => {
