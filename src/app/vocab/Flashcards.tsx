@@ -413,8 +413,20 @@ export default function Flashcards({
               <Sparkles size={13} /> Luyện tập
             </button>
           )}
-          <span className="rounded-full bg-orange-500/15 px-3 py-1 text-orange-700 dark:bg-orange-400/15 dark:text-orange-300">Chưa biết: {unknownList.length}</span>
-          <span className="rounded-full bg-emerald-500/15 px-3 py-1 text-emerald-700 dark:bg-emerald-400/15 dark:text-emerald-300">Đã biết: {knownList.length}</span>
+          <span
+            title={`Chưa biết: ${unknownList.length}`}
+            aria-label={`Chưa biết: ${unknownList.length}`}
+            className="inline-flex min-w-[1.75rem] items-center justify-center rounded-full bg-orange-500/10 px-2 py-0.5 tabular-nums text-orange-500 dark:bg-orange-400/10 dark:text-orange-300/80"
+          >
+            {unknownList.length}
+          </span>
+          <span
+            title={`Đã biết: ${knownList.length}`}
+            aria-label={`Đã biết: ${knownList.length}`}
+            className="inline-flex min-w-[1.75rem] items-center justify-center rounded-full bg-emerald-500/10 px-2 py-0.5 tabular-nums text-emerald-500 dark:bg-emerald-400/10 dark:text-emerald-300/80"
+          >
+            {knownList.length}
+          </span>
         </div>
       </div>
 
