@@ -67,6 +67,59 @@ type FeedbackState = {
 
 const PROMPT_SIDE_KEY = "ielts_review_prompt_side_v1";
 const ANSWER_MODE_KEY = "ielts_review_answer_mode_v1";
+const REVIEW_SESSION_KEY = "ielts_review_session_v1";
+const SESSION_TTL_MS = 12 * 60 * 60 * 1000;
+
+type StoredReviewSession = {
+  queue: SessionItem[];
+  reviewedInSession: number;
+  correctInSession: number;
+  updatedAt: number;
+};
+
+function loadReviewSession(): StoredReviewSession | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = localStorage.getItem(REVIEW_SESSION_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<StoredReviewSession>;
+    if (
+      !Array.isArray(parsed.queue) ||
+      parsed.queue.length === 0 ||
+      typeof parsed.updatedAt !== "number" ||
+      Date.now() - parsed.updatedAt > SESSION_TTL_MS
+    ) {
+      localStorage.removeItem(REVIEW_SESSION_KEY);
+      return null;
+    }
+    return {
+      queue: parsed.queue,
+      reviewedInSession: Number(parsed.reviewedInSession ?? 0),
+      correctInSession: Number(parsed.correctInSession ?? 0),
+      updatedAt: parsed.updatedAt,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function saveReviewSession(data: StoredReviewSession): void {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(REVIEW_SESSION_KEY, JSON.stringify(data));
+  } catch {
+    // bỏ qua nếu trình duyệt chặn localStorage
+  }
+}
+
+function clearReviewSession(): void {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.removeItem(REVIEW_SESSION_KEY);
+  } catch {
+    // bỏ qua
+  }
+}
 
 const LEITNER_BADGE: Record<LeitnerLevel, { label: string; cls: string }> = {
   1: { label: "Lv.1 · Mới/Hay quên", cls: "bg-rose-500/15 text-rose-700 dark:text-rose-300" },
@@ -207,8 +260,22 @@ export default function Review() {
       ]);
       if (r.ok) {
         const j = await r.json();
-        setQueue(j.words ?? []);
-        setDueCount(j.dueCount ?? 0);
+        const savedSession = loadReviewSession();
+        const serverWords = (j.words ?? []) as SessionItem[];
+        if (savedSession && savedSession.queue.length > 0) {
+          setQueue(savedSession.queue);
+          const pendingNonRetry = savedSession.queue.filter(
+            (item) => !item.isRetryInSession
+          ).length;
+          setDueCount(Math.max(j.dueCount ?? 0, pendingNonRetry));
+          setReviewedInSession(savedSession.reviewedInSession);
+          setCorrectInSession(savedSession.correctInSession);
+        } else {
+          setQueue(serverWords);
+          setDueCount(j.dueCount ?? 0);
+          setReviewedInSession(0);
+          setCorrectInSession(0);
+        }
         setTotalOverdueCount(j.totalOverdueCount ?? j.dueCount ?? 0);
         setReviewedToday(j.reviewedToday ?? 0);
         setDailyReviewLimit(j.dailyReviewLimit ?? DEFAULT_USER_SETTINGS.daily_review_limit);
@@ -226,8 +293,6 @@ export default function Review() {
         setSelfGradeMode(false);
         setRevealedMeaning(false);
         setFeedback(null);
-        setReviewedInSession(0);
-        setCorrectInSession(0);
       }
       if (wRes.ok) {
         const wJson = await wRes.json();
@@ -237,6 +302,20 @@ export default function Review() {
       setLoading(false);
     }
   }, []);
+
+  useEffect(() => {
+    if (loading) return;
+    if (queue.length === 0) {
+      clearReviewSession();
+    } else if (reviewedInSession > 0) {
+      saveReviewSession({
+        queue,
+        reviewedInSession,
+        correctInSession,
+        updatedAt: Date.now(),
+      });
+    }
+  }, [loading, queue, reviewedInSession, correctInSession]);
 
   useEffect(() => {
     const id = requestAnimationFrame(() => {
@@ -311,6 +390,7 @@ export default function Review() {
     setErrMsg("");
     try {
       await clearAllReviews();
+      clearReviewSession();
       setQueue([]);
       setDueCount(0);
       setTotalOverdueCount(0);
@@ -570,6 +650,7 @@ export default function Review() {
       const j = await res.json();
       if (!res.ok) throw new Error(j.error || "Không lưu được cài đặt");
       setSettingsOpen(false);
+      clearReviewSession();
       await load();
       notifyDueUpdated();
     } catch (err) {
