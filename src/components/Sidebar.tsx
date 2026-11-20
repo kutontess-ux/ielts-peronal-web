@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import {
-  BarChart3, Bell, BookOpen, Eye, Home, Layers, LogIn, LogOut, Newspaper, PenLine, Repeat, Settings, Shield, Target,
+  BarChart3, Bell, BookOpen, Eye, Folder, Home, Layers, LogIn, LogOut, Newspaper, PenLine, Repeat, Settings, Shield, Target,
   type LucideIcon,
 } from "lucide-react";
 import {
@@ -259,14 +259,14 @@ export default function Sidebar() {
 
   const MOBILE_TABS: Item[] = [
     { href: "/", label: "Trang chủ", icon: Home, exact: true },
-    { href: "/vocab", label: "Thẻ nhớ", icon: Layers, exact: true },
+    { href: "/vocab", label: "Thư mục", icon: Folder, exact: true },
     { href: "/vocab/review", label: "Ôn tập", icon: Repeat, badge: dueCount },
   ];
 
   return (
     <>
-      {/* Thanh điều hướng dưới cùng trên điện thoại (4 tab gọn giống Quizlet) */}
-      <nav className="fixed inset-x-0 bottom-0 z-30 grid w-full max-w-[100vw] grid-cols-4 border-t border-line/80 bg-card/95 px-2 pt-1.5 pb-[max(0.5rem,env(safe-area-inset-bottom))] backdrop-blur md:hidden">
+      {/* Thanh điều hướng dưới cùng trên điện thoại (4 tab gọn, lớn giống Quizlet) */}
+      <nav className="fixed inset-x-0 bottom-0 z-30 grid w-full max-w-[100vw] grid-cols-4 border-t border-line/80 bg-card/95 px-2 pt-2.5 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur md:hidden">
         {MOBILE_TABS.map((tab) => {
           const active = tab.exact ? path === tab.href : path.startsWith(tab.href);
           const Icon = tab.icon;
@@ -274,14 +274,14 @@ export default function Sidebar() {
             <Link
               key={tab.href}
               href={tab.href}
-              className={`relative flex min-w-0 flex-col items-center justify-center gap-0.5 rounded-xl px-1 py-1 text-[11px] font-semibold transition ${
+              className={`relative flex min-w-0 flex-col items-center justify-center gap-1 rounded-xl px-1 py-1.5 text-xs font-semibold transition ${
                 active ? "text-brand dark:text-brand-hover" : "text-muted"
               }`}
             >
               <div className="relative">
-                <Icon size={21} strokeWidth={active ? 2.1 : 1.75} />
+                <Icon size={24} strokeWidth={active ? 2.15 : 1.8} />
                 {tab.badge && tab.badge > 0 ? (
-                  <span className="absolute -right-2.5 -top-1 rounded-full bg-brand px-1.5 text-[9px] font-bold text-white">
+                  <span className="absolute -right-2.5 -top-1 rounded-full bg-brand px-1.5 text-[10px] font-bold text-white">
                     {tab.badge}
                   </span>
                 ) : null}
@@ -294,15 +294,15 @@ export default function Sidebar() {
         <button
           type="button"
           onClick={() => setSettingsOpen(true)}
-          className={`relative flex min-w-0 flex-col items-center justify-center gap-0.5 rounded-xl px-1 py-1 text-[11px] font-semibold transition ${
+          className={`relative flex min-w-0 flex-col items-center justify-center gap-1 rounded-xl px-1 py-1.5 text-xs font-semibold transition ${
             settingsOpen ? "text-brand dark:text-brand-hover" : "text-muted"
           }`}
           aria-label="Cài đặt"
         >
           <div className="relative">
-            <Settings size={21} strokeWidth={settingsOpen ? 2.1 : 1.75} />
+            <Settings size={24} strokeWidth={settingsOpen ? 2.15 : 1.8} />
             {notifBadge > 0 && (
-              <span className="absolute -right-1 -top-0.5 h-2 w-2 rounded-full bg-rose-500 ring-2 ring-card" />
+              <span className="absolute -right-1 -top-0.5 h-2.5 w-2.5 rounded-full bg-rose-500 ring-2 ring-card" />
             )}
           </div>
           <span className="max-w-full truncate">Cài đặt</span>

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { BookOpen, ChevronRight, Flame, Layers, Library, MoreVertical, Newspaper, PenLine, Repeat, Trash2, type LucideIcon } from "lucide-react";
+import { BookOpen, ChevronRight, Flame, Library, MoreVertical, Newspaper, PenLine, Repeat, Trash2, type LucideIcon } from "lucide-react";
 import { HorizontalCarousel } from "@/components/HorizontalCarousel";
 import { fetchDueSummaryCached } from "@/lib/due-events";
 import { useMe } from "@/lib/use-me";
@@ -12,6 +12,43 @@ import {
   getInProgressStudyDrafts,
   type InProgressStudyDraft,
 } from "@/lib/study-drafts";
+
+function QuizletSetIcon({ size = 22 }: { size?: number }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      aria-hidden="true"
+    >
+      {/* Thẻ phía sau */}
+      <rect
+        x="8"
+        y="3.5"
+        width="10.5"
+        height="13.5"
+        rx="2"
+        transform="rotate(8 13.25 10.25)"
+        stroke="currentColor"
+        strokeWidth="1.9"
+      />
+      {/* Thẻ phía trước */}
+      <rect
+        x="4.5"
+        y="6"
+        width="11"
+        height="14"
+        rx="2"
+        transform="rotate(-8 10 13)"
+        fill="#eaf4ff"
+        className="dark:fill-[#1d2246]"
+        stroke="currentColor"
+        strokeWidth="1.9"
+      />
+    </svg>
+  );
+}
 
 type ReadingItem = {
   id: number;
@@ -191,13 +228,13 @@ export default function Home() {
     },
   ];
 
-  const SHORTCUTS: { title: string; sub: string; tag: string; href: string; icon: LucideIcon; mobileHidden?: boolean }[] = [
+  const SHORTCUTS: { title: string; sub: string; tag: string; href: string; icon: React.ComponentType<{ size?: number; strokeWidth?: number }>; mobileHidden?: boolean }[] = [
     ...recentStudySets.map((s) => ({
       title: s.title,
       sub: `${s.wordIds.length} thẻ · Tác giả: bạn`,
       tag: "",
       href: `/vocab?setId=${encodeURIComponent(s.id)}`,
-      icon: Layers,
+      icon: QuizletSetIcon,
     })),
     {
       title: "Kho từ vựng",
@@ -211,7 +248,7 @@ export default function Home() {
       sub: "Học từ vựng & lật thẻ kiểu Quizlet",
       tag: "Flashcards",
       href: "/vocab",
-      icon: Layers,
+      icon: QuizletSetIcon,
     },
     ...recentPassages.map((p) => ({
       title: p.title,
