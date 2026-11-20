@@ -14,7 +14,7 @@ import {
   Smartphone,
   type LucideIcon,
 } from "lucide-react";
-import { markNotifSeenToday, notifySettingsUpdated } from "@/lib/due-events";
+import { fetchDueSummaryCached, markNotifSeenToday, notifySettingsUpdated } from "@/lib/due-events";
 import { DEFAULT_NOTIFICATION_SETTINGS, type NotificationSettings } from "@/lib/srs";
 import {
   getExistingPushSubscription,
@@ -106,9 +106,8 @@ export default function Notifications() {
       })
       .catch(() => {});
 
-    fetch("/api/reviews", { cache: "no-store" })
-      .then((r) => r.json())
-      .then((j) => setDueCount(j.dueCount ?? 0))
+    fetchDueSummaryCached()
+      .then((s) => setDueCount(s.ok ? s.dueCount : 0))
       .catch(() => setDueCount(0));
 
     fetch("/api/writing", { cache: "no-store" })

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { clearDailyClientCache } from "@/lib/daily-cache";
+import { clearDueSummaryCache } from "@/lib/due-events";
 
 export type MeInfo = {
   profile: {
@@ -72,6 +73,7 @@ export function clearCachedMe() {
   inflightPromise = null;
   previewAsUserState = false;
   clearDailyClientCache();
+  clearDueSummaryCache();
   try {
     if (typeof window !== "undefined") {
       sessionStorage.removeItem(PREVIEW_USER_KEY);

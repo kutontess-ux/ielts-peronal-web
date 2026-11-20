@@ -21,7 +21,7 @@ import {
 } from "lucide-react";
 import { ReviewOverview } from "./ReviewOverview";
 import { levelColor, type Word } from "@/lib/mock";
-import { notifyDueUpdated } from "@/lib/due-events";
+import { notifyDueUpdated, updateDueSummaryCache } from "@/lib/due-events";
 import { useMe } from "@/lib/use-me";
 import { speakVietnamese, speakWord as speakTts } from "@/lib/tts";
 import { VoiceSettingsButton } from "@/components/VoiceSettingsModal";
@@ -313,6 +313,11 @@ export default function Review() {
           levelCounts: nextLevelCounts,
           settings: nextSettings,
         };
+        updateDueSummaryCache({
+          dueCount: nextDueCount,
+          totalWords: nextTotalWords,
+          masteredCount: j.masteredCount ?? 0,
+        });
 
         if (savedSession && savedSession.queue.length > 0) {
           setQueue(savedSession.queue);

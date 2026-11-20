@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { BookOpen, ChevronRight, Flame, Layers, Library, MoreVertical, Newspaper, PenLine, Repeat, Trash2, type LucideIcon } from "lucide-react";
 import { HorizontalCarousel } from "@/components/HorizontalCarousel";
+import { fetchDueSummaryCached } from "@/lib/due-events";
 import { useMe } from "@/lib/use-me";
 import { useStudySets } from "@/lib/study-sets";
 import {
@@ -60,23 +61,21 @@ export default function Home() {
   useEffect(() => {
     let active = true;
     (async () => {
-      const [revRes, readingRes, writingRes] = await Promise.allSettled([
-        fetch("/api/reviews", { cache: "no-store" }),
+      const [revSummary, readingRes, writingRes] = await Promise.allSettled([
+        fetchDueSummaryCached(),
         fetch("/api/reading", { cache: "no-store" }),
         fetch("/api/writing", { cache: "no-store" }),
       ]);
       if (!active) return;
 
-      if (revRes.status === "fulfilled") {
-        const r = revRes.value;
-        const body = await r.json().catch(() => ({}));
-        if (!active) return;
-        if (!r.ok) {
-          setAuthMsg(body?.error || "Bạn cần đăng nhập để xem dữ liệu học tập của mình.");
+      if (revSummary.status === "fulfilled") {
+        const s = revSummary.value;
+        if (!s.ok) {
+          setAuthMsg(s.error || "Bạn cần đăng nhập để xem dữ liệu học tập của mình.");
           setDueCount(0);
         } else {
-          setDueCount(body.dueCount ?? 0);
-          setTotalWords(body.totalWords ?? null);
+          setDueCount(s.dueCount);
+          setTotalWords(s.totalWords);
         }
       } else {
         setDueCount(0);

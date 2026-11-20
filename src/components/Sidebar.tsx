@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import {
   DUE_EVENT,
+  fetchDueSummaryCached,
   isNotifSeenToday,
   markNotifSeenToday,
   NOTIF_SEEN_EVENT,
@@ -169,14 +170,9 @@ export default function Sidebar() {
     let active = true;
 
     const fetchDue = async () => {
-      try {
-        const r = await fetch("/api/reviews", { cache: "no-store" });
-        if (r.ok && active) {
-          const j = await r.json();
-          setDueCount(j.dueCount ?? 0);
-        }
-      } catch {
-        // bỏ qua lỗi mạng tạm thời
+      const summary = await fetchDueSummaryCached();
+      if (active && summary.ok) {
+        setDueCount(summary.dueCount);
       }
     };
 

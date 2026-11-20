@@ -9,7 +9,7 @@ import {
 } from "lucide-react";
 import { levelColor, type Word } from "@/lib/mock";
 import { enrollWordsInSrs } from "@/lib/srs";
-import { notifyDueUpdated } from "@/lib/due-events";
+import { fetchDueSummaryCached, notifyDueUpdated } from "@/lib/due-events";
 import { setActivityLabel } from "@/lib/activity";
 import { useMe } from "@/lib/use-me";
 import BookSection from "@/app/vocab/bank/BookSection";
@@ -1338,15 +1338,15 @@ function VocabLearnContent() {
   }, [openMenuSetId]);
 
   const reloadWords = useCallback(async (): Promise<Word[]> => {
-    const [wJson, rJson] = await Promise.all([
+    const [wJson, rSummary] = await Promise.all([
       fetch("/api/words", { cache: "no-store" }).then((r) => r.json()),
-      fetch("/api/reviews", { cache: "no-store" }).then((r) => r.json()),
+      fetchDueSummaryCached(),
     ]);
     const list = (wJson.words ?? []) as Word[];
     const nextStats = {
-      dueCount: rJson.dueCount ?? 0,
-      totalWords: rJson.totalWords ?? list.length,
-      masteredCount: rJson.masteredCount ?? 0,
+      dueCount: rSummary.dueCount ?? 0,
+      totalWords: rSummary.totalWords ?? list.length,
+      masteredCount: rSummary.masteredCount ?? 0,
     };
     cachedVocabWords = list;
     cachedVocabOverviewStats = nextStats;
@@ -1398,17 +1398,17 @@ function VocabLearnContent() {
     });
     Promise.all([
       fetch("/api/words", { cache: "no-store" }).then((r) => r.json()),
-      fetch("/api/reviews", { cache: "no-store" }).then((r) => r.json()),
+      fetchDueSummaryCached(),
       isBookLink
         ? fetch("/api/words?scope=books", { cache: "no-store" }).then((r) => r.json())
         : Promise.resolve(null),
     ])
-      .then(([wJson, rJson, bJson]) => {
+      .then(([wJson, rSummary, bJson]) => {
         const list = (wJson.words ?? []) as Word[];
         const nextStats = {
-          dueCount: rJson.dueCount ?? 0,
-          totalWords: rJson.totalWords ?? list.length,
-          masteredCount: rJson.masteredCount ?? 0,
+          dueCount: rSummary.dueCount ?? 0,
+          totalWords: rSummary.totalWords ?? list.length,
+          masteredCount: rSummary.masteredCount ?? 0,
         };
         cachedVocabWords = list;
         cachedVocabOverviewStats = nextStats;
