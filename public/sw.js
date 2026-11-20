@@ -26,12 +26,29 @@ self.addEventListener("push", (event) => {
     badge: "/icon-192.png",
     tag: data.tag || "lontonvocab-reminder",
     renotify: true,
+    silent: false,
+    vibrate: [200, 100, 200],
     data: {
       url: data.url || "/notifications",
     },
   };
 
-  event.waitUntil(self.registration.showNotification(title, options));
+  event.waitUntil(
+    Promise.all([
+      self.registration.showNotification(title, options),
+      self.clients
+        .matchAll({ type: "window", includeUncontrolled: true })
+        .then((clientList) => {
+          for (const client of clientList) {
+            client.postMessage({
+              type: "PUSH_RECEIVED",
+              title,
+              body: options.body,
+            });
+          }
+        }),
+    ])
+  );
 });
 
 self.addEventListener("notificationclick", (event) => {
