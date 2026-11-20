@@ -4,11 +4,11 @@
 
 :root {
   color-scheme: light;
-  --bg: #f0f2f8;
+  --bg: #f6f7fb;
   --card: #ffffff;
-  --card-hover: #e7ebf5;
-  --line: #d6dceb;
-  --ink: #1a1d2e;
+  --card-hover: #edf0f7;
+  --line: #edeff4;
+  --ink: #282e3e;
   --muted: #586380;
   --placeholder: #8a94b0;
   --brand: #4255ff;

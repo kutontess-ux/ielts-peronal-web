@@ -24,14 +24,14 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = {
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#f0f2f8" },
+    { media: "(prefers-color-scheme: light)", color: "#f6f7fb" },
     { media: "(prefers-color-scheme: dark)", color: "#0a092d" },
   ],
   width: "device-width",
   initialScale: 1,
 };
 
-const THEME_INIT_SCRIPT = `(function(){try{var t=localStorage.getItem("ielts_theme_v1");var d=t==="light"?"light":"dark";var r=document.documentElement;r.classList.toggle("dark",d==="dark");r.classList.toggle("light",d==="light");r.setAttribute("data-theme",d);r.style.colorScheme=d;var c=d==="light"?"#f0f2f8":"#0a092d";document.querySelectorAll('meta[name="theme-color"]').forEach(function(m){m.setAttribute("content",c);});}catch(e){}})();`;
+const THEME_INIT_SCRIPT = `(function(){try{var t=localStorage.getItem("ielts_theme_v1");var d=t==="light"?"light":"dark";var r=document.documentElement;r.classList.toggle("dark",d==="dark");r.classList.toggle("light",d==="light");r.setAttribute("data-theme",d);r.style.colorScheme=d;var c=d==="light"?"#f6f7fb":"#0a092d";document.querySelectorAll('meta[name="theme-color"]').forEach(function(m){m.setAttribute("content",c);});}catch(e){}})();`;
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
@@ -43,7 +43,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         <Suspense fallback={<aside className="hidden w-64 shrink-0 border-r border-line bg-bg md:flex" />}>
           <Sidebar />
         </Suspense>
-        <main className="w-full min-w-0 flex-1 px-4 pb-24 pt-5 sm:px-6 md:px-10 md:py-8">
+        <main className="w-full min-w-0 flex-1 px-4 pb-24 pt-4 sm:px-6 md:px-10 md:py-8">
           <div className="mx-auto w-full min-w-0 max-w-5xl">{children}</div>
         </main>
         <ActivityMonitor />

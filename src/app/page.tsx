@@ -43,6 +43,15 @@ export default function Home() {
   const [inProgressDrafts, setInProgressDrafts] = useState<InProgressStudyDraft[]>([]);
   const [openDraftMenu, setOpenDraftMenu] = useState<string | null>(null);
   const [draftVersion, setDraftVersion] = useState(0);
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 767px)");
+    const update = () => setIsMobile(mq.matches);
+    update();
+    mq.addEventListener("change", update);
+    return () => mq.removeEventListener("change", update);
+  }, []);
 
   useEffect(() => {
     const rafId = requestAnimationFrame(() => {
@@ -130,7 +139,7 @@ export default function Home() {
       .slice(0, 4);
   }, [studySets]);
 
-  const JUMP: { title: string; sub: string; badge: string; href: string; icon: LucideIcon; cta: string }[] = [
+  const JUMP: { title: string; sub: string; badge: string; href: string; icon: LucideIcon; cta: string; mobileHidden?: boolean }[] = [
     {
       title: "Ôn tập",
       sub:
@@ -161,6 +170,7 @@ export default function Home() {
       href: recentPassages[0] ? `/reading/${recentPassages[0].id}` : "/reading",
       icon: BookOpen,
       cta: recentPassages[0] ? "Mở bài" : "Bắt đầu",
+      mobileHidden: true,
     },
     {
       title: "Kỷ luật Writing",
@@ -177,10 +187,11 @@ export default function Home() {
       href: "/writing",
       icon: PenLine,
       cta: writingSummary?.completedToday ? "Xem sổ tay" : "Viết ngay",
+      mobileHidden: true,
     },
   ];
 
-  const SHORTCUTS: { title: string; sub: string; tag: string; href: string; icon: LucideIcon }[] = [
+  const SHORTCUTS: { title: string; sub: string; tag: string; href: string; icon: LucideIcon; mobileHidden?: boolean }[] = [
     ...recentStudySets.map((s) => ({
       title: s.title,
       sub: `${s.wordIds.length} thẻ · Tác giả: bạn`,
@@ -210,11 +221,15 @@ export default function Home() {
       tag: p.score_correct !== null && p.score_total !== null ? `${p.score_correct}/${p.score_total}` : "Reading",
       href: `/reading/${p.id}`,
       icon: BookOpen,
+      mobileHidden: true,
     })),
   ];
 
+  const visibleJump = isMobile ? JUMP.filter((j) => !j.mobileHidden) : JUMP;
+  const visibleShortcuts = isMobile ? SHORTCUTS.filter((s) => !s.mobileHidden) : SHORTCUTS;
+
   return (
-    <div className="space-y-8 sm:space-y-10">
+    <div className="space-y-7 sm:space-y-10">
       {authMsg && (
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-amber-500/40 bg-amber-500/10 p-4 text-sm text-amber-800 dark:text-amber-200">
           <span>{authMsg} (Dữ liệu trong cơ sở dữ liệu vẫn còn nguyên vẹn.)</span>
@@ -229,13 +244,12 @@ export default function Home() {
 
       {/* 1. Học tiếp - Dạng lướt ngang giống Quizlet */}
       <section>
-        <div className="mb-3.5 flex items-center justify-between">
-          <h2 className="text-lg font-bold">Học tiếp</h2>
-          <span className="text-xs text-muted md:hidden">Vuốt ngang để xem thêm →</span>
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="text-[17px] font-bold tracking-[-0.01em] text-ink md:text-lg">Học tiếp</h2>
         </div>
 
         <HorizontalCarousel
-          itemCount={inProgressDrafts.length + JUMP.length}
+          itemCount={inProgressDrafts.length + visibleJump.length}
           showDots
           stepMode="card"
           ariaLabel="Học tiếp"
@@ -245,15 +259,12 @@ export default function Home() {
             return (
               <div
                 key={menuKey}
-                className="relative flex w-[86%] shrink-0 snap-start flex-col justify-between rounded-3xl border border-line bg-card p-5 transition hover:border-brand/50 sm:w-[420px] sm:p-6 md:w-[460px]"
+                className="relative flex w-[88%] shrink-0 snap-start flex-col justify-between rounded-[20px] border border-line bg-card p-5 shadow-[0_2px_10px_rgba(40,46,62,0.05)] transition hover:border-brand/50 dark:shadow-none sm:w-[420px] sm:p-6 md:w-[460px]"
               >
                 <div>
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0 flex-1">
-                      <span className="inline-block rounded-full bg-emerald-500/15 px-2.5 py-0.5 text-[11px] font-bold text-emerald-700 dark:text-emerald-300">
-                        {d.modeLabel}
-                      </span>
-                      <div className="mt-2 line-clamp-2 break-words text-lg font-extrabold text-ink sm:text-xl">
+                      <div className="line-clamp-2 break-words text-[17px] font-bold text-ink sm:text-xl">
                         {d.title}
                       </div>
                     </div>
@@ -270,7 +281,7 @@ export default function Home() {
                             prev === menuKey ? null : menuKey
                           )
                         }
-                        className="rounded-full p-1.5 text-muted transition hover:bg-bg hover:text-ink"
+                        className="-mr-1.5 -mt-1 rounded-full p-1.5 text-muted transition hover:bg-bg hover:text-ink"
                       >
                         <MoreVertical size={18} />
                       </button>
@@ -294,13 +305,13 @@ export default function Home() {
                   </div>
 
                   {/* Thanh tiến trình xanh lá kiểu Quizlet */}
-                  <div className="mt-4 h-3 w-full overflow-hidden rounded-full bg-line/70">
+                  <div className="mt-4 h-2.5 w-full overflow-hidden rounded-full bg-line">
                     <div
-                      className="h-full rounded-full bg-emerald-500 transition-all"
+                      className="h-full rounded-full bg-[#23b26d] transition-all"
                       style={{ width: `${d.progressPct}%` }}
                     />
                   </div>
-                  <div className="mt-2.5 text-sm font-medium text-muted">
+                  <div className="mt-2.5 text-[13px] font-normal text-muted sm:text-sm">
                     {d.progressText}
                   </div>
                 </div>
@@ -308,7 +319,7 @@ export default function Home() {
                 <div className="mt-5">
                   <Link
                     href={d.href}
-                    className="block w-full rounded-full bg-brand px-6 py-3 text-center text-sm font-bold text-white transition hover:bg-brand-hover"
+                    className="block w-full rounded-full bg-brand px-6 py-2.5 text-center text-[14px] font-bold text-white transition hover:bg-brand-hover sm:py-3 sm:text-[15px]"
                   >
                     Tiếp tục
                   </Link>
@@ -317,29 +328,29 @@ export default function Home() {
             );
           })}
 
-          {JUMP.map((j) => (
+          {visibleJump.map((j) => (
             <div
               key={j.title}
-              className="flex w-[86%] shrink-0 snap-start flex-col justify-between rounded-3xl border border-line bg-card p-5 transition hover:border-brand/50 sm:w-[420px] sm:p-6 md:w-[460px]"
+              className="flex w-[88%] shrink-0 snap-start flex-col justify-between rounded-[20px] border border-line bg-card p-5 shadow-[0_2px_10px_rgba(40,46,62,0.05)] transition hover:border-brand/50 dark:shadow-none sm:w-[420px] sm:p-6 md:w-[460px]"
             >
               <div className="flex items-start justify-between gap-4">
                 <div className="min-w-0 flex-1">
                   {isAdmin && (
-                    <span className="mb-2.5 inline-block rounded-full bg-brand/10 px-2.5 py-0.5 text-[11px] font-bold text-brand-hover">
+                    <span className="mb-2 inline-block rounded-full bg-brand/10 px-2.5 py-0.5 text-[11px] font-bold text-brand dark:text-brand-hover">
                       {j.badge}
                     </span>
                   )}
-                  <div className="break-words text-lg font-bold sm:text-xl">{j.title}</div>
-                  <div className="mt-1 line-clamp-2 text-sm text-muted">{j.sub}</div>
+                  <div className="break-words text-[17px] font-bold text-ink sm:text-xl">{j.title}</div>
+                  <div className="mt-1 line-clamp-2 text-[13px] text-muted sm:text-sm">{j.sub}</div>
                 </div>
-                <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl border border-line/70 bg-bg/70 text-brand-hover sm:h-20 sm:w-20">
-                  <j.icon size={34} strokeWidth={1.35} />
+                <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-[#eaf4ff] text-[#0077cc] dark:bg-brand/15 dark:text-brand-hover sm:h-16 sm:w-16">
+                  <j.icon size={28} strokeWidth={1.5} />
                 </div>
               </div>
-              <div className="mt-5 flex items-center justify-between gap-3">
+              <div className="mt-5">
                 <Link
                   href={j.href}
-                  className="w-fit rounded-full bg-brand px-6 py-2.5 text-sm font-bold text-white transition hover:bg-brand-hover hover:text-bg"
+                  className="block w-full rounded-full bg-brand px-6 py-2.5 text-center text-[14px] font-bold text-white transition hover:bg-brand-hover sm:py-3 sm:text-[15px]"
                 >
                   {j.cta}
                 </Link>
@@ -349,47 +360,76 @@ export default function Home() {
         </HorizontalCarousel>
       </section>
 
-      {/* 2. Gần đây & Truy cập nhanh - Dạng thẻ lướt ngang */}
+      {/* 2. Gần đây - Dạng danh sách phẳng 2 hàng giống Quizlet trên mobile, thẻ trên PC */}
       <section>
-        <div className="mb-3.5 flex items-center justify-between">
-          <h2 className="text-lg font-bold">Gần đây &amp; Truy cập nhanh</h2>
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="text-[17px] font-bold tracking-[-0.01em] text-ink md:text-lg">
+            <span className="md:hidden">Gần đây</span>
+            <span className="hidden md:inline">Gần đây &amp; Truy cập nhanh</span>
+          </h2>
         </div>
 
-        <HorizontalCarousel
-          itemCount={SHORTCUTS.length}
-          stepMode="page"
-          ariaLabel="Gần đây và truy cập nhanh"
-        >
-          {SHORTCUTS.map((item) => (
+        {/* Mobile: Danh sách phẳng cuộn ngang 2 hàng giống Quizlet */}
+        <div className="grid auto-cols-[84%] grid-flow-col grid-rows-2 gap-x-4 gap-y-4 overflow-x-auto pb-1 no-scrollbar md:hidden">
+          {visibleShortcuts.map((item) => (
             <Link
               key={item.href + item.title}
               href={item.href}
-              className="flex w-[76%] shrink-0 snap-start flex-col justify-between rounded-2xl border border-line bg-card p-4 transition hover:border-brand-hover sm:w-[270px] md:w-[calc((100%-28px)/3)]"
+              className="flex items-start gap-3.5 rounded-xl py-0.5 transition active:opacity-75"
             >
-              <div className="flex items-center justify-between gap-2">
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-bg text-brand-hover">
-                  <item.icon size={18} strokeWidth={1.6} />
-                </div>
-                {item.tag && (
-                  <span className="truncate rounded-full bg-bg px-2.5 py-0.5 text-[11px] font-semibold text-muted">
-                    {item.tag}
-                  </span>
-                )}
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[#eaf4ff] text-[#0077cc] dark:bg-brand/15 dark:text-brand-hover">
+                <item.icon size={22} strokeWidth={1.7} />
               </div>
-              <div className="mt-4 min-w-0">
-                <div className="line-clamp-1 text-sm font-bold text-ink">{item.title}</div>
-                <div className="mt-1 flex items-center justify-between gap-2 text-xs text-muted">
-                  <span className="truncate">{item.sub}</span>
-                  <ChevronRight size={14} className="shrink-0 text-muted" />
+              <div className="min-w-0 flex-1">
+                <div className="line-clamp-2 text-[15px] font-bold leading-snug text-ink">
+                  {item.title}
+                </div>
+                <div className="mt-0.5 truncate text-[13px] text-muted">
+                  {item.sub}
                 </div>
               </div>
             </Link>
           ))}
-        </HorizontalCarousel>
+        </div>
+
+        {/* PC: Carousel thẻ như cũ */}
+        <div className="hidden md:block">
+          <HorizontalCarousel
+            itemCount={visibleShortcuts.length}
+            stepMode="page"
+            ariaLabel="Gần đây và truy cập nhanh"
+          >
+            {visibleShortcuts.map((item) => (
+              <Link
+                key={item.href + item.title}
+                href={item.href}
+                className="flex w-[270px] shrink-0 snap-start flex-col justify-between rounded-2xl border border-line bg-card p-4 transition hover:border-brand-hover md:w-[calc((100%-28px)/3)]"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-bg text-brand-hover">
+                    <item.icon size={18} strokeWidth={1.6} />
+                  </div>
+                  {item.tag && (
+                    <span className="truncate rounded-full bg-bg px-2.5 py-0.5 text-[11px] font-semibold text-muted">
+                      {item.tag}
+                    </span>
+                  )}
+                </div>
+                <div className="mt-4 min-w-0">
+                  <div className="line-clamp-1 text-sm font-bold text-ink">{item.title}</div>
+                  <div className="mt-1 flex items-center justify-between gap-2 text-xs text-muted">
+                    <span className="truncate">{item.sub}</span>
+                    <ChevronRight size={14} className="shrink-0 text-muted" />
+                  </div>
+                </div>
+              </Link>
+            ))}
+          </HorizontalCarousel>
+        </div>
       </section>
 
-      {/* 3. Kỹ năng - Dạng lướt ngang trên điện thoại, 3 cột vừa vặn trên PC */}
-      <section>
+      {/* 3. Kỹ năng - Ẩn trên mobile, giữ nguyên 3 cột trên PC */}
+      <section className="hidden md:block">
         <h2 className="mb-3.5 text-lg font-bold">Kỹ năng</h2>
 
         <HorizontalCarousel

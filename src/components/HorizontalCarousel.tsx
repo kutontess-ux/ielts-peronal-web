@@ -163,7 +163,7 @@ export function HorizontalCarousel({
 
       {/* Chấm chỉ báo vị trí giống Quizlet */}
       {showDots && itemCount > 1 && (
-        <div className="mt-3 flex items-center justify-center gap-1.5">
+        <div className="mt-3.5 flex items-center justify-center gap-2">
           {Array.from({ length: itemCount }).map((_, i) => {
             const active = i === activeIndex;
             return (
@@ -173,10 +173,10 @@ export function HorizontalCarousel({
                 onClick={() => scrollToIndex(i)}
                 aria-label={`Chuyển đến thẻ ${i + 1}`}
                 aria-current={active ? "true" : undefined}
-                className={`h-2 rounded-full transition-all ${
+                className={`h-2 w-2 rounded-full transition-colors ${
                   active
-                    ? "w-5 bg-brand-hover"
-                    : "w-2 bg-line hover:bg-muted"
+                    ? "bg-brand dark:bg-brand-hover"
+                    : "bg-[#d9dde8] hover:bg-muted dark:bg-line"
                 }`}
               />
             );

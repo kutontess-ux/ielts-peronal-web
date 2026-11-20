@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import {
-  BarChart3, Bell, BookOpen, Eye, Home, Layers, LogIn, LogOut, Menu, Newspaper, PenLine, Repeat, Shield, Target, X,
+  BarChart3, Bell, BookOpen, Eye, Home, Layers, LogIn, LogOut, Newspaper, PenLine, Repeat, Settings, Shield, Target,
   type LucideIcon,
 } from "lucide-react";
 import {
@@ -20,6 +20,7 @@ import { useMe, type MeInfo } from "@/lib/use-me";
 import ThemeToggle from "@/components/ThemeToggle";
 import { VoiceSettingsButton } from "@/components/VoiceSettingsModal";
 import { BrandLogo } from "@/components/BrandLogo";
+import { SettingsModal } from "@/components/SettingsModal";
 
 type Item = { href: string; label: string; icon: LucideIcon; exact?: boolean; badge?: number; soon?: boolean };
 
@@ -146,7 +147,7 @@ export default function Sidebar() {
   const [dueCount, setDueCount] = useState(0);
   const [notifSeen, setNotifSeen] = useState(true);
   const [notifyReviewDue, setNotifyReviewDue] = useState(true);
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
   const { me, meLoaded, previewAsUser, togglePreviewAsUser, clearMe } = useMe({ skip: isAuthPage });
 
@@ -260,98 +261,12 @@ export default function Sidebar() {
     { href: "/", label: "Trang chủ", icon: Home, exact: true },
     { href: "/vocab", label: "Thẻ nhớ", icon: Layers, exact: true },
     { href: "/vocab/review", label: "Ôn tập", icon: Repeat, badge: dueCount },
-    { href: "/reading", label: "Reading", icon: BookOpen },
-    { href: "/writing", label: "Writing", icon: PenLine },
   ];
 
   return (
     <>
-      {/* Header trên điện thoại */}
-      <header className="sticky top-0 z-30 flex items-center justify-between gap-2 border-b border-line bg-bg/95 px-3 py-2.5 backdrop-blur sm:px-4 sm:py-3 md:hidden">
-        <Link href="/" className="min-w-0 shrink text-base font-bold tracking-tight sm:text-lg">
-          <BrandLogo iconClassName="h-6 w-6 sm:h-7 sm:w-7" textClassName="text-inherit" />
-        </Link>
-        <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
-          {meLoaded && !me && (
-            <Link
-              href="/login"
-              className="inline-flex items-center gap-1 whitespace-nowrap rounded-xl bg-brand px-2 py-1.5 text-[11px] font-bold text-white sm:px-2.5 sm:text-xs"
-            >
-              <LogIn size={13} />
-              <span>Đăng nhập</span>
-            </Link>
-          )}
-          <ThemeToggle variant="icon" />
-          <VoiceSettingsButton variant="icon" />
-          <Link
-            href="/notifications"
-            className="relative rounded-xl border border-line bg-card p-2 text-muted hover:text-ink"
-            aria-label="Thông báo"
-          >
-            <Bell size={18} />
-            {notifBadge > 0 && (
-              <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-bold leading-none text-white ring-2 ring-bg">
-                {notifBadge}
-              </span>
-            )}
-          </Link>
-          <button
-            onClick={() => setMobileMenuOpen(true)}
-            className="rounded-xl border border-line bg-card p-2 text-muted hover:text-ink"
-            aria-label="Mở menu"
-          >
-            <Menu size={18} />
-          </button>
-        </div>
-      </header>
-
-      {/* Drawer menu đầy đủ trên điện thoại */}
-      {mobileMenuOpen && (
-        <div className="fixed inset-0 z-50 flex md:hidden">
-          <div className="fixed inset-0 bg-black/70" onClick={() => setMobileMenuOpen(false)} />
-          <div className="relative z-10 flex h-full w-72 flex-col gap-1 overflow-y-auto border-r border-line bg-bg p-4">
-            <div className="mb-3 flex items-center justify-between px-2">
-              <span className="text-lg font-bold">
-                <BrandLogo iconClassName="w-7 h-7" textClassName="text-inherit" />
-              </span>
-              <button
-                onClick={() => setMobileMenuOpen(false)}
-                className="rounded-lg p-1.5 text-muted hover:bg-card hover:text-ink"
-              >
-                <X size={18} />
-              </button>
-            </div>
-            {MAIN.map((i) => (
-              <NavLink key={i.href} item={i} path={path} onClick={() => setMobileMenuOpen(false)} />
-            ))}
-            <div className="my-2 border-t border-line" />
-            <div className="px-3 pb-1 text-xs font-semibold text-muted">Từ vựng</div>
-            {LIBRARY.map((i) => (
-              <NavLink key={i.href} item={i} path={path} onClick={() => setMobileMenuOpen(false)} />
-            ))}
-            <div className="my-2 border-t border-line" />
-            <div className="px-3 pb-1 text-xs font-semibold text-muted">Kỹ năng</div>
-            {SKILLS.map((i) => (
-              <NavLink key={i.href} item={i} path={path} onClick={() => setMobileMenuOpen(false)} />
-            ))}
-            <div className="mt-auto space-y-2.5 pt-3">
-              <VoiceSettingsButton className="w-full justify-center" />
-              <ThemeToggle variant="switch" />
-              <UserFooter
-                me={me}
-                meLoaded={meLoaded}
-                signingOut={signingOut}
-                previewAsUser={previewAsUser}
-                onTogglePreview={togglePreviewAsUser}
-                onSignOut={handleSignOut}
-              />
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Thanh điều hướng dưới cùng trên điện thoại */}
-      <nav className="fixed inset-x-0 bottom-0 z-30 grid w-full max-w-[100vw] grid-cols-5 border-t border-line bg-bg px-1 pt-1.5 pb-[max(0.5rem,env(safe-area-inset-bottom))] md:hidden">
+      {/* Thanh điều hướng dưới cùng trên điện thoại (4 tab gọn giống Quizlet) */}
+      <nav className="fixed inset-x-0 bottom-0 z-30 grid w-full max-w-[100vw] grid-cols-4 border-t border-line/80 bg-card/95 px-2 pt-1.5 pb-[max(0.5rem,env(safe-area-inset-bottom))] backdrop-blur md:hidden">
         {MOBILE_TABS.map((tab) => {
           const active = tab.exact ? path === tab.href : path.startsWith(tab.href);
           const Icon = tab.icon;
@@ -359,12 +274,12 @@ export default function Sidebar() {
             <Link
               key={tab.href}
               href={tab.href}
-              className={`relative flex min-w-0 flex-col items-center justify-center gap-0.5 rounded-xl px-0.5 py-1 text-[11px] font-semibold transition ${
-                active ? "text-brand-hover" : "text-muted"
+              className={`relative flex min-w-0 flex-col items-center justify-center gap-0.5 rounded-xl px-1 py-1 text-[11px] font-semibold transition ${
+                active ? "text-brand dark:text-brand-hover" : "text-muted"
               }`}
             >
               <div className="relative">
-                <Icon size={19} strokeWidth={active ? 2 : 1.6} />
+                <Icon size={21} strokeWidth={active ? 2.1 : 1.75} />
                 {tab.badge && tab.badge > 0 ? (
                   <span className="absolute -right-2.5 -top-1 rounded-full bg-brand px-1.5 text-[9px] font-bold text-white">
                     {tab.badge}
@@ -375,7 +290,39 @@ export default function Sidebar() {
             </Link>
           );
         })}
+
+        <button
+          type="button"
+          onClick={() => setSettingsOpen(true)}
+          className={`relative flex min-w-0 flex-col items-center justify-center gap-0.5 rounded-xl px-1 py-1 text-[11px] font-semibold transition ${
+            settingsOpen ? "text-brand dark:text-brand-hover" : "text-muted"
+          }`}
+          aria-label="Cài đặt"
+        >
+          <div className="relative">
+            <Settings size={21} strokeWidth={settingsOpen ? 2.1 : 1.75} />
+            {notifBadge > 0 && (
+              <span className="absolute -right-1 -top-0.5 h-2 w-2 rounded-full bg-rose-500 ring-2 ring-card" />
+            )}
+          </div>
+          <span className="max-w-full truncate">Cài đặt</span>
+        </button>
       </nav>
+
+      <SettingsModal
+        isOpen={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        dueCount={dueCount}
+        notifBadge={notifBadge}
+        notifyReviewDue={notifyReviewDue}
+        onNotifyChange={setNotifyReviewDue}
+        me={me}
+        meLoaded={meLoaded}
+        signingOut={signingOut}
+        previewAsUser={previewAsUser}
+        onTogglePreview={togglePreviewAsUser}
+        onSignOut={handleSignOut}
+      />
 
       {/* Sidebar cố định trên PC */}
       <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col gap-1 overflow-y-auto border-r border-line bg-bg p-3 md:flex">
