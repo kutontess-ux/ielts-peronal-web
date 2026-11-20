@@ -265,7 +265,7 @@ export default function Sidebar() {
 
   return (
     <>
-      {/* Thanh điều hướng dưới cùng trên điện thoại (4 tab gọn, lớn giống Quizlet) */}
+      {/* Thanh điều hướng dưới cùng trên điện thoại (chỉ icon giống Quizlet) */}
       <nav className="fixed inset-x-0 bottom-0 z-30 grid w-full max-w-[100vw] grid-cols-4 border-t border-line/80 bg-card/95 px-2 pt-2.5 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur md:hidden">
         {MOBILE_TABS.map((tab) => {
           const active = tab.exact ? path === tab.href : path.startsWith(tab.href);
@@ -274,19 +274,20 @@ export default function Sidebar() {
             <Link
               key={tab.href}
               href={tab.href}
-              className={`relative flex min-w-0 flex-col items-center justify-center gap-1 rounded-xl px-1 py-1.5 text-xs font-semibold transition ${
+              aria-label={tab.label}
+              title={tab.label}
+              className={`relative flex min-w-0 items-center justify-center rounded-xl py-2 transition ${
                 active ? "text-brand dark:text-brand-hover" : "text-muted"
               }`}
             >
               <div className="relative">
-                <Icon size={24} strokeWidth={active ? 2.15 : 1.8} />
+                <Icon size={26} strokeWidth={active ? 2.2 : 1.85} />
                 {tab.badge && tab.badge > 0 ? (
-                  <span className="absolute -right-2.5 -top-1 rounded-full bg-brand px-1.5 text-[10px] font-bold text-white">
+                  <span className="absolute -right-2.5 -top-1.5 rounded-full bg-brand px-1.5 text-[10px] font-bold text-white">
                     {tab.badge}
                   </span>
                 ) : null}
               </div>
-              <span className="max-w-full truncate">{tab.label}</span>
             </Link>
           );
         })}
@@ -294,18 +295,18 @@ export default function Sidebar() {
         <button
           type="button"
           onClick={() => setSettingsOpen(true)}
-          className={`relative flex min-w-0 flex-col items-center justify-center gap-1 rounded-xl px-1 py-1.5 text-xs font-semibold transition ${
+          className={`relative flex min-w-0 items-center justify-center rounded-xl py-2 transition ${
             settingsOpen ? "text-brand dark:text-brand-hover" : "text-muted"
           }`}
           aria-label="Cài đặt"
+          title="Cài đặt"
         >
           <div className="relative">
-            <Settings size={24} strokeWidth={settingsOpen ? 2.15 : 1.8} />
+            <Settings size={26} strokeWidth={settingsOpen ? 2.2 : 1.85} />
             {notifBadge > 0 && (
               <span className="absolute -right-1 -top-0.5 h-2.5 w-2.5 rounded-full bg-rose-500 ring-2 ring-card" />
             )}
           </div>
-          <span className="max-w-full truncate">Cài đặt</span>
         </button>
       </nav>
 

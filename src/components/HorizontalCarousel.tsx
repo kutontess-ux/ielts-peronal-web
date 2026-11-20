@@ -24,6 +24,7 @@ export function HorizontalCarousel({
   ariaLabel = "Danh sách cuộn ngang",
 }: HorizontalCarouselProps) {
   const trackRef = useRef<HTMLDivElement>(null);
+  const userInteractedRef = useRef(false);
   const [canPrev, setCanPrev] = useState(false);
   const [canNext, setCanNext] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
@@ -61,7 +62,16 @@ export function HorizontalCarousel({
     const el = trackRef.current;
     if (!el) return;
 
-    const raf = requestAnimationFrame(updateScrollState);
+    if (!userInteractedRef.current && el.scrollLeft !== 0) {
+      el.scrollLeft = 0;
+    }
+
+    const raf = requestAnimationFrame(() => {
+      if (!userInteractedRef.current && el.scrollLeft !== 0) {
+        el.scrollLeft = 0;
+      }
+      updateScrollState();
+    });
     const ro = new ResizeObserver(() => {
       updateScrollState();
     });
@@ -75,6 +85,7 @@ export function HorizontalCarousel({
   }, [updateScrollState, itemCount]);
 
   const scrollToIndex = useCallback((idx: number) => {
+    userInteractedRef.current = true;
     const el = trackRef.current;
     if (!el) return;
     const clamped = Math.max(0, Math.min(el.children.length - 1, idx));
@@ -86,6 +97,7 @@ export function HorizontalCarousel({
 
   const handleStep = useCallback(
     (dir: -1 | 1) => {
+      userInteractedRef.current = true;
       const el = trackRef.current;
       if (!el) return;
 
@@ -142,9 +154,12 @@ export function HorizontalCarousel({
       <div
         ref={trackRef}
         onScroll={updateScrollState}
+        onTouchStart={() => { userInteractedRef.current = true; }}
+        onWheel={() => { userInteractedRef.current = true; }}
+        onPointerDown={() => { userInteractedRef.current = true; }}
         role="region"
         aria-label={ariaLabel}
-        className={`flex snap-x snap-mandatory gap-3.5 overflow-x-auto scroll-smooth no-scrollbar pb-1 ${trackClassName}`}
+        className={`flex snap-x snap-mandatory gap-3.5 overflow-x-auto scroll-smooth [overflow-anchor:none] no-scrollbar pb-1 ${trackClassName}`}
       >
         {children}
       </div>
