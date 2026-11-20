@@ -182,21 +182,47 @@ function buildChoiceOptions(
   return combined;
 }
 
+type CachedReviewOverview = {
+  words: SessionItem[];
+  dueCount: number;
+  totalOverdueCount: number;
+  reviewedToday: number;
+  dailyReviewLimit: number;
+  dailyLimitRemaining: number;
+  enrolledCount: number;
+  totalWords: number;
+  levelCounts: Record<LeitnerLevel, number>;
+  settings: UserSettings;
+};
+
+let cachedReviewOverview: CachedReviewOverview | null = null;
+let cachedWordPool: Word[] | null = null;
+
 export default function Review() {
   const { isAdmin } = useMe();
-  const [queue, setQueue] = useState<SessionItem[]>([]);
-  const [wordPool, setWordPool] = useState<Word[]>([]);
-  const [dueCount, setDueCount] = useState(0);
-  const [totalOverdueCount, setTotalOverdueCount] = useState(0);
-  const [reviewedToday, setReviewedToday] = useState(0);
-  const [dailyReviewLimit, setDailyReviewLimit] = useState(DEFAULT_USER_SETTINGS.daily_review_limit);
-  const [dailyLimitRemaining, setDailyLimitRemaining] = useState(DEFAULT_USER_SETTINGS.daily_review_limit);
-  const [enrolledCount, setEnrolledCount] = useState(0);
-  const [totalWords, setTotalWords] = useState(0);
-  const [levelCounts, setLevelCounts] = useState<Record<LeitnerLevel, number>>({ 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 });
-  const [settings, setSettings] = useState<UserSettings>(DEFAULT_USER_SETTINGS);
+  const [queue, setQueue] = useState<SessionItem[]>(() => cachedReviewOverview?.words ?? []);
+  const [wordPool, setWordPool] = useState<Word[]>(() => cachedWordPool ?? []);
+  const [dueCount, setDueCount] = useState(() => cachedReviewOverview?.dueCount ?? 0);
+  const [totalOverdueCount, setTotalOverdueCount] = useState(
+    () => cachedReviewOverview?.totalOverdueCount ?? 0
+  );
+  const [reviewedToday, setReviewedToday] = useState(() => cachedReviewOverview?.reviewedToday ?? 0);
+  const [dailyReviewLimit, setDailyReviewLimit] = useState(
+    () => cachedReviewOverview?.dailyReviewLimit ?? DEFAULT_USER_SETTINGS.daily_review_limit
+  );
+  const [dailyLimitRemaining, setDailyLimitRemaining] = useState(
+    () => cachedReviewOverview?.dailyLimitRemaining ?? DEFAULT_USER_SETTINGS.daily_review_limit
+  );
+  const [enrolledCount, setEnrolledCount] = useState(() => cachedReviewOverview?.enrolledCount ?? 0);
+  const [totalWords, setTotalWords] = useState(() => cachedReviewOverview?.totalWords ?? 0);
+  const [levelCounts, setLevelCounts] = useState<Record<LeitnerLevel, number>>(
+    () => cachedReviewOverview?.levelCounts ?? { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 }
+  );
+  const [settings, setSettings] = useState<UserSettings>(
+    () => cachedReviewOverview?.settings ?? DEFAULT_USER_SETTINGS
+  );
 
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => !cachedReviewOverview);
   const [viewMode, setViewMode] = useState<"overview" | "session">("overview");
   const [startingSession, setStartingSession] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -251,42 +277,66 @@ export default function Review() {
   }, []);
 
   const load = useCallback(async () => {
-    setLoading(true);
+    if (!cachedReviewOverview) {
+      setLoading(true);
+    }
     setErrMsg("");
     try {
       const [r, wRes] = await Promise.all([
         fetch("/api/reviews", { cache: "no-store" }),
-        fetch("/api/words?scope=pool", { cache: "no-store" }),
+        cachedWordPool ? Promise.resolve(null) : fetch("/api/words?scope=pool", { cache: "no-store" }),
       ]);
       if (r.ok) {
         const j = await r.json();
         const savedSession = loadReviewSession();
         const serverWords = (j.words ?? []) as SessionItem[];
+        const nextDueCount = j.dueCount ?? 0;
+        const nextTotalOverdue = j.totalOverdueCount ?? nextDueCount;
+        const nextReviewedToday = j.reviewedToday ?? 0;
+        const nextDailyLimit = j.dailyReviewLimit ?? DEFAULT_USER_SETTINGS.daily_review_limit;
+        const nextDailyRemaining = j.dailyLimitRemaining ?? 0;
+        const nextEnrolled = j.enrolledCount ?? 0;
+        const nextTotalWords = j.totalWords ?? 0;
+        const nextLevelCounts: Record<LeitnerLevel, number> =
+          j.levelCounts ?? { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+        const nextSettings: UserSettings = j.settings ?? DEFAULT_USER_SETTINGS;
+
+        cachedReviewOverview = {
+          words: serverWords,
+          dueCount: nextDueCount,
+          totalOverdueCount: nextTotalOverdue,
+          reviewedToday: nextReviewedToday,
+          dailyReviewLimit: nextDailyLimit,
+          dailyLimitRemaining: nextDailyRemaining,
+          enrolledCount: nextEnrolled,
+          totalWords: nextTotalWords,
+          levelCounts: nextLevelCounts,
+          settings: nextSettings,
+        };
+
         if (savedSession && savedSession.queue.length > 0) {
           setQueue(savedSession.queue);
           const pendingNonRetry = savedSession.queue.filter(
             (item) => !item.isRetryInSession
           ).length;
-          setDueCount(Math.max(j.dueCount ?? 0, pendingNonRetry));
+          setDueCount(Math.max(nextDueCount, pendingNonRetry));
           setReviewedInSession(savedSession.reviewedInSession);
           setCorrectInSession(savedSession.correctInSession);
         } else {
           setQueue(serverWords);
-          setDueCount(j.dueCount ?? 0);
+          setDueCount(nextDueCount);
           setReviewedInSession(0);
           setCorrectInSession(0);
         }
-        setTotalOverdueCount(j.totalOverdueCount ?? j.dueCount ?? 0);
-        setReviewedToday(j.reviewedToday ?? 0);
-        setDailyReviewLimit(j.dailyReviewLimit ?? DEFAULT_USER_SETTINGS.daily_review_limit);
-        setDailyLimitRemaining(j.dailyLimitRemaining ?? 0);
-        setEnrolledCount(j.enrolledCount ?? 0);
-        setTotalWords(j.totalWords ?? 0);
-        if (j.levelCounts) setLevelCounts(j.levelCounts);
-        if (j.settings) {
-          setSettings(j.settings);
-          setDraftSettings(j.settings);
-        }
+        setTotalOverdueCount(nextTotalOverdue);
+        setReviewedToday(nextReviewedToday);
+        setDailyReviewLimit(nextDailyLimit);
+        setDailyLimitRemaining(nextDailyRemaining);
+        setEnrolledCount(nextEnrolled);
+        setTotalWords(nextTotalWords);
+        setLevelCounts(nextLevelCounts);
+        setSettings(nextSettings);
+        setDraftSettings(nextSettings);
         setTyped("");
         setHintLevel(0);
         setSoftHintMsg("");
@@ -294,9 +344,11 @@ export default function Review() {
         setRevealedMeaning(false);
         setFeedback(null);
       }
-      if (wRes.ok) {
+      if (wRes && wRes.ok) {
         const wJson = await wRes.json();
-        setWordPool((wJson.words ?? []) as Word[]);
+        const pool = (wJson.words ?? []) as Word[];
+        cachedWordPool = pool;
+        setWordPool(pool);
       }
     } finally {
       setLoading(false);

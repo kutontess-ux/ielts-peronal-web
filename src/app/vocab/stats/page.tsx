@@ -104,14 +104,16 @@ function formatRelativeDue(iso: string): string {
   return `Còn ${absDays} ngày`;
 }
 
+let cachedVocabStats: StatsPayload | null = null;
+
 function VocabStatsInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const activeTab: "stats" | "bank" =
     searchParams.get("tab") === "bank" ? "bank" : "stats";
 
-  const [data, setData] = useState<StatsPayload | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [data, setData] = useState<StatsPayload | null>(() => cachedVocabStats);
+  const [loading, setLoading] = useState(() => !cachedVocabStats);
   const [err, setErr] = useState("");
   const [riskFilter, setRiskFilter] = useState<"all" | "overdue" | "due-soon" | "lapsed">("all");
   const [todayKey, setTodayKey] = useState("");
@@ -121,15 +123,21 @@ function VocabStatsInner() {
   const studyHistory = useStudyHistory();
 
   const loadStats = useCallback(async () => {
-    setLoading(true);
+    if (!cachedVocabStats) {
+      setLoading(true);
+    }
     setErr("");
     try {
       const r = await fetch("/api/vocab/stats", { cache: "no-store" });
       const j = await r.json();
       if (!r.ok) throw new Error(j.error || "Không tải được thống kê");
-      setData(j as StatsPayload);
+      const payload = j as StatsPayload;
+      cachedVocabStats = payload;
+      setData(payload);
     } catch (e) {
-      setErr((e as Error).message);
+      if (!cachedVocabStats) {
+        setErr((e as Error).message);
+      }
     } finally {
       setLoading(false);
     }

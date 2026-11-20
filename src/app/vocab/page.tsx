@@ -1209,11 +1209,15 @@ function MoveFolderModal({
   );
 }
 
+let cachedVocabWords: Word[] | null = null;
+let cachedVocabOverviewStats: { dueCount: number; totalWords: number; masteredCount: number } | null = null;
+
 function VocabLearnContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const urlTab = searchParams.get("tab");
   const selectedBookId = searchParams.get("book");
+  const urlSetId = searchParams.get("setId");
   const bookModuleQuery = useMemo(() => {
     const qSource = searchParams.get("source") ?? "";
     if (!qSource.startsWith("book-")) return null;
@@ -1225,9 +1229,11 @@ function VocabLearnContent() {
     };
   }, [searchParams]);
 
-  const [words, setWords] = useState<Word[]>([]);
-  const [stats, setStats] = useState({ dueCount: 0, totalWords: 0, masteredCount: 0 });
-  const [loading, setLoading] = useState(true);
+  const [words, setWords] = useState<Word[]>(() => cachedVocabWords ?? []);
+  const [stats, setStats] = useState(
+    () => cachedVocabOverviewStats ?? { dueCount: 0, totalWords: 0, masteredCount: 0 }
+  );
+  const [loading, setLoading] = useState(() => !cachedVocabWords);
   const [bookWords, setBookWords] = useState<Word[]>([]);
   const [bookLoading, setBookLoading] = useState(false);
   const [bookLoaded, setBookLoaded] = useState(false);
@@ -1235,7 +1241,23 @@ function VocabLearnContent() {
   const [savedBookSetId, setSavedBookSetId] = useState<string | null>(null);
   const [bookFolderModalOpen, setBookFolderModalOpen] = useState(false);
   const [newBookFolderName, setNewBookFolderName] = useState("");
-  const [selectedSetId, setSelectedSetId] = useState<string | null>(null);
+  const selectedSetId = urlSetId;
+  const openStudySet = useCallback(
+    (id: string) => {
+      router.push(`/vocab?setId=${encodeURIComponent(id)}`, { scroll: false });
+    },
+    [router]
+  );
+  const closeStudySet = useCallback(
+    (replace = false) => {
+      if (replace) {
+        router.replace("/vocab", { scroll: false });
+      } else {
+        router.push("/vocab", { scroll: false });
+      }
+    },
+    [router]
+  );
   const [openMenuSetId, setOpenMenuSetId] = useState<string | null>(null);
   const [moveFolderSet, setMoveFolderSet] = useState<StudySet | null>(null);
   const [activeSession, setActiveSession] = useState<{
@@ -1321,12 +1343,15 @@ function VocabLearnContent() {
       fetch("/api/reviews", { cache: "no-store" }).then((r) => r.json()),
     ]);
     const list = (wJson.words ?? []) as Word[];
-    setWords(list);
-    setStats({
+    const nextStats = {
       dueCount: rJson.dueCount ?? 0,
       totalWords: rJson.totalWords ?? list.length,
       masteredCount: rJson.masteredCount ?? 0,
-    });
+    };
+    cachedVocabWords = list;
+    cachedVocabOverviewStats = nextStats;
+    setWords(list);
+    setStats(nextStats);
     return list;
   }, []);
 
@@ -1380,12 +1405,15 @@ function VocabLearnContent() {
     ])
       .then(([wJson, rJson, bJson]) => {
         const list = (wJson.words ?? []) as Word[];
-        setWords(list);
-        setStats({
+        const nextStats = {
           dueCount: rJson.dueCount ?? 0,
           totalWords: rJson.totalWords ?? list.length,
           masteredCount: rJson.masteredCount ?? 0,
-        });
+        };
+        cachedVocabWords = list;
+        cachedVocabOverviewStats = nextStats;
+        setWords(list);
+        setStats(nextStats);
         if (bJson) {
           setBookWords((bJson.words ?? []) as Word[]);
           setBookLoaded(true);
@@ -1544,7 +1572,6 @@ function VocabLearnContent() {
       .filter((w): w is Word => !!w);
     const qMode = params.get("mode");
     const rafId = requestAnimationFrame(() => {
-      setSelectedSetId(targetSet.id);
       if (
         (qMode === "flashcards" ||
           qMode === "learn" ||
@@ -1770,10 +1797,10 @@ function VocabLearnContent() {
                     `/vocab?tab=books&book=${encodeURIComponent(bookModuleQuery!.source)}`,
                     { scroll: false }
                   )
-                : setSelectedSetId(null)
+                : closeStudySet()
             }
             onOpenFolder={(fId) => {
-              setSelectedSetId(null);
+              closeStudySet(true);
               setActiveFolderId(fId);
             }}
             onStartFlashcards={() =>
@@ -1823,7 +1850,7 @@ function VocabLearnContent() {
                 )
               ) {
                 deleteStudySet(activeDetailSet.id);
-                setSelectedSetId(null);
+                closeStudySet(true);
               }
             }}
           />
@@ -2506,13 +2533,13 @@ function VocabLearnContent() {
                   tabIndex={0}
                   onClick={() => {
                     setOpenMenuSetId(null);
-                    setSelectedSetId(s.id);
+                    openStudySet(s.id);
                   }}
                   onKeyDown={(e) => {
                     if (e.key === "Enter" || e.key === " ") {
                       e.preventDefault();
                       setOpenMenuSetId(null);
-                      setSelectedSetId(s.id);
+                      openStudySet(s.id);
                     }
                   }}
                   className={`group relative flex cursor-pointer flex-col justify-between rounded-2xl border border-transparent bg-transparent p-4 text-left transition hover:border-line hover:bg-card ${
