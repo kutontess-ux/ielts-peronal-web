@@ -5,8 +5,9 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CharacterLoader } from "@/components/CharacterLoader";
 import {
-  ArrowLeft, BarChart3, Bell, BookMarked, Bot, CalendarClock, Check, CheckCircle2, ChevronDown, ChevronUp, Clock, Folder, FolderInput, FolderOpen, FolderPlus, Layers, ListChecks, Loader2, MoreVertical, Pencil, PenLine, Plus, Repeat, Search, Settings2, Sparkles, Trash2, X,
+  ArrowLeft, BarChart3, Bell, BookMarked, Bot, CalendarClock, Check, CheckCircle2, ChevronDown, ChevronUp, Clock, Folder, FolderInput, FolderOpen, FolderPlus, ListChecks, Loader2, MoreVertical, Pencil, PenLine, Plus, Repeat, Search, Settings2, Sparkles, Trash2, X,
 } from "lucide-react";
+import { QuizletSetIcon } from "@/components/QuizletSetIcon";
 import { levelColor, type Word } from "@/lib/mock";
 import { normKey } from "@/lib/normalize";
 import { enrollWordsInSrs } from "@/lib/srs";
@@ -1919,7 +1920,7 @@ function VocabLearnContent() {
                   <CalendarClock size={20} className="shrink-0 text-brand-hover" />
                   {isAdmin && dueSetCount === 0
                     ? "Theo dõi lịch ôn học phần"
-                    : "Học phần cần ôn hôm nay"}
+                    : "Ôn lại"}
                 </h2>
                 {dueSetCount > 0 && (
                   <span className="whitespace-nowrap rounded-full bg-rose-500/15 px-2.5 py-0.5 text-xs font-bold text-rose-700 dark:text-rose-300">
@@ -1927,11 +1928,11 @@ function VocabLearnContent() {
                   </span>
                 )}
               </div>
-              <p className="mt-0.5 text-xs text-muted">
-                {isAdmin
-                  ? "Theo dõi tối đa 5 học phần học gần nhất · Ưu tiên nhắc học phần đã học lâu nhất trước."
-                  : "Các học phần được gợi ý ôn lại để nhớ lâu hơn."}
-              </p>
+              {isAdmin && (
+                <p className="mt-0.5 text-xs text-muted">
+                  Theo dõi tối đa 5 học phần học gần nhất · Ưu tiên nhắc học phần đã học lâu nhất trước.
+                </p>
+              )}
             </div>
 
             {isAdmin && (
@@ -2017,7 +2018,7 @@ function VocabLearnContent() {
               </div>
             ) : (
               <div className="mt-4 rounded-2xl bg-bg/70 px-4 py-4 text-xs text-muted">
-                Chưa có học phần nào được học gần đây. Hãy bấm <b>Lật thẻ</b> hoặc <b>Luyện tập</b> ở một học phần bên dưới — sau khi học xong hệ thống sẽ tự xếp lịch ôn lại tại đây.
+                Chưa có học phần nào được học gần đây. Hãy bấm <b>Flashcard</b> hoặc <b>Luyện tập</b> ở một học phần bên dưới — sau khi học xong hệ thống sẽ tự xếp lịch ôn lại tại đây.
               </div>
             )
           ) : (
@@ -2043,7 +2044,7 @@ function VocabLearnContent() {
                             : "bg-card text-muted"
                         }`}
                       >
-                        {isAdmin ? `#${index + 1}` : <Layers size={14} />}
+                        {isAdmin ? `#${index + 1}` : <QuizletSetIcon size={15} />}
                       </span>
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-2">
@@ -2116,7 +2117,7 @@ function VocabLearnContent() {
                         }
                         className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-full bg-card px-3.5 py-2 text-xs font-bold text-muted shadow-xs transition hover:text-ink hover:shadow-sm disabled:opacity-40"
                       >
-                        <Layers size={13} /> Lật thẻ
+                        <QuizletSetIcon size={14} /> Flashcard
                       </button>
                     </div>
                   </div>
@@ -2232,8 +2233,8 @@ function VocabLearnContent() {
             {activeTab !== "books" && (
               <div className="flex items-center justify-between gap-3 rounded-2xl border border-line/70 bg-card px-4 py-3 shadow-sm shadow-slate-900/5 dark:shadow-black/20">
                 <div className="flex min-w-0 items-center gap-3">
-                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-brand/10 text-brand-hover">
-                    <Layers size={18} strokeWidth={1.8} />
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#eaf4ff] text-[#0077cc] dark:bg-brand/15 dark:text-brand-hover">
+                    <QuizletSetIcon size={20} />
                   </span>
                   <span className="truncate text-sm font-bold text-ink">
                     Tạo bộ thẻ ghi nhớ
@@ -2262,7 +2263,7 @@ function VocabLearnContent() {
                     activeTab === "sets" ? "text-brand-hover" : "text-muted hover:text-ink"
                   }`}
                 >
-                  <Layers size={15} className="shrink-0 sm:h-4 sm:w-4" /> Học phần ({studySets.length})
+                  <QuizletSetIcon size={16} className="shrink-0" /> Học phần ({studySets.length})
                   {activeTab === "sets" && (
                     <span className="absolute inset-x-0 bottom-0 h-0.5 rounded-full bg-brand-hover" />
                   )}
@@ -2549,7 +2550,7 @@ function VocabLearnContent() {
           </div>
         ) : studySets.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-line bg-card p-10 text-center">
-            <Layers size={40} strokeWidth={1.3} className="mx-auto text-brand-hover" />
+            <QuizletSetIcon size={40} className="mx-auto text-[#0077cc] dark:text-brand-hover" />
             <div className="mt-3 text-lg font-bold">Chưa có học phần nào</div>
             <p className="mx-auto mt-1 max-w-md text-sm text-muted">
               Hãy tự tạo học phần từ những từ muốn học (hoặc nhập từ mới) để ôn tập hiệu quả.
@@ -2597,8 +2598,8 @@ function VocabLearnContent() {
                 >
                   <div className="flex items-start justify-between gap-2.5">
                     <div className="flex min-w-0 flex-1 items-start gap-2.5">
-                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-card text-brand-hover transition group-hover:bg-bg">
-                        <Layers size={20} strokeWidth={1.6} />
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#eaf4ff] text-[#0077cc] transition dark:bg-brand/15 dark:text-brand-hover">
+                        <QuizletSetIcon size={22} />
                       </div>
                       <div className="min-w-0 flex-1">
                         <div className="break-words text-base font-bold text-ink">
