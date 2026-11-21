@@ -382,6 +382,9 @@ export function parseRequestedWordCount(
   maxCount = 60
 ): { targetCount: number; explicit: boolean } {
   const cleaned = prompt
+    .replace(/\b\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4}\b/g, " ") // bỏ ngày tháng vd 21/11/2026
+    .replace(/\b20\d{2}\b/g, " ") // bỏ năm vd 2026
+    .replace(/\b\d+\/\d+\b/g, " ") // bỏ phân số / tiến độ vd 45/3718
     .replace(/\btask\s*[12]\b/gi, " ")
     .replace(/\bband\s*\d+(?:\.\d+)?\b/gi, " ")
     .replace(/\b[abc][12]\b/gi, " ");

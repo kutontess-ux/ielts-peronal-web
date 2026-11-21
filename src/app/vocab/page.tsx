@@ -261,7 +261,7 @@ function StudySetModal({
 
       setQuickText("");
       setQuickMsg(`Đã thêm ${matchedIds.length} từ vào học phần (lưu đồng thời trong Kho từ vựng).`);
-      setMode("pick");
+      setMode("current");
     } catch (e) {
       setQuickErr((e as Error).message);
     } finally {

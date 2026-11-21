@@ -40,7 +40,9 @@ export async function POST(req: Request) {
     const { text } = (await req.json()) as { text: string };
     if (!text?.trim()) return NextResponse.json({ error: "Chưa có nội dung" }, { status: 400 });
 
-    const { terms, passage } = splitInput(text);
+    const { terms, passage, structured } = splitInput(text);
+    const structuredMap = new Map((structured ?? []).map((s) => [normKey(s.word), s]));
+
     const candidatesRaw = [...terms];
     if (passage) {
       const quotaErr = await consumeAiQuota(ctx, "import-passage");
@@ -72,12 +74,39 @@ export async function POST(req: Request) {
     }
 
     const toEnrich = candidates.filter((_, i) => !dictMap.has(keys[i]));
-    if (toEnrich.length > 0 && !passage) {
+    const selfEnriched: Enriched[] = [];
+    const needAi: string[] = [];
+
+    for (const c of toEnrich) {
+      const s = structuredMap.get(normKey(c));
+      if (s && s.meaning_vi) {
+        selfEnriched.push({
+          input: c,
+          valid: true,
+          lemma: s.word,
+          ipa: s.ipa ?? "",
+          pos: s.pos ?? "n",
+          meaning_vi: s.meaning_vi,
+          definition_en: s.meaning_vi,
+          example: s.example ?? "",
+          cefr_level: (s.level ?? "B2") as Enriched["cefr_level"],
+          topic: "Other",
+          is_awl: false,
+          collocations: [],
+          synonyms: s.synonyms ?? [],
+        });
+      } else {
+        needAi.push(c);
+      }
+    }
+
+    if (needAi.length > 0 && !passage) {
       const quotaErr = await consumeAiQuota(ctx, "import-enrich");
       if (quotaErr) return quotaErr;
     }
 
-    const enriched = toEnrich.length ? await enrich(toEnrich) : [];
+    const aiEnriched = needAi.length ? await enrich(needAi) : [];
+    const enriched = [...selfEnriched, ...aiEnriched];
 
     // 3) kiểm tra lại cache theo lemma do AI trả về (vd "analysed" -> "analyse")
     const lemKeys = enriched.filter((e) => e.valid).map((e) => normKey(e.lemma));
@@ -102,24 +131,27 @@ export async function POST(req: Request) {
     const existingWordIds = new Set<number>();
     const items: Record<string, unknown>[] = [];
 
-    const dictToItem = (row: DictWordRow, inputLabel: string, status: "new" | "duplicate") => ({
-      input: inputLabel,
-      lemma: row.lemma,
-      norm_key: row.norm_key,
-      existingId: row.id,
-      ipa: row.ipa ?? "",
-      pos: row.pos ?? "",
-      meaning_vi: row.meaning_vi ?? "",
-      definition_en: row.definition_en ?? "",
-      example: row.example ?? "",
-      cefr_level: row.cefr_level ?? "B2",
-      topic: row.topic ?? "Other",
-      is_awl: !!row.is_awl,
-      collocations: row.collocations ?? [],
-      synonyms: row.synonyms ?? [],
-      cachedFromBank: true,
-      status,
-    });
+    const dictToItem = (row: DictWordRow, inputLabel: string, status: "new" | "duplicate") => {
+      const s = structuredMap.get(row.norm_key);
+      return {
+        input: inputLabel,
+        lemma: row.lemma,
+        norm_key: row.norm_key,
+        existingId: row.id,
+        ipa: s?.ipa || row.ipa || "",
+        pos: s?.pos || row.pos || "",
+        meaning_vi: s?.meaning_vi || row.meaning_vi || "",
+        definition_en: row.definition_en || s?.meaning_vi || "",
+        example: s?.example || row.example || "",
+        cefr_level: s?.level || row.cefr_level || "B2",
+        topic: row.topic ?? "Other",
+        is_awl: !!row.is_awl,
+        collocations: row.collocations ?? [],
+        synonyms: s?.synonyms && s.synonyms.length > 0 ? s.synonyms : row.synonyms ?? [],
+        cachedFromBank: true,
+        status,
+      };
+    };
 
     // Từ đã có sẵn trong cache từ điển (0 lượt AI)
     candidates.forEach((c, i) => {

@@ -100,10 +100,101 @@ export function possibleLemmas(raw: string): string[] {
 }
 
 
-// Tách văn bản dán vào thành các mục. Trả về { terms, passage }:
+export type StructuredWordItem = {
+  word: string;
+  level?: "A2" | "B1" | "B2" | "C1" | "C2";
+  pos?: string;
+  ipa?: string;
+  meaning_vi?: string;
+  example?: string;
+  synonyms?: string[];
+};
+
+export function parseStructuredVocab(text: string): StructuredWordItem[] | null {
+  const lines = text.split(/[\r\n]+/);
+  // Match lines like "1. abandon [B2] (v) /.../" or "1) abandon - ..." or "1. crime rate"
+  const itemHeaderRegex =
+    /^\s*(\d+)[\.\)\/:\-]\s*([a-zA-Z\s\-'\`’]+?)(?:\s*\[([A-Za-z0-9]+)\])?(?:\s*\(([a-z\s\.\/]+)\))?(?:\s*\/([^\/]+)\/)?\s*$/;
+
+  const items: StructuredWordItem[] = [];
+  let current: StructuredWordItem | null = null;
+
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    if (!line) continue;
+
+    // Bỏ qua các dòng tiêu đề như "📚 DAILY...", "📈 Tiến độ...", v.v.
+    if (/^(?:📚|📈|Tiến độ|DAILY|Daily|Date|Ngày)\b/i.test(line)) continue;
+
+    const m = line.match(itemHeaderRegex);
+    if (m) {
+      if (current) items.push(current);
+      const w = cleanTerm(m[2]);
+      if (w) {
+        const rawLevel = m[3]?.toUpperCase();
+        const level =
+          rawLevel === "A1"
+            ? "A2"
+            : ["A2", "B1", "B2", "C1", "C2"].includes(rawLevel ?? "")
+            ? (rawLevel as StructuredWordItem["level"])
+            : undefined;
+        const pos = m[4]?.trim().toLowerCase();
+        const ipa = m[5] ? `/${m[5].trim()}/` : undefined;
+        current = {
+          word: w,
+          level,
+          pos: pos ? pos.replace(/[^a-z]/g, "") : undefined,
+          ipa,
+        };
+      } else {
+        current = null;
+      }
+      continue;
+    }
+
+    if (current) {
+      // Dòng nghĩa tiếng Việt
+      if (/^(?:🔹|•|-|\*)*\s*(?:nghĩa|meaning|định nghĩa)\s*:\s*/i.test(line)) {
+        const val = line.replace(/^(?:🔹|•|-|\*)*\s*(?:nghĩa|meaning|định nghĩa)\s*:\s*/i, "").trim();
+        if (val) current.meaning_vi = val;
+      }
+      // Dòng paraphrase / đồng nghĩa
+      else if (/^(?:🔄|•|-|\*)*\s*(?:paraphrase|synonym|synonyms|đồng nghĩa)\s*:\s*/i.test(line)) {
+        const val = line.replace(/^(?:🔄|•|-|\*)*\s*(?:paraphrase|synonym|synonyms|đồng nghĩa)\s*:\s*/i, "").trim();
+        if (val) {
+          current.synonyms = val.split(/[,;\/]+/).map((s) => cleanTerm(s)).filter(Boolean);
+        }
+      }
+      // Dòng câu ví dụ
+      else if (/^(?:💬|•|-|\*)*\s*(?:ví dụ|example|vd|ex)\s*:\s*/i.test(line)) {
+        const val = line.replace(/^(?:💬|•|-|\*)*\s*(?:ví dụ|example|vd|ex)\s*:\s*/i, "").trim();
+        if (val) current.example = val.replace(/^["“”'`]/, "").replace(/["“”'`]$/, "");
+      }
+    }
+  }
+
+  if (current) items.push(current);
+  return items.length >= 2 ? items : null;
+}
+
+// Tách văn bản dán vào thành các mục. Trả về { terms, passage, structured }:
 // - terms: các mục ngắn (≤3 từ) -> coi là từ/cụm từ
 // - passage: các dòng dài -> coi là đoạn văn, để AI trích từ
-export function splitInput(text: string): { terms: string[]; passage: string } {
+// - structured: nếu phát hiện dạng danh sách từ vựng có cấu trúc (1. word, Nghĩa:..., Paraphrase:..., Ví dụ:...)
+export function splitInput(text: string): {
+  terms: string[];
+  passage: string;
+  structured?: StructuredWordItem[];
+} {
+  const structured = parseStructuredVocab(text);
+  if (structured && structured.length > 0) {
+    return {
+      terms: structured.map((item) => item.word),
+      passage: "",
+      structured,
+    };
+  }
+
   const parts = text
     .split(/[\n\r;\t]+/)
     .flatMap((line) => (line.trim().split(/\s+/).length > 6 ? [line] : line.split(",")))
