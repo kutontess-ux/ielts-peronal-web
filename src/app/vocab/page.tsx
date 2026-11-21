@@ -8,6 +8,7 @@ import {
   ArrowLeft, BarChart3, Bell, BookMarked, Bot, CalendarClock, Check, CheckCircle2, ChevronDown, ChevronUp, Clock, Folder, FolderInput, FolderOpen, FolderPlus, ListChecks, Loader2, MoreVertical, Pencil, PenLine, Plus, Repeat, Search, Settings2, Sparkles, Trash2, X,
 } from "lucide-react";
 import { QuizletSetIcon } from "@/components/QuizletSetIcon";
+import { HorizontalCarousel } from "@/components/HorizontalCarousel";
 import { levelColor, type Word } from "@/lib/mock";
 import { normKey } from "@/lib/normalize";
 import { enrollWordsInSrs } from "@/lib/srs";
