@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/lib/supabase-server";
 import { consumeAiQuota } from "@/lib/ai-quota";
-import { enrich, extractFromPassage } from "@/lib/ai";
+import { enrich, extractFromPassage, type Enriched } from "@/lib/ai";
 import { cleanTerm, normKey, splitInput } from "@/lib/normalize";
 import { loadUserWordIdSet } from "@/lib/user-words";
 
