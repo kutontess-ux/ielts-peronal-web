@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CharacterLoader } from "@/components/CharacterLoader";
 import {
-  ArrowLeft, BarChart3, Bell, BookMarked, Bot, CalendarClock, Check, CheckCircle2, ChevronDown, ChevronUp, Clock, Folder, FolderInput, FolderOpen, FolderPlus, ListChecks, Loader2, MoreVertical, Pencil, PenLine, Plus, Repeat, Search, Settings2, Sparkles, Trash2, X,
+  ArrowLeft, BarChart3, Bell, BookMarked, Bot, CalendarClock, Check, CheckCircle2, ChevronDown, ChevronUp, Clock, Folder, FolderInput, FolderOpen, FolderPlus, Loader2, MoreVertical, Pencil, PenLine, Plus, Repeat, Search, Settings2, Sparkles, Trash2, X,
 } from "lucide-react";
 import { QuizletSetIcon } from "@/components/QuizletSetIcon";
 import { HorizontalCarousel } from "@/components/HorizontalCarousel";
@@ -130,19 +130,16 @@ function StudySetModal({
   const [selectedIds, setSelectedIds] = useState<Set<number>>(
     () => new Set(editing?.wordIds ?? [])
   );
-  const [mode, setMode] = useState<"current" | "manual" | "quick-add" | "ai-create">(
-    editing ? "current" : "manual"
-  );
+  const [mode, setMode] = useState<"cards" | "quick-add" | "ai-create">("cards");
 
-  // Tạo tay thẻ thủ công
-  const [manualCards, setManualCards] = useState<ManualCardDraft[]>(() => [
-    createEmptyManualCard(1),
-    createEmptyManualCard(2),
-  ]);
+  // Tạo tay thẻ thủ công (nếu tạo mới thì mở sẵn 2 thẻ trống; nếu đang sửa thì hiện thẻ cũ trước)
+  const [manualCards, setManualCards] = useState<ManualCardDraft[]>(() =>
+    editing ? [] : [createEmptyManualCard(1), createEmptyManualCard(2)]
+  );
   const [manualBusy, setManualBusy] = useState(false);
   const [manualErr, setManualErr] = useState("");
 
-  // Tìm kiếm trong các từ hiện tại
+  // Tìm kiếm trong các từ đã lưu
   const [currentQuery, setCurrentQuery] = useState("");
 
   // Nhập nhanh từ mới vào học phần
@@ -169,7 +166,10 @@ function StudySetModal({
   };
 
   const removeManualCard = (id: string) => {
-    setManualCards((prev) => (prev.length <= 1 ? prev : prev.filter((c) => c.id !== id)));
+    setManualCards((prev) => {
+      if (selectedIds.size === 0 && prev.length <= 1) return prev;
+      return prev.filter((c) => c.id !== id);
+    });
   };
 
   const validManualCards = useMemo(
@@ -267,7 +267,7 @@ function StudySetModal({
         });
       }
 
-      setManualCards([createEmptyManualCard(1), createEmptyManualCard(2)]);
+      setManualCards([]);
       setQuickMsg(`Đã thêm ${returnedIds.length} thẻ tạo tay vào học phần (lưu đồng thời trong Kho từ vựng).`);
       return returnedIds;
     } catch (e) {
@@ -333,7 +333,7 @@ function StudySetModal({
 
       setQuickText("");
       setQuickMsg(`Đã thêm ${matchedIds.length} từ vào học phần (lưu đồng thời trong Kho từ vựng).`);
-      setMode("current");
+      setMode("cards");
     } catch (e) {
       setQuickErr((e as Error).message);
     } finally {
@@ -421,7 +421,7 @@ function StudySetModal({
       setAiItems(null);
       setAiPrompt("");
       setQuickMsg(`AI đã tạo & thêm ${chosenAiItems.length} flashcard vào học phần (đồng bộ cùng Kho từ vựng).`);
-      setMode("current");
+      setMode("cards");
     } catch (e) {
       setAiErr((e as Error).message);
     } finally {
@@ -438,7 +438,7 @@ function StudySetModal({
     if (hasStartedManual) {
       const addedIds = await commitManualCards();
       if (addedIds === null) {
-        setMode("manual");
+        setMode("cards");
         return;
       }
       for (const id of addedIds) finalIds.add(id);
@@ -462,7 +462,7 @@ function StudySetModal({
         onSubmit={handleSubmit}
         onClick={(e) => e.stopPropagation()}
         className={`flex max-h-[92vh] w-full flex-col overflow-hidden rounded-3xl border border-line bg-card shadow-2xl transition-all ${
-          mode === "manual" ? "max-w-3xl" : "max-w-2xl"
+          mode === "cards" ? "max-w-3xl" : "max-w-2xl"
         }`}
       >
         <div className="flex items-center justify-between border-b border-line px-4 py-3.5 sm:px-6 sm:py-4">
@@ -519,21 +519,12 @@ function StudySetModal({
             <div className="flex flex-wrap gap-2">
               <button
                 type="button"
-                onClick={() => setMode("current")}
+                onClick={() => setMode("cards")}
                 className={`inline-flex items-center gap-1 rounded-full px-3.5 py-1.5 text-xs font-bold transition ${
-                  mode === "current" ? "bg-ink text-bg" : "bg-bg text-muted hover:text-ink"
+                  mode === "cards" ? "bg-ink text-bg" : "bg-bg text-muted hover:text-ink"
                 }`}
               >
-                <ListChecks size={13} /> Những từ hiện tại ({selectedWordsList.length})
-              </button>
-              <button
-                type="button"
-                onClick={() => setMode("manual")}
-                className={`inline-flex items-center gap-1 rounded-full px-3.5 py-1.5 text-xs font-bold transition ${
-                  mode === "manual" ? "bg-ink text-bg" : "bg-bg text-muted hover:text-ink"
-                }`}
-              >
-                <PenLine size={13} /> Tạo tay ({manualCards.length})
+                <PenLine size={13} /> Danh sách thẻ ({selectedIds.size + validManualCards.length})
               </button>
               <button
                 type="button"
@@ -555,7 +546,7 @@ function StudySetModal({
               </button>
             </div>
             <div className="text-xs font-bold text-brand-hover">
-              Đã chọn: {selectedIds.size} từ
+              Tổng: {selectedIds.size + validManualCards.length} từ
             </div>
           </div>
 
@@ -565,7 +556,7 @@ function StudySetModal({
             </div>
           )}
 
-          {mode === "current" ? (
+          {mode === "cards" ? (
             <div className="space-y-3">
               {selectedWordsList.length > 0 && (
                 <div className="flex flex-wrap items-center gap-2">
@@ -574,7 +565,7 @@ function StudySetModal({
                     <input
                       value={currentQuery}
                       onChange={(e) => setCurrentQuery(e.target.value)}
-                      placeholder="Tìm trong các từ hiện tại..."
+                      placeholder="Tìm trong các từ đã lưu..."
                       className="w-full rounded-xl border border-line py-2 pl-9 pr-3 text-xs outline-none focus:border-brand-hover"
                     />
                   </div>
@@ -583,184 +574,190 @@ function StudySetModal({
                     onClick={clearSelected}
                     className="rounded-xl bg-bg px-3 py-2 text-xs font-semibold text-muted hover:text-rose-600 dark:hover:text-rose-300"
                   >
-                    Bỏ chọn tất cả
+                    Xoá tất cả từ đã lưu
                   </button>
                 </div>
               )}
 
-              {selectedWordsList.length === 0 ? (
-                <div className="rounded-2xl bg-bg p-6 text-center text-xs text-muted">
-                  Chưa có từ nào trong học phần này. Chuyển sang tab <b>“Tạo tay”</b>, <b>“Nhập từ mới nhanh”</b> hoặc <b>“AI tạo Flashcard”</b> để thêm từ.
-                </div>
-              ) : filteredCurrentWords.length === 0 ? (
-                <div className="rounded-2xl bg-bg p-6 text-center text-xs text-muted">
-                  Không có từ nào khớp từ khoá tìm kiếm.
-                </div>
-              ) : (
-                <div className="max-h-64 space-y-1.5 overflow-y-auto rounded-2xl border border-line bg-bg p-2">
-                  {filteredCurrentWords.map((w) => (
-                    <div
-                      key={w.id}
-                      className="flex items-center gap-3 rounded-xl bg-card px-3 py-2 text-sm"
-                    >
-                      <span className="font-bold">{w.word}</span>
-                      <span className="min-w-0 flex-1 truncate text-xs text-muted">{w.vi}</span>
-                      <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold ${levelColor[w.level]}`}>
-                        {w.level}
-                      </span>
-                      <button
-                        type="button"
-                        title="Xoá khỏi học phần"
-                        onClick={() => toggleWord(w.id)}
-                        className="rounded-lg p-1 text-muted transition hover:bg-rose-500/15 hover:text-rose-600 dark:hover:text-rose-300"
-                      >
-                        <X size={14} />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          ) : mode === "manual" ? (
-            <div className="space-y-3">
-              <div className="max-h-80 space-y-3 overflow-y-auto pr-1">
-                {manualCards.map((card, index) => (
-                  <div
-                    key={card.id}
-                    className="rounded-2xl border border-line bg-bg p-3.5 transition focus-within:border-brand/60"
-                  >
-                    <div className="mb-2.5 flex items-center justify-between gap-2 border-b border-line pb-2">
-                      <span className="inline-flex h-6 min-w-[24px] items-center justify-center rounded-lg bg-card px-2 text-xs font-bold text-muted">
-                        {index + 1}
-                      </span>
-                      <div className="flex items-center gap-1.5">
-                        <button
-                          type="button"
-                          onClick={() =>
-                            updateManualCard(card.id, { showExtra: !card.showExtra })
-                          }
-                          className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-semibold text-muted transition hover:bg-card hover:text-ink"
-                        >
-                          {card.showExtra ? (
-                            <>
-                              <ChevronUp size={13} /> Ẩn chi tiết
-                            </>
-                          ) : (
-                            <>
-                              <ChevronDown size={13} /> + IPA / Ví dụ / Loại từ
-                            </>
-                          )}
-                        </button>
-                        <button
-                          type="button"
-                          title="Xoá thẻ này"
-                          disabled={manualCards.length <= 1}
-                          onClick={() => removeManualCard(card.id)}
-                          className="rounded-lg p-1 text-muted transition hover:bg-rose-500/15 hover:text-rose-600 disabled:opacity-30 dark:hover:text-rose-300"
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="grid gap-3 sm:grid-cols-2">
-                      <div>
-                        <label className="mb-1 block text-[10px] font-bold tracking-wider text-muted uppercase">
-                          Thuật ngữ
-                        </label>
-                        <input
-                          value={card.term}
-                          onChange={(e) =>
-                            updateManualCard(card.id, { term: e.target.value })
-                          }
-                          placeholder="Vd: ubiquitous"
-                          className="w-full rounded-xl border border-line bg-card px-3 py-2 text-sm outline-none focus:border-brand-hover"
-                        />
-                      </div>
-                      <div>
-                        <label className="mb-1 block text-[10px] font-bold tracking-wider text-muted uppercase">
-                          Định nghĩa
-                        </label>
-                        <input
-                          value={card.definition}
-                          onChange={(e) =>
-                            updateManualCard(card.id, { definition: e.target.value })
-                          }
-                          placeholder="Vd: có mặt ở khắp mọi nơi"
-                          className="w-full rounded-xl border border-line bg-card px-3 py-2 text-sm outline-none focus:border-brand-hover"
-                        />
-                      </div>
-                    </div>
-
-                    {card.showExtra && (
-                      <div className="mt-3 grid gap-3 border-t border-line/60 pt-3 sm:grid-cols-2">
-                        <div>
-                          <label className="mb-1 block text-[10px] font-bold tracking-wider text-muted uppercase">
-                            IPA (tuỳ chọn)
-                          </label>
-                          <input
-                            value={card.ipa}
-                            onChange={(e) =>
-                              updateManualCard(card.id, { ipa: e.target.value })
-                            }
-                            placeholder="Vd: /juːˈbɪk.wɪ.təs/"
-                            className="w-full rounded-xl border border-line bg-card px-3 py-2 text-xs outline-none focus:border-brand-hover"
-                          />
-                        </div>
-                        <div>
-                          <label className="mb-1 block text-[10px] font-bold tracking-wider text-muted uppercase">
-                            Ví dụ (tuỳ chọn)
-                          </label>
-                          <input
-                            value={card.example}
-                            onChange={(e) =>
-                              updateManualCard(card.id, { example: e.target.value })
-                            }
-                            placeholder="Vd: Smartphones have become ubiquitous."
-                            className="w-full rounded-xl border border-line bg-card px-3 py-2 text-xs outline-none focus:border-brand-hover"
-                          />
-                        </div>
-                        <div>
-                          <label className="mb-1 block text-[10px] font-bold tracking-wider text-muted uppercase">
-                            Từ loại (tuỳ chọn)
-                          </label>
-                          <select
-                            value={card.pos}
-                            onChange={(e) =>
-                              updateManualCard(card.id, { pos: e.target.value })
-                            }
-                            className="w-full rounded-xl border border-line bg-card px-3 py-2 text-xs outline-none focus:border-brand-hover"
-                          >
-                            <option value="">Chưa chọn</option>
-                            <option value="n">Danh từ (n)</option>
-                            <option value="v">Động từ (v)</option>
-                            <option value="adj">Tính từ (adj)</option>
-                            <option value="adv">Trạng từ (adv)</option>
-                            <option value="phr">Cụm từ (phr)</option>
-                          </select>
-                        </div>
-                        <div>
-                          <label className="mb-1 block text-[10px] font-bold tracking-wider text-muted uppercase">
-                            Cấp độ CEFR
-                          </label>
-                          <select
-                            value={card.level}
-                            onChange={(e) =>
-                              updateManualCard(card.id, { level: e.target.value })
-                            }
-                            className="w-full rounded-xl border border-line bg-card px-3 py-2 text-xs outline-none focus:border-brand-hover"
-                          >
-                            {LEVELS.map((lv) => (
-                              <option key={lv} value={lv}>
-                                {lv}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                      </div>
-                    )}
+              <div className="max-h-96 space-y-2.5 overflow-y-auto pr-1">
+                {selectedWordsList.length > 0 && filteredCurrentWords.length === 0 && manualCards.length === 0 ? (
+                  <div className="rounded-2xl bg-bg p-6 text-center text-xs text-muted">
+                    Không có từ nào khớp từ khoá tìm kiếm.
                   </div>
-                ))}
+                ) : (
+                  <>
+                    {filteredCurrentWords.map((w, idx) => (
+                      <div
+                        key={w.id}
+                        className="rounded-2xl border border-line bg-bg px-3.5 py-3 text-sm"
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex min-w-0 flex-wrap items-center gap-2">
+                            <span className="inline-flex h-6 min-w-[24px] items-center justify-center rounded-lg bg-card px-2 text-xs font-bold text-muted">
+                              {idx + 1}
+                            </span>
+                            <span className="font-bold text-ink">{w.word}</span>
+                            {w.ipa && <span className="text-xs text-muted">{w.ipa}</span>}
+                            {w.pos && <span className="text-xs text-muted">· {w.pos}</span>}
+                            <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold ${levelColor[w.level]}`}>
+                              {w.level}
+                            </span>
+                          </div>
+                          <button
+                            type="button"
+                            title="Xoá khỏi học phần"
+                            onClick={() => toggleWord(w.id)}
+                            className="rounded-lg p-1 text-muted transition hover:bg-rose-500/15 hover:text-rose-600 dark:hover:text-rose-300"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                        <div className="mt-1.5 text-xs font-medium text-ink/90">{w.vi}</div>
+                        {w.example && (
+                          <div className="mt-1 text-[11px] italic text-muted">“{w.example}”</div>
+                        )}
+                      </div>
+                    ))}
+
+                    {manualCards.map((card, index) => (
+                      <div
+                        key={card.id}
+                        className="rounded-2xl border border-line bg-bg p-3.5 transition focus-within:border-brand/60"
+                      >
+                        <div className="mb-2.5 flex items-center justify-between gap-2 border-b border-line pb-2">
+                          <span className="inline-flex h-6 min-w-[24px] items-center justify-center rounded-lg bg-card px-2 text-xs font-bold text-muted">
+                            {filteredCurrentWords.length + index + 1}
+                          </span>
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                updateManualCard(card.id, { showExtra: !card.showExtra })
+                              }
+                              className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-semibold text-muted transition hover:bg-card hover:text-ink"
+                            >
+                              {card.showExtra ? (
+                                <>
+                                  <ChevronUp size={13} /> Ẩn chi tiết
+                                </>
+                              ) : (
+                                <>
+                                  <ChevronDown size={13} /> + IPA / Ví dụ / Loại từ
+                                </>
+                              )}
+                            </button>
+                            <button
+                              type="button"
+                              title="Xoá thẻ này"
+                              disabled={selectedIds.size === 0 && manualCards.length <= 1}
+                              onClick={() => removeManualCard(card.id)}
+                              className="rounded-lg p-1 text-muted transition hover:bg-rose-500/15 hover:text-rose-600 disabled:opacity-30 dark:hover:text-rose-300"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="grid gap-3 sm:grid-cols-2">
+                          <div>
+                            <label className="mb-1 block text-[10px] font-bold tracking-wider text-muted uppercase">
+                              Thuật ngữ
+                            </label>
+                            <input
+                              value={card.term}
+                              onChange={(e) =>
+                                updateManualCard(card.id, { term: e.target.value })
+                              }
+                              placeholder="Vd: ubiquitous"
+                              className="w-full rounded-xl border border-line bg-card px-3 py-2 text-sm outline-none focus:border-brand-hover"
+                            />
+                          </div>
+                          <div>
+                            <label className="mb-1 block text-[10px] font-bold tracking-wider text-muted uppercase">
+                              Định nghĩa
+                            </label>
+                            <input
+                              value={card.definition}
+                              onChange={(e) =>
+                                updateManualCard(card.id, { definition: e.target.value })
+                              }
+                              placeholder="Vd: có mặt ở khắp mọi nơi"
+                              className="w-full rounded-xl border border-line bg-card px-3 py-2 text-sm outline-none focus:border-brand-hover"
+                            />
+                          </div>
+                        </div>
+
+                        {card.showExtra && (
+                          <div className="mt-3 grid gap-3 border-t border-line/60 pt-3 sm:grid-cols-2">
+                            <div>
+                              <label className="mb-1 block text-[10px] font-bold tracking-wider text-muted uppercase">
+                                IPA (tuỳ chọn)
+                              </label>
+                              <input
+                                value={card.ipa}
+                                onChange={(e) =>
+                                  updateManualCard(card.id, { ipa: e.target.value })
+                                }
+                                placeholder="Vd: /juːˈbɪk.wɪ.təs/"
+                                className="w-full rounded-xl border border-line bg-card px-3 py-2 text-xs outline-none focus:border-brand-hover"
+                              />
+                            </div>
+                            <div>
+                              <label className="mb-1 block text-[10px] font-bold tracking-wider text-muted uppercase">
+                                Ví dụ (tuỳ chọn)
+                              </label>
+                              <input
+                                value={card.example}
+                                onChange={(e) =>
+                                  updateManualCard(card.id, { example: e.target.value })
+                                }
+                                placeholder="Vd: Smartphones have become ubiquitous."
+                                className="w-full rounded-xl border border-line bg-card px-3 py-2 text-xs outline-none focus:border-brand-hover"
+                              />
+                            </div>
+                            <div>
+                              <label className="mb-1 block text-[10px] font-bold tracking-wider text-muted uppercase">
+                                Từ loại (tuỳ chọn)
+                              </label>
+                              <select
+                                value={card.pos}
+                                onChange={(e) =>
+                                  updateManualCard(card.id, { pos: e.target.value })
+                                }
+                                className="w-full rounded-xl border border-line bg-card px-3 py-2 text-xs outline-none focus:border-brand-hover"
+                              >
+                                <option value="">Chưa chọn</option>
+                                <option value="n">Danh từ (n)</option>
+                                <option value="v">Động từ (v)</option>
+                                <option value="adj">Tính từ (adj)</option>
+                                <option value="adv">Trạng từ (adv)</option>
+                                <option value="phr">Cụm từ (phr)</option>
+                              </select>
+                            </div>
+                            <div>
+                              <label className="mb-1 block text-[10px] font-bold tracking-wider text-muted uppercase">
+                                Cấp độ CEFR
+                              </label>
+                              <select
+                                value={card.level}
+                                onChange={(e) =>
+                                  updateManualCard(card.id, { level: e.target.value })
+                                }
+                                className="w-full rounded-xl border border-line bg-card px-3 py-2 text-xs outline-none focus:border-brand-hover"
+                              >
+                                {LEVELS.map((lv) => (
+                                  <option key={lv} value={lv}>
+                                    {lv}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </>
+                )}
               </div>
 
               {manualErr && (
@@ -777,17 +774,17 @@ function StudySetModal({
                 >
                   <Plus size={15} strokeWidth={2.3} /> Thêm thẻ
                 </button>
-                <button
-                  type="button"
-                  onClick={() => void commitManualCards()}
-                  disabled={validManualCards.length === 0 || manualBusy}
-                  className="inline-flex items-center justify-center gap-2 rounded-2xl bg-brand px-5 py-2.5 text-xs font-bold text-white transition hover:bg-brand-hover hover:text-bg disabled:opacity-40"
-                >
-                  {manualBusy ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
-                  {manualBusy
-                    ? "Đang lưu thẻ..."
-                    : `Thêm ${validManualCards.length > 0 ? `${validManualCards.length} ` : ""}thẻ vào học phần`}
-                </button>
+                {validManualCards.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => void commitManualCards()}
+                    disabled={manualBusy}
+                    className="inline-flex items-center justify-center gap-2 rounded-2xl bg-brand/15 px-4 py-2.5 text-xs font-bold text-brand-hover transition hover:bg-brand hover:text-white disabled:opacity-40"
+                  >
+                    {manualBusy ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+                    {manualBusy ? "Đang lưu..." : `Lưu ${validManualCards.length} thẻ mới`}
+                  </button>
+                )}
               </div>
             </div>
           ) : mode === "quick-add" ? (
