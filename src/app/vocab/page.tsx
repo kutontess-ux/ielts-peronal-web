@@ -2023,107 +2023,114 @@ function VocabLearnContent() {
               </div>
             )
           ) : (
-            <div className="mt-4 space-y-2.5">
-              {visibleQueue.map((s, index) => {
-                const setWords = s.wordIds
-                  .map((id) => wordMap.get(id))
-                  .filter((w): w is Word => !!w);
-                const status = getStudySetReviewStatus(s, recentSetIds, nowMs);
-                const setFolder = s.folderId ? folderMap.get(s.folderId) : null;
-                return (
-                  <div
-                    key={s.id}
-                    className={`flex flex-col gap-3 rounded-2xl px-4 py-3.5 shadow-sm shadow-slate-900/5 transition hover:shadow-md dark:shadow-black/20 sm:flex-row sm:items-center sm:justify-between ${
-                      status.isDue ? "bg-brand/5" : "bg-bg/70"
-                    }`}
-                  >
-                    <div className="flex min-w-0 flex-1 items-start gap-3">
-                      <span
-                        className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-xl text-xs font-bold ${
-                          status.isDue
-                            ? "bg-brand text-white"
-                            : "bg-card text-muted"
-                        }`}
-                      >
-                        {isAdmin ? `#${index + 1}` : <QuizletSetIcon size={15} />}
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="break-words font-bold text-ink">{s.title}</span>
-                          {isAdmin ? (
-                            <span
-                              className={`inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-2.5 py-0.5 text-[11px] font-bold ${
-                                status.isDue
-                                  ? "bg-rose-500/15 text-rose-700 dark:text-rose-300"
-                                  : "bg-sky-500/15 text-sky-700 dark:text-sky-300"
-                              }`}
-                            >
-                              <Clock size={11} /> {status.badgeText}
-                            </span>
-                          ) : status.isDue ? (
-                            <span className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full bg-rose-500/15 px-2.5 py-0.5 text-[11px] font-bold text-rose-700 dark:text-rose-300">
-                              <Clock size={11} /> Cần ôn
-                            </span>
-                          ) : null}
-                          {setFolder && (
-                            <span className="inline-flex max-w-full items-center gap-1 rounded-full bg-card px-2 py-0.5 text-[10px] font-semibold text-muted">
-                              <Folder size={10} className="shrink-0" />
-                              <span className="truncate">{setFolder.name}</span>
-                            </span>
-                          )}
-                        </div>
-                        <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted">
-                          <span>{setWords.length} thẻ</span>
-                          {isAdmin && status.lastStudiedLabel && <span>{status.lastStudiedLabel}</span>}
-                          {isAdmin && typeof s.lastScore === "number" && (
-                            <span>Lần trước: {s.lastScore}%</span>
-                          )}
-                          {isAdmin && (s.reviewLevel ?? 0) > 0 && (
-                            <span>Mức {s.reviewLevel}/5</span>
-                          )}
+            <div className="mt-4">
+              <HorizontalCarousel
+                itemCount={visibleQueue.length}
+                showDots
+                stepMode="card"
+                ariaLabel="Ôn lại"
+              >
+                {visibleQueue.map((s, index) => {
+                  const setWords = s.wordIds
+                    .map((id) => wordMap.get(id))
+                    .filter((w): w is Word => !!w);
+                  const status = getStudySetReviewStatus(s, recentSetIds, nowMs);
+                  const setFolder = s.folderId ? folderMap.get(s.folderId) : null;
+                  return (
+                    <div
+                      key={s.id}
+                      className={`flex w-[88%] shrink-0 snap-start flex-col justify-between gap-3 rounded-2xl px-4 py-3.5 shadow-sm shadow-slate-900/5 transition hover:shadow-md dark:shadow-black/20 sm:w-[360px] ${
+                        status.isDue ? "bg-brand/5" : "bg-bg/70"
+                      }`}
+                    >
+                      <div className="flex min-w-0 items-start gap-3">
+                        <span
+                          className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-xl text-xs font-bold ${
+                            status.isDue
+                              ? "bg-brand text-white"
+                              : "bg-card text-muted"
+                          }`}
+                        >
+                          {isAdmin ? `#${index + 1}` : <QuizletSetIcon size={15} />}
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="line-clamp-2 break-words font-bold text-ink">{s.title}</span>
+                            {isAdmin ? (
+                              <span
+                                className={`inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-2.5 py-0.5 text-[11px] font-bold ${
+                                  status.isDue
+                                    ? "bg-rose-500/15 text-rose-700 dark:text-rose-300"
+                                    : "bg-sky-500/15 text-sky-700 dark:text-sky-300"
+                                }`}
+                              >
+                                <Clock size={11} /> {status.badgeText}
+                              </span>
+                            ) : status.isDue ? (
+                              <span className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full bg-rose-500/15 px-2.5 py-0.5 text-[11px] font-bold text-rose-700 dark:text-rose-300">
+                                <Clock size={11} /> Cần ôn
+                              </span>
+                            ) : null}
+                            {setFolder && (
+                              <span className="inline-flex max-w-full items-center gap-1 rounded-full bg-card px-2 py-0.5 text-[10px] font-semibold text-muted">
+                                <Folder size={10} className="shrink-0" />
+                                <span className="truncate">{setFolder.name}</span>
+                              </span>
+                            )}
+                          </div>
+                          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted">
+                            <span>{setWords.length} thẻ</span>
+                            {isAdmin && status.lastStudiedLabel && <span>{status.lastStudiedLabel}</span>}
+                            {isAdmin && typeof s.lastScore === "number" && (
+                              <span>Lần trước: {s.lastScore}%</span>
+                            )}
+                            {isAdmin && (s.reviewLevel ?? 0) > 0 && (
+                              <span>Mức {s.reviewLevel}/5</span>
+                            )}
+                          </div>
                         </div>
                       </div>
-                    </div>
 
-                    <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:shrink-0 sm:items-center">
-                      <button
-                        type="button"
-                        disabled={setWords.length === 0}
-                        onClick={() =>
-                          setActiveSession({
-                            mode: "learn",
-                            id: s.id,
-                            title: s.title,
-                            words: setWords,
-                          })
-                        }
-                        className={`inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-full px-4 py-2 text-xs font-bold shadow-xs transition disabled:opacity-40 ${
-                          status.isDue
-                            ? "bg-brand text-white hover:bg-brand-hover hover:text-bg"
-                            : "bg-card text-ink hover:bg-brand hover:text-white"
-                        }`}
-                      >
-                        <Sparkles size={13} /> Luyện tập
-                      </button>
-                      <button
-                        type="button"
-                        disabled={setWords.length === 0}
-                        onClick={() =>
-                          setActiveSession({
-                            mode: "flashcards",
-                            id: s.id,
-                            title: s.title,
-                            words: setWords,
-                          })
-                        }
-                        className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-full bg-card px-3.5 py-2 text-xs font-bold text-muted shadow-xs transition hover:text-ink hover:shadow-sm disabled:opacity-40"
-                      >
-                        <QuizletSetIcon size={14} /> Flashcard
-                      </button>
+                      <div className="grid w-full grid-cols-2 gap-2 pt-1">
+                        <button
+                          type="button"
+                          disabled={setWords.length === 0}
+                          onClick={() =>
+                            setActiveSession({
+                              mode: "learn",
+                              id: s.id,
+                              title: s.title,
+                              words: setWords,
+                            })
+                          }
+                          className={`inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-full px-4 py-2 text-xs font-bold shadow-xs transition disabled:opacity-40 ${
+                            status.isDue
+                              ? "bg-brand text-white hover:bg-brand-hover hover:text-bg"
+                              : "bg-card text-ink hover:bg-brand hover:text-white"
+                          }`}
+                        >
+                          <Sparkles size={13} /> Luyện tập
+                        </button>
+                        <button
+                          type="button"
+                          disabled={setWords.length === 0}
+                          onClick={() =>
+                            setActiveSession({
+                              mode: "flashcards",
+                              id: s.id,
+                              title: s.title,
+                              words: setWords,
+                            })
+                          }
+                          className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-full bg-card px-3.5 py-2 text-xs font-bold text-muted shadow-xs transition hover:text-ink hover:shadow-sm disabled:opacity-40"
+                        >
+                          <QuizletSetIcon size={14} /> Flashcard
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </HorizontalCarousel>
             </div>
           )}
         </section>
