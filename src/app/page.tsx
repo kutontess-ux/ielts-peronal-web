@@ -223,7 +223,6 @@ export default function Home() {
       tag: p.score_correct !== null && p.score_total !== null ? `${p.score_correct}/${p.score_total}` : "Reading",
       href: `/reading/${p.id}`,
       icon: BookOpen,
-      mobileHidden: true,
     })),
   ];
 
@@ -430,9 +429,9 @@ export default function Home() {
         </div>
       </section>
 
-      {/* 3. Kỹ năng - Ẩn trên mobile, giữ nguyên 3 cột trên PC */}
-      <section className="hidden md:block">
-        <h2 className="mb-3.5 text-lg font-bold">Kỹ năng</h2>
+      {/* 3. Kỹ năng - Hiển thị trên cả mobile và PC */}
+      <section>
+        <h2 className="mb-3 text-[17px] font-bold tracking-[-0.01em] text-ink md:mb-3.5 md:text-lg">Kỹ năng</h2>
 
         <HorizontalCarousel
           itemCount={3}

@@ -6,11 +6,13 @@ import { createPortal } from "react-dom";
 import {
   BarChart3,
   Bell,
+  BookOpen,
   ChevronRight,
   Eye,
   LogIn,
   LogOut,
   Newspaper,
+  PenLine,
   Settings,
   Shield,
   Volume2,
@@ -245,7 +247,40 @@ export function SettingsModal({
                 </Link>
               </div>
 
-              {/* 4. Tiện ích từ vựng */}
+              {/* 4. Kỹ năng IELTS */}
+              <div className="rounded-2xl border border-line bg-card p-3.5">
+                <div className="mb-2 text-[12px] font-bold uppercase tracking-wider text-muted">
+                  Kỹ năng
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <Link
+                    href="/reading"
+                    onClick={onClose}
+                    className="flex items-center gap-2 rounded-xl bg-bg px-3 py-2.5 text-[13px] font-semibold text-ink transition hover:bg-card-hover"
+                  >
+                    <BookOpen size={16} className="text-brand dark:text-brand-hover" />
+                    <span className="truncate">Reading</span>
+                  </Link>
+                  <Link
+                    href="/writing"
+                    onClick={onClose}
+                    className="flex items-center gap-2 rounded-xl bg-bg px-3 py-2.5 text-[13px] font-semibold text-ink transition hover:bg-card-hover"
+                  >
+                    <PenLine size={16} className="text-brand dark:text-brand-hover" />
+                    <span className="truncate">Writing</span>
+                  </Link>
+                  <Link
+                    href="/writing/stats"
+                    onClick={onClose}
+                    className="col-span-2 flex items-center gap-2 rounded-xl bg-bg px-3 py-2.5 text-[13px] font-semibold text-ink transition hover:bg-card-hover"
+                  >
+                    <BarChart3 size={16} className="text-brand dark:text-brand-hover" />
+                    <span className="truncate">Thống kê Writing</span>
+                  </Link>
+                </div>
+              </div>
+
+              {/* 5. Tiện ích từ vựng */}
               <div className="rounded-2xl border border-line bg-card p-3.5">
                 <div className="mb-2 text-[12px] font-bold uppercase tracking-wider text-muted">
                   Tiện ích khác
