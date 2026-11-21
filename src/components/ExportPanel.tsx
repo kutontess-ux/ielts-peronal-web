@@ -49,8 +49,8 @@ export default function ExportButton({
           <div className="w-full max-w-2xl rounded-3xl border border-line bg-card p-6" onClick={(e) => e.stopPropagation()}>
             <div className="mb-4 flex items-center justify-between">
               <div>
-                <div className="text-lg font-bold">Xuất {words.length} từ để nhập vào Quizlet</div>
-                <div className="text-sm text-muted">Quizlet → Tạo học phần → Nhập → dán văn bản vào</div>
+                <div className="text-lg font-bold">Xuất {words.length} từ dạng văn bản</div>
+                <div className="text-sm text-muted">Sao chép nhanh hoặc tải file .txt theo ký tự ngăn cách</div>
               </div>
               <button onClick={() => setOpen(false)} className="rounded-full p-2 text-muted hover:bg-line hover:text-ink">
                 <X size={20} strokeWidth={1.75} />
@@ -59,7 +59,7 @@ export default function ExportButton({
 
             <div className="mb-3 text-xs font-semibold text-muted">Ký tự ngăn giữa từ và nghĩa</div>
             <div className="mb-4 flex flex-wrap gap-2">
-              {([["tab", "Tab (mặc định Quizlet)"], ["comma", "Dấu phẩy"], ["dash", "Gạch ngang"]] as const).map(([k, l]) => (
+              {([["tab", "Tab (mặc định)"], ["comma", "Dấu phẩy"], ["dash", "Gạch ngang"]] as const).map(([k, l]) => (
                 <button
                   key={k}
                   onClick={() => setO((p) => ({ ...p, separator: k }))}

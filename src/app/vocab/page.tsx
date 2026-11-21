@@ -8,6 +8,7 @@ import {
   ArrowLeft, BarChart3, Bell, BookMarked, Bot, CalendarClock, Check, CheckCircle2, ChevronDown, ChevronUp, Clock, Folder, FolderInput, FolderOpen, FolderPlus, Layers, ListChecks, Loader2, MoreVertical, Pencil, PenLine, Plus, Repeat, Search, Settings2, Sparkles, Trash2, X,
 } from "lucide-react";
 import { levelColor, type Word } from "@/lib/mock";
+import { normKey } from "@/lib/normalize";
 import { enrollWordsInSrs } from "@/lib/srs";
 import { fetchDueSummaryCached, notifyDueUpdated } from "@/lib/due-events";
 import { setActivityLabel } from "@/lib/activity";
@@ -86,6 +87,8 @@ type ManualCardDraft = {
   definition: string;
   ipa: string;
   example: string;
+  pos: string;
+  level: string;
   showExtra: boolean;
 };
 
@@ -96,6 +99,8 @@ function createEmptyManualCard(seq: number): ManualCardDraft {
     definition: "",
     ipa: "",
     example: "",
+    pos: "",
+    level: "B2",
     showExtra: false,
   };
 }
@@ -123,20 +128,20 @@ function StudySetModal({
   const [selectedIds, setSelectedIds] = useState<Set<number>>(
     () => new Set(editing?.wordIds ?? [])
   );
-  const [mode, setMode] = useState<"current" | "pick" | "manual" | "quick-add" | "ai-create">(
-    editing ? "current" : "pick"
+  const [mode, setMode] = useState<"current" | "manual" | "quick-add" | "ai-create">(
+    editing ? "current" : "manual"
   );
 
-  // Tạo tay giống Quizlet (UI trước)
+  // Tạo tay thẻ thủ công
   const [manualCards, setManualCards] = useState<ManualCardDraft[]>(() => [
     createEmptyManualCard(1),
     createEmptyManualCard(2),
   ]);
+  const [manualBusy, setManualBusy] = useState(false);
+  const [manualErr, setManualErr] = useState("");
 
-  // Tìm kiếm & lọc từ trong Kho từ vựng
-  const [query, setQuery] = useState("");
+  // Tìm kiếm trong các từ hiện tại
   const [currentQuery, setCurrentQuery] = useState("");
-  const [levelFilter, setLevelFilter] = useState("Tất cả");
 
   // Nhập nhanh từ mới vào học phần
   const [quickText, setQuickText] = useState("");
@@ -165,6 +170,11 @@ function StudySetModal({
     setManualCards((prev) => (prev.length <= 1 ? prev : prev.filter((c) => c.id !== id)));
   };
 
+  const validManualCards = useMemo(
+    () => manualCards.filter((c) => c.term.trim() && c.definition.trim()),
+    [manualCards]
+  );
+
   const selectedWordsList = useMemo(
     () => words.filter((w) => selectedIds.has(w.id)),
     [words, selectedIds]
@@ -178,15 +188,6 @@ function StudySetModal({
     );
   }, [selectedWordsList, currentQuery]);
 
-  const filteredWords = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return words.filter((w) => {
-      if (levelFilter !== "Tất cả" && w.level !== levelFilter) return false;
-      if (!q) return true;
-      return `${w.word} ${w.vi} ${w.en} ${w.topic}`.toLowerCase().includes(q);
-    });
-  }, [words, query, levelFilter]);
-
   const toggleWord = (id: number) => {
     setSelectedIds((prev) => {
       const next = new Set(prev);
@@ -196,15 +197,84 @@ function StudySetModal({
     });
   };
 
-  const selectAllFiltered = () => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      for (const w of filteredWords) next.add(w.id);
-      return next;
-    });
-  };
-
   const clearSelected = () => setSelectedIds(new Set());
+
+  const commitManualCards = async (): Promise<number[] | null> => {
+    const started = manualCards.filter((c) => c.term.trim() || c.definition.trim());
+    if (started.length === 0) return [];
+
+    const incomplete = started.find((c) => !c.term.trim() || !c.definition.trim());
+    if (incomplete) {
+      setManualErr("Vui lòng nhập đầy đủ cả Thuật ngữ và Định nghĩa cho các thẻ đã bắt đầu.");
+      return null;
+    }
+
+    setManualBusy(true);
+    setManualErr("");
+    setQuickMsg("");
+    try {
+      const seenKey = new Set<string>();
+      const payloadItems = [];
+      for (const card of started) {
+        const lemma = card.term.trim();
+        const k = normKey(lemma);
+        if (!k || seenKey.has(k)) continue;
+        seenKey.add(k);
+        payloadItems.push({
+          lemma: lemma.toLowerCase(),
+          norm_key: k,
+          ipa: card.ipa.trim() || undefined,
+          pos: card.pos.trim() || undefined,
+          meaning_vi: card.definition.trim(),
+          definition_en: card.definition.trim(),
+          example: card.example.trim() || undefined,
+          cefr_level: card.level || "B2",
+          topic: "Other",
+          is_awl: false,
+        });
+      }
+
+      if (payloadItems.length === 0) {
+        setManualErr("Không có thẻ hợp lệ để lưu.");
+        return null;
+      }
+
+      setActivityLabel("/api/import/commit", `Đang lưu ${payloadItems.length} thẻ tạo tay vào kho...`);
+      const cRes = await fetch("/api/import/commit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          items: payloadItems,
+          source: "study-set-manual",
+        }),
+      });
+      const cJson = await cRes.json();
+      if (!cRes.ok) throw new Error(cJson.error || "Không lưu được thẻ tạo tay");
+      notifyDueUpdated();
+
+      await onReloadWords();
+      const returnedIds = ((cJson.wordIds ?? []) as number[]).filter(
+        (id) => Number.isFinite(id) && id > 0
+      );
+
+      if (returnedIds.length > 0) {
+        setSelectedIds((prev) => {
+          const next = new Set(prev);
+          for (const id of returnedIds) next.add(id);
+          return next;
+        });
+      }
+
+      setManualCards([createEmptyManualCard(1), createEmptyManualCard(2)]);
+      setQuickMsg(`Đã thêm ${returnedIds.length} thẻ tạo tay vào học phần (lưu đồng thời trong Kho từ vựng).`);
+      return returnedIds;
+    } catch (e) {
+      setManualErr((e as Error).message);
+      return null;
+    } finally {
+      setManualBusy(false);
+    }
+  };
 
   const handleQuickAdd = async () => {
     if (!quickText.trim() || quickBusy) return;
@@ -349,7 +419,7 @@ function StudySetModal({
       setAiItems(null);
       setAiPrompt("");
       setQuickMsg(`AI đã tạo & thêm ${chosenAiItems.length} flashcard vào học phần (đồng bộ cùng Kho từ vựng).`);
-      setMode("pick");
+      setMode("current");
     } catch (e) {
       setAiErr((e as Error).message);
     } finally {
@@ -357,10 +427,24 @@ function StudySetModal({
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title.trim() || selectedIds.size === 0) return;
-    const ids = Array.from(selectedIds);
+    if (!title.trim() || manualBusy) return;
+
+    let finalIds = new Set(selectedIds);
+    const hasStartedManual = manualCards.some((c) => c.term.trim() || c.definition.trim());
+    if (hasStartedManual) {
+      const addedIds = await commitManualCards();
+      if (addedIds === null) {
+        setMode("manual");
+        return;
+      }
+      for (const id of addedIds) finalIds.add(id);
+    }
+
+    if (finalIds.size === 0) return;
+
+    const ids = Array.from(finalIds);
     const nextFolderId = folderId || null;
     if (editing) {
       updateStudySet(editing.id, { title, desc, wordIds: ids, folderId: nextFolderId });
@@ -442,15 +526,6 @@ function StudySetModal({
               </button>
               <button
                 type="button"
-                onClick={() => setMode("pick")}
-                className={`rounded-full px-3.5 py-1.5 text-xs font-bold transition ${
-                  mode === "pick" ? "bg-ink text-bg" : "bg-bg text-muted hover:text-ink"
-                }`}
-              >
-                Chọn từ Kho ({words.length})
-              </button>
-              <button
-                type="button"
                 onClick={() => setMode("manual")}
                 className={`inline-flex items-center gap-1 rounded-full px-3.5 py-1.5 text-xs font-bold transition ${
                   mode === "manual" ? "bg-ink text-bg" : "bg-bg text-muted hover:text-ink"
@@ -513,7 +588,7 @@ function StudySetModal({
 
               {selectedWordsList.length === 0 ? (
                 <div className="rounded-2xl bg-bg p-6 text-center text-xs text-muted">
-                  Chưa có từ nào trong học phần này. Chuyển sang tab <b>“Chọn từ Kho”</b>, <b>“Nhập từ mới nhanh”</b> hoặc <b>“AI tạo Flashcard”</b> để thêm từ.
+                  Chưa có từ nào trong học phần này. Chuyển sang tab <b>“Tạo tay”</b>, <b>“Nhập từ mới nhanh”</b> hoặc <b>“AI tạo Flashcard”</b> để thêm từ.
                 </div>
               ) : filteredCurrentWords.length === 0 ? (
                 <div className="rounded-2xl bg-bg p-6 text-center text-xs text-muted">
@@ -546,10 +621,6 @@ function StudySetModal({
             </div>
           ) : mode === "manual" ? (
             <div className="space-y-3">
-              <div className="rounded-2xl border border-brand/25 bg-brand/5 px-3.5 py-2.5 text-xs text-muted">
-                Giao diện nhập thẻ thủ công giống Quizlet (tạm thời xem trước giao diện, phần lưu dữ liệu thẻ tạo tay sẽ được nối ở bước tiếp theo).
-              </div>
-
               <div className="max-h-80 space-y-3 overflow-y-auto pr-1">
                 {manualCards.map((card, index) => (
                   <div
@@ -570,11 +641,11 @@ function StudySetModal({
                         >
                           {card.showExtra ? (
                             <>
-                              <ChevronUp size={13} /> Ẩn IPA / Ví dụ
+                              <ChevronUp size={13} /> Ẩn chi tiết
                             </>
                           ) : (
                             <>
-                              <ChevronDown size={13} /> + IPA / Ví dụ
+                              <ChevronDown size={13} /> + IPA / Ví dụ / Loại từ
                             </>
                           )}
                         </button>
@@ -647,19 +718,75 @@ function StudySetModal({
                             className="w-full rounded-xl border border-line bg-card px-3 py-2 text-xs outline-none focus:border-brand-hover"
                           />
                         </div>
+                        <div>
+                          <label className="mb-1 block text-[10px] font-bold tracking-wider text-muted uppercase">
+                            Từ loại (tuỳ chọn)
+                          </label>
+                          <select
+                            value={card.pos}
+                            onChange={(e) =>
+                              updateManualCard(card.id, { pos: e.target.value })
+                            }
+                            className="w-full rounded-xl border border-line bg-card px-3 py-2 text-xs outline-none focus:border-brand-hover"
+                          >
+                            <option value="">Chưa chọn</option>
+                            <option value="n">Danh từ (n)</option>
+                            <option value="v">Động từ (v)</option>
+                            <option value="adj">Tính từ (adj)</option>
+                            <option value="adv">Trạng từ (adv)</option>
+                            <option value="phr">Cụm từ (phr)</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="mb-1 block text-[10px] font-bold tracking-wider text-muted uppercase">
+                            Cấp độ CEFR
+                          </label>
+                          <select
+                            value={card.level}
+                            onChange={(e) =>
+                              updateManualCard(card.id, { level: e.target.value })
+                            }
+                            className="w-full rounded-xl border border-line bg-card px-3 py-2 text-xs outline-none focus:border-brand-hover"
+                          >
+                            {LEVELS.map((lv) => (
+                              <option key={lv} value={lv}>
+                                {lv}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
                       </div>
                     )}
                   </div>
                 ))}
               </div>
 
-              <button
-                type="button"
-                onClick={addManualCard}
-                className="flex w-full items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-line bg-bg py-3 text-xs font-bold text-ink transition hover:border-brand-hover hover:text-brand-hover"
-              >
-                <Plus size={15} strokeWidth={2.3} /> Thêm thẻ
-              </button>
+              {manualErr && (
+                <div className="rounded-xl bg-rose-500/15 px-3.5 py-2 text-xs text-rose-700 dark:bg-rose-400/15 dark:text-rose-300">
+                  {manualErr}
+                </div>
+              )}
+
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={addManualCard}
+                  className="flex flex-1 min-w-[140px] items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-line bg-bg py-2.5 text-xs font-bold text-ink transition hover:border-brand-hover hover:text-brand-hover"
+                >
+                  <Plus size={15} strokeWidth={2.3} /> Thêm thẻ
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void commitManualCards()}
+                  disabled={validManualCards.length === 0 || manualBusy}
+                  className="inline-flex items-center justify-center gap-2 rounded-2xl bg-brand px-5 py-2.5 text-xs font-bold text-white transition hover:bg-brand-hover hover:text-bg disabled:opacity-40"
+                >
+                  {manualBusy ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+                  {manualBusy
+                    ? "Đang lưu thẻ..."
+                    : `Thêm ${validManualCards.length > 0 ? `${validManualCards.length} ` : ""}thẻ vào học phần`}
+                </button>
+              </div>
             </div>
           ) : mode === "quick-add" ? (
             <div className="space-y-3">
@@ -815,90 +942,7 @@ function StudySetModal({
                 </div>
               )}
             </div>
-          ) : (
-            <div className="space-y-3">
-              <div className="flex flex-wrap items-center gap-2">
-                <div className="relative min-w-0 w-full sm:min-w-[200px] sm:flex-1">
-                  <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
-                  <input
-                    value={query}
-                    onChange={(e) => setQuery(e.target.value)}
-                    placeholder="Tìm từ hoặc nghĩa trong kho..."
-                    className="w-full rounded-xl border border-line py-2 pl-9 pr-3 text-xs outline-none focus:border-brand-hover"
-                  />
-                </div>
-                <select
-                  value={levelFilter}
-                  onChange={(e) => setLevelFilter(e.target.value)}
-                  className="rounded-xl border border-line px-3 py-2 text-xs"
-                >
-                  <option value="Tất cả">Mọi cấp độ</option>
-                  {LEVELS.map((l) => (
-                    <option key={l} value={l}>{l}</option>
-                  ))}
-                </select>
-                {filteredWords.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={selectAllFiltered}
-                    className="rounded-xl bg-bg px-3 py-2 text-xs font-semibold text-muted hover:text-ink"
-                  >
-                    Chọn {filteredWords.length} từ
-                  </button>
-                )}
-                {selectedIds.size > 0 && (
-                  <button
-                    type="button"
-                    onClick={clearSelected}
-                    className="rounded-xl bg-bg px-3 py-2 text-xs font-semibold text-muted hover:text-rose-600 dark:hover:text-rose-300"
-                  >
-                    Bỏ chọn
-                  </button>
-                )}
-              </div>
-
-              {words.length === 0 ? (
-                <div className="rounded-2xl bg-bg p-6 text-center text-xs text-muted">
-                  Kho từ vựng chưa có từ nào. Chuyển sang tab <b>“Nhập từ mới nhanh”</b> ở trên để tạo từ ngay!
-                </div>
-              ) : filteredWords.length === 0 ? (
-                <div className="rounded-2xl bg-bg p-6 text-center text-xs text-muted">
-                  Không có từ nào khớp bộ lọc hiện tại.
-                </div>
-              ) : (
-                <div className="max-h-64 space-y-1.5 overflow-y-auto rounded-2xl border border-line bg-bg p-2">
-                  {filteredWords.map((w) => {
-                    const checked = selectedIds.has(w.id);
-                    return (
-                      <button
-                        key={w.id}
-                        type="button"
-                        onClick={() => toggleWord(w.id)}
-                        className={`flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm transition ${
-                          checked ? "bg-brand/15 text-ink" : "hover:bg-card"
-                        }`}
-                      >
-                        <span
-                          className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border ${
-                            checked
-                              ? "border-brand bg-brand text-white"
-                              : "border-muted/50"
-                          }`}
-                        >
-                          {checked && <Check size={12} strokeWidth={3} />}
-                        </span>
-                        <span className="font-bold">{w.word}</span>
-                        <span className="min-w-0 flex-1 truncate text-xs text-muted">{w.vi}</span>
-                        <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold ${levelColor[w.level]}`}>
-                          {w.level}
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          )}
+          ) : null}
         </div>
 
         <div className="flex items-center justify-end gap-2 border-t border-line px-4 py-3 sm:px-6 sm:py-4">
@@ -911,10 +955,15 @@ function StudySetModal({
           </button>
           <button
             type="submit"
-            disabled={!title.trim() || selectedIds.size === 0}
-            className="rounded-full bg-brand px-6 py-2 text-sm font-bold text-white hover:bg-brand-hover hover:text-bg disabled:opacity-40"
+            disabled={!title.trim() || manualBusy || (selectedIds.size === 0 && validManualCards.length === 0)}
+            className="inline-flex items-center gap-2 rounded-full bg-brand px-6 py-2 text-sm font-bold text-white hover:bg-brand-hover hover:text-bg disabled:opacity-40"
           >
-            {editing ? `Lưu (${selectedIds.size} từ)` : `Tạo học phần (${selectedIds.size} từ)`}
+            {manualBusy && <Loader2 size={14} className="animate-spin" />}
+            {manualBusy
+              ? "Đang lưu..."
+              : editing
+              ? `Lưu (${selectedIds.size + validManualCards.length} từ)`
+              : `Tạo học phần (${selectedIds.size + validManualCards.length} từ)`}
           </button>
         </div>
       </form>
@@ -2152,7 +2201,7 @@ function VocabLearnContent() {
             <h2 className="text-[32px] font-bold leading-tight">Học phần của bạn</h2>
             {isAdmin && (
               <p className="mt-0.5 text-xs text-muted">
-                Sắp xếp học phần theo thư mục giống Quizlet để luyện Flashcards và chuyển vào Ôn tập.
+                Sắp xếp học phần theo thư mục để luyện Flashcards và chuyển vào Ôn tập.
               </p>
             )}
           </div>
@@ -2391,7 +2440,7 @@ function VocabLearnContent() {
               <FolderPlus size={40} strokeWidth={1.3} className="mx-auto text-brand-hover" />
               <div className="mt-3 text-lg font-bold">Chưa có thư mục nào</div>
               <p className="mx-auto mt-1 max-w-md text-sm text-muted">
-                Tạo thư mục để gom các học phần cùng chủ đề (ví dụ: Reading, Writing Task 1, Environment...) giống Quizlet.
+                Tạo thư mục để gom các học phần cùng chủ đề (ví dụ: Reading, Writing Task 1, Environment...).
               </p>
               <button
                 type="button"
@@ -2503,7 +2552,7 @@ function VocabLearnContent() {
             <Layers size={40} strokeWidth={1.3} className="mx-auto text-brand-hover" />
             <div className="mt-3 text-lg font-bold">Chưa có học phần nào</div>
             <p className="mx-auto mt-1 max-w-md text-sm text-muted">
-              Hãy tự tạo học phần từ những từ muốn học trong Kho từ vựng (hoặc nhập từ mới) để ôn tập kiểu Quizlet.
+              Hãy tự tạo học phần từ những từ muốn học (hoặc nhập từ mới) để ôn tập hiệu quả.
             </p>
             <button
               type="button"

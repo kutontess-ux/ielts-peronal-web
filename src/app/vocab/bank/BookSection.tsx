@@ -44,7 +44,7 @@ const DEFAULT_BOOK: BookMeta = {
 const COLLEGIATE_BOOK: BookMeta = {
   id: "book-5000",
   title: "5000 Collegiate Words (IELTS Prep)",
-  desc: "Bộ 5000 từ vựng học thuật chuyên sâu chia theo từng cấp độ & chủ đề kiểu Quizlet",
+  desc: "Bộ 5000 từ vựng học thuật chuyên sâu chia theo từng cấp độ & chủ đề",
   band: "Band 7.0+",
   target: 5000,
 };

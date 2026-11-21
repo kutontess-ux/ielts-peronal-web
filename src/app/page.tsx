@@ -245,7 +245,7 @@ export default function Home() {
     },
     {
       title: "Thẻ ghi nhớ (Flashcards)",
-      sub: "Học từ vựng & lật thẻ kiểu Quizlet",
+      sub: "Học từ vựng & lật thẻ ghi nhớ thông minh",
       tag: "Flashcards",
       href: "/vocab",
       icon: QuizletSetIcon,

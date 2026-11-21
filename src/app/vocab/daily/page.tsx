@@ -738,7 +738,7 @@ export default function Daily() {
             >
               <FolderPlus size={14} /> Thêm vào học phần
             </button>
-            <ExportButton words={allSingle} filename={`tu-hang-ngay-${date}`} label="Xuất văn bản (Quizlet)" />
+            <ExportButton words={allSingle} filename={`tu-hang-ngay-${date}`} label="Xuất văn bản" />
           </>
         )}
         {mode === "7d" && all7d.length > 0 && (
