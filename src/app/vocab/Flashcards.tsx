@@ -102,6 +102,14 @@ export default function Flashcards({
   const [srsMsg, setSrsMsg] = useState("");
   const [reviewSchedule, setReviewSchedule] = useState<StudySetReviewResult | null>(null);
 
+  // Touch swipe state (chỉ kích hoạt trên thiết bị cảm ứng như Android/iOS, PC giữ nguyên)
+  const [swipeX, setSwipeX] = useState(0);
+  const [swipeLeaving, setSwipeLeaving] = useState<"left" | "right" | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const touchStartRef = useRef<{ x: number; y: number; time: number; locked: "h" | "v" | null } | null>(null);
+  const suppressClickRef = useRef(false);
+  const swipeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   useEffect(() => {
     const onSettingsChanged = (e: Event) => {
       const detail = (e as CustomEvent<TtsSettings>).detail;
@@ -222,6 +230,13 @@ export default function Flashcards({
   };
 
   const restart = (subset?: Word[]) => {
+    if (swipeTimerRef.current) {
+      clearTimeout(swipeTimerRef.current);
+      swipeTimerRef.current = null;
+    }
+    setSwipeX(0);
+    setSwipeLeaving(null);
+    setIsDragging(false);
     setDeck(subset ?? words);
     setIdx(0);
     setHistory([]);
@@ -229,6 +244,88 @@ export default function Flashcards({
     setAutoplay(false);
     setSrsMsg("");
     setReviewSchedule(null);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (swipeTimerRef.current) clearTimeout(swipeTimerRef.current);
+    };
+  }, []);
+
+  const SWIPE_THRESHOLD = 90;
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (done || swipeLeaving || e.touches.length !== 1) return;
+    const t = e.touches[0];
+    touchStartRef.current = { x: t.clientX, y: t.clientY, time: Date.now(), locked: null };
+    setIsDragging(false);
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    const start = touchStartRef.current;
+    if (!start || swipeLeaving || e.touches.length !== 1) return;
+    const t = e.touches[0];
+    const dx = t.clientX - start.x;
+    const dy = t.clientY - start.y;
+
+    if (!start.locked) {
+      if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
+      start.locked = Math.abs(dx) >= Math.abs(dy) ? "h" : "v";
+    }
+
+    if (start.locked === "v") return;
+
+    setIsDragging(true);
+    setSwipeX(dx);
+  };
+
+  const finishSwipe = (dx: number, elapsedMs: number) => {
+    const velocity = elapsedMs > 0 ? Math.abs(dx) / elapsedMs : 0;
+    const passed = Math.abs(dx) >= SWIPE_THRESHOLD || (velocity > 0.45 && Math.abs(dx) >= 45);
+
+    if (passed) {
+      const dir: "right" | "left" = dx > 0 ? "right" : "left";
+      setIsDragging(false);
+      setSwipeLeaving(dir);
+      suppressClickRef.current = true;
+      swipeTimerRef.current = setTimeout(() => {
+        swipeTimerRef.current = null;
+        setSwipeLeaving(null);
+        setSwipeX(0);
+        mark(dir === "right" ? "known" : "unknown");
+        setTimeout(() => {
+          suppressClickRef.current = false;
+        }, 120);
+      }, 180);
+    } else {
+      setIsDragging(false);
+      setSwipeX(0);
+      if (Math.abs(dx) > 10) {
+        suppressClickRef.current = true;
+        setTimeout(() => {
+          suppressClickRef.current = false;
+        }, 180);
+      }
+    }
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    const start = touchStartRef.current;
+    touchStartRef.current = null;
+    if (!start || start.locked !== "h" || swipeLeaving) {
+      setIsDragging(false);
+      setSwipeX(0);
+      return;
+    }
+    const t = e.changedTouches[0];
+    const dx = t ? t.clientX - start.x : swipeX;
+    finishSwipe(dx, Date.now() - start.time);
+  };
+
+  const handleTouchCancel = () => {
+    touchStartRef.current = null;
+    setIsDragging(false);
+    setSwipeX(0);
   };
 
   // Phím tắt giống Quizlet
@@ -504,53 +601,112 @@ export default function Flashcards({
         <div className="h-full bg-brand-hover transition-all" style={{ width: `${(idx / Math.max(1, deck.length)) * 100}%` }} />
       </div>
 
-      {/* Thẻ lật 3D (tự giãn chiều cao khi thu nhỏ màn hình) */}
-      <div
-        role="button"
-        tabIndex={0}
-        aria-pressed={flipped}
-        className="cursor-pointer select-none focus:outline-none"
-        style={{ perspective: 1500 }}
-        onClick={() => setFlipped((f) => !f)}
-      >
-        <div
-          className="grid transition-transform duration-500"
-          style={{ transformStyle: "preserve-3d", transform: flipped ? "rotateX(180deg)" : "rotateX(0deg)" }}
-        >
+      {/* Thẻ lật 3D (tự giãn chiều cao khi thu nhỏ màn hình; hỗ trợ vuốt trái/phải trên màn hình cảm ứng) */}
+      {(() => {
+        const swipeDir = swipeLeaving ?? (swipeX > 16 ? "right" : swipeX < -16 ? "left" : null);
+        const swipeProgress = swipeLeaving ? 1 : Math.min(1, Math.abs(swipeX) / SWIPE_THRESHOLD);
+        const cardTransform =
+          swipeLeaving === "right"
+            ? "translateX(120%) rotate(14deg)"
+            : swipeLeaving === "left"
+            ? "translateX(-120%) rotate(-14deg)"
+            : swipeX !== 0
+            ? `translateX(${swipeX}px) rotate(${Math.max(-12, Math.min(12, swipeX * 0.04))}deg)`
+            : undefined;
+
+        return (
           <div
-            className={`col-start-1 row-start-1 flex min-h-[320px] flex-col justify-between rounded-3xl border border-line bg-card p-5 shadow-xl sm:min-h-[380px] sm:p-8 ${
-              flipped ? "pointer-events-none" : ""
-            }`}
-            style={{ backfaceVisibility: "hidden", transform: "rotateX(0deg)" }}
+            role="button"
+            tabIndex={0}
+            aria-pressed={flipped}
+            className="relative cursor-pointer select-none touch-pan-y focus:outline-none"
+            style={{
+              perspective: 1500,
+              transform: cardTransform,
+              opacity: swipeLeaving ? 0 : 1,
+              transition: isDragging
+                ? "none"
+                : "transform 200ms cubic-bezier(0.22, 1, 0.36, 1), opacity 180ms ease",
+            }}
+            onTouchStart={handleTouchStart}
+            onTouchMove={handleTouchMove}
+            onTouchEnd={handleTouchEnd}
+            onTouchCancel={handleTouchCancel}
+            onClick={() => {
+              if (suppressClickRef.current) return;
+              setFlipped((f) => !f);
+            }}
           >
-            <div className="flex items-center justify-between gap-2 text-muted">
-              <span className={`rounded-full px-3 py-1 text-xs font-bold ${levelColor[card.level]}`}>
-                {card.level} · {card.topic}
-              </span>
-              <div className="flex gap-3" onClick={(e) => e.stopPropagation()}>
-                <button type="button" title="Phát âm (A)" onClick={() => speak(card.word)} className="hover:text-ink">
-                  <Volume2 size={21} strokeWidth={1.6} />
-                </button>
-                <button type="button" title="Gắn sao (S)" onClick={() => setStar((s) => ({ ...s, [card.id]: !s[card.id] }))} className="hover:text-ink">
-                  <Star size={21} strokeWidth={1.6} className={star[card.id] ? "fill-amber-400 text-amber-400 dark:fill-yellow-300 dark:text-yellow-300" : ""} />
-                </button>
+            {swipeDir && (
+              <div
+                aria-hidden="true"
+                className={`pointer-events-none absolute inset-0 z-20 flex items-start rounded-3xl border-2 p-5 transition-opacity duration-75 ${
+                  swipeDir === "right"
+                    ? "justify-start border-emerald-500/80 bg-emerald-500/10"
+                    : "justify-end border-orange-500/80 bg-orange-500/10"
+                }`}
+                style={{ opacity: Math.max(0.25, swipeProgress) }}
+              >
+                <span
+                  className={`inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-sm font-bold shadow-sm ${
+                    swipeDir === "right"
+                      ? "bg-emerald-500 text-white"
+                      : "bg-orange-500 text-white"
+                  }`}
+                >
+                  {swipeDir === "right" ? (
+                    <>
+                      <Check size={16} strokeWidth={2.5} /> Đã biết
+                    </>
+                  ) : (
+                    <>
+                      <X size={16} strokeWidth={2.5} /> Chưa biết
+                    </>
+                  )}
+                </span>
+              </div>
+            )}
+
+            <div
+              className="grid transition-transform duration-500"
+              style={{ transformStyle: "preserve-3d", transform: flipped ? "rotateX(180deg)" : "rotateX(0deg)" }}
+            >
+              <div
+                className={`col-start-1 row-start-1 flex min-h-[320px] flex-col justify-between rounded-3xl border border-line bg-card p-5 shadow-xl sm:min-h-[380px] sm:p-8 ${
+                  flipped ? "pointer-events-none" : ""
+                }`}
+                style={{ backfaceVisibility: "hidden", transform: "rotateX(0deg)" }}
+              >
+                <div className="flex items-center justify-between gap-2 text-muted">
+                  <span className={`rounded-full px-3 py-1 text-xs font-bold ${levelColor[card.level]}`}>
+                    {card.level} · {card.topic}
+                  </span>
+                  <div className="flex gap-3" onClick={(e) => e.stopPropagation()}>
+                    <button type="button" title="Phát âm (A)" onClick={() => speak(card.word)} className="hover:text-ink">
+                      <Volume2 size={21} strokeWidth={1.6} />
+                    </button>
+                    <button type="button" title="Gắn sao (S)" onClick={() => setStar((s) => ({ ...s, [card.id]: !s[card.id] }))} className="hover:text-ink">
+                      <Star size={21} strokeWidth={1.6} className={star[card.id] ? "fill-amber-400 text-amber-400 dark:fill-yellow-300 dark:text-yellow-300" : ""} />
+                    </button>
+                  </div>
+                </div>
+                <div className="my-4 flex flex-1 flex-col items-center justify-center">{frontContent}</div>
+                <div className="text-center text-sm text-muted/70">Bấm thẻ hoặc Space để lật</div>
+              </div>
+
+              <div
+                className={`col-start-1 row-start-1 flex min-h-[320px] flex-col justify-between rounded-3xl border border-line bg-card p-5 shadow-xl sm:min-h-[380px] sm:p-10 ${
+                  flipped ? "" : "pointer-events-none"
+                }`}
+                style={{ backfaceVisibility: "hidden", transform: "rotateX(180deg)" }}
+              >
+                <div className="my-4 flex flex-1 flex-col justify-center">{backContent}</div>
+                <div className="text-center text-sm text-muted/70">Bấm lại để lật về mặt trước</div>
               </div>
             </div>
-            <div className="my-4 flex flex-1 flex-col items-center justify-center">{frontContent}</div>
-            <div className="text-center text-sm text-muted/70">Bấm thẻ hoặc Space để lật</div>
           </div>
-
-          <div
-            className={`col-start-1 row-start-1 flex min-h-[320px] flex-col justify-between rounded-3xl border border-line bg-card p-5 shadow-xl sm:min-h-[380px] sm:p-10 ${
-              flipped ? "" : "pointer-events-none"
-            }`}
-            style={{ backfaceVisibility: "hidden", transform: "rotateX(180deg)" }}
-          >
-            <div className="my-4 flex flex-1 flex-col justify-center">{backContent}</div>
-            <div className="text-center text-sm text-muted/70">Bấm lại để lật về mặt trước</div>
-          </div>
-        </div>
-      </div>
+        );
+      })()}
 
       {/* Nút điều khiển dưới thẻ kiểu Quizlet */}
       <div className="mt-6 flex flex-wrap items-center justify-center gap-2.5 sm:justify-between sm:gap-3">
@@ -634,7 +790,10 @@ export default function Flashcards({
         </div>
       </div>
 
-      <p className="mt-4 text-center text-xs text-muted">
+      <p className="mt-4 text-center text-xs text-muted md:hidden">
+        Vuốt phải: Đã biết · Vuốt trái: Chưa biết · Chạm thẻ để lật
+      </p>
+      <p className="mt-4 hidden text-center text-xs text-muted md:block">
         Phím tắt: Space lật thẻ · ← Chưa biết · → Đã biết · Enter xem tiếp · A phát âm · S gắn sao
       </p>
     </div>
