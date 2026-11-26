@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { CharacterLoader } from "@/components/CharacterLoader";
+import { AdminModuleGuard } from "@/components/AdminModuleGuard";
 import {
   ArrowLeft,
   Award,
@@ -2595,7 +2596,9 @@ export default function WritingStudioPage() {
         </div>
       }
     >
-      <WritingStudioInner />
+      <AdminModuleGuard title="Module Writing" loaderMode="writing">
+        <WritingStudioInner />
+      </AdminModuleGuard>
     </Suspense>
   );
 }

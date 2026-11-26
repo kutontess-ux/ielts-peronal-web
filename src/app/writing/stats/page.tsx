@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { CharacterLoader } from "@/components/CharacterLoader";
+import { AdminModuleGuard } from "@/components/AdminModuleGuard";
 import {
   AlertTriangle,
   ArrowLeft,
@@ -62,7 +63,7 @@ const ERROR_GROUPS: {
   { key: "task_response", label: "Lập luận & Trả lời đề (TR/TA)", barCls: "bg-emerald-500" },
 ];
 
-export default function WritingStatsPage() {
+function WritingStatsInner() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [streak, setStreak] = useState<WritingStreakSummary>(INITIAL_STREAK);
@@ -398,5 +399,13 @@ export default function WritingStatsPage() {
         </>
       )}
     </div>
+  );
+}
+
+export default function WritingStatsPage() {
+  return (
+    <AdminModuleGuard title="Thống kê Writing" loaderMode="writing">
+      <WritingStatsInner />
+    </AdminModuleGuard>
   );
 }

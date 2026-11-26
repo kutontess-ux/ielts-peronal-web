@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { fetchDueSummaryCached, markNotifSeenToday, notifySettingsUpdated } from "@/lib/due-events";
 import { DEFAULT_NOTIFICATION_SETTINGS, type NotificationSettings } from "@/lib/srs";
+import { useMe } from "@/lib/use-me";
 import {
   getExistingPushSubscription,
   isIosDevice,
@@ -28,6 +29,7 @@ import {
 type NotifKey = "notify_review_due" | "notify_writing_streak" | "notify_daily_vocab";
 
 export default function Notifications() {
+  const { isAdmin, meLoaded } = useMe();
   const [perm, setPerm] = useState<string>(
     typeof Notification !== "undefined" ? Notification.permission : "default"
   );
@@ -109,7 +111,10 @@ export default function Notifications() {
     fetchDueSummaryCached()
       .then((s) => setDueCount(s.ok ? s.dueCount : 0))
       .catch(() => setDueCount(0));
+  }, []);
 
+  useEffect(() => {
+    if (!meLoaded || !isAdmin) return;
     fetch("/api/writing", { cache: "no-store" })
       .then((r) => (r.ok ? r.json() : null))
       .then((j) => {
@@ -123,7 +128,7 @@ export default function Notifications() {
         }
       })
       .catch(() => {});
-  }, []);
+  }, [meLoaded, isAdmin]);
 
   const updateSettings = async (patch: Partial<NotificationSettings>, keyTag = "bulk") => {
     const prev = settings;
@@ -291,7 +296,7 @@ export default function Notifications() {
     });
   }
 
-  if (settings.notify_writing_streak) {
+  if (isAdmin && settings.notify_writing_streak) {
     if (!writingInfo || !writingInfo.completedToday) {
       items.push({
         key: "notify_writing_streak",
@@ -485,11 +490,15 @@ export default function Notifications() {
                 label: "Nhắc ôn tập (SRS)",
                 desc: "Hiện thông báo và chấm đỏ khi có từ đến hạn ôn",
               },
-              {
-                key: "notify_writing_streak",
-                label: "Nhắc Kỷ luật Writing hằng ngày",
-                desc: "Nhắc hoàn thành bài viết 15 phút & giữ chuỗi streak",
-              },
+              ...(isAdmin
+                ? [
+                    {
+                      key: "notify_writing_streak" as const,
+                      label: "Nhắc Kỷ luật Writing hằng ngày",
+                      desc: "Nhắc hoàn thành bài viết 15 phút & giữ chuỗi streak",
+                    },
+                  ]
+                : []),
             ] as const
           ).map((opt) => {
             const enabled = settings[opt.key];

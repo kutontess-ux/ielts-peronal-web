@@ -252,32 +252,61 @@ export function SettingsModal({
                 <div className="mb-2 text-[12px] font-bold uppercase tracking-wider text-muted">
                   Kỹ năng
                 </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <Link
-                    href="/reading"
-                    onClick={onClose}
-                    className="flex items-center gap-2 rounded-xl bg-bg px-3 py-2.5 text-[13px] font-semibold text-ink transition hover:bg-card-hover"
-                  >
-                    <BookOpen size={16} className="text-brand dark:text-brand-hover" />
-                    <span className="truncate">Reading</span>
-                  </Link>
-                  <Link
-                    href="/writing"
-                    onClick={onClose}
-                    className="flex items-center gap-2 rounded-xl bg-bg px-3 py-2.5 text-[13px] font-semibold text-ink transition hover:bg-card-hover"
-                  >
-                    <PenLine size={16} className="text-brand dark:text-brand-hover" />
-                    <span className="truncate">Writing</span>
-                  </Link>
-                  <Link
-                    href="/writing/stats"
-                    onClick={onClose}
-                    className="col-span-2 flex items-center gap-2 rounded-xl bg-bg px-3 py-2.5 text-[13px] font-semibold text-ink transition hover:bg-card-hover"
-                  >
-                    <BarChart3 size={16} className="text-brand dark:text-brand-hover" />
-                    <span className="truncate">Thống kê Writing</span>
-                  </Link>
-                </div>
+                {Boolean(me?.isAdmin) && !previewAsUser ? (
+                  <div className="grid grid-cols-2 gap-2">
+                    <Link
+                      href="/reading"
+                      onClick={onClose}
+                      className="flex items-center gap-2 rounded-xl bg-bg px-3 py-2.5 text-[13px] font-semibold text-ink transition hover:bg-card-hover"
+                    >
+                      <BookOpen size={16} className="text-brand dark:text-brand-hover" />
+                      <span className="truncate">Reading</span>
+                    </Link>
+                    <Link
+                      href="/writing"
+                      onClick={onClose}
+                      className="flex items-center gap-2 rounded-xl bg-bg px-3 py-2.5 text-[13px] font-semibold text-ink transition hover:bg-card-hover"
+                    >
+                      <PenLine size={16} className="text-brand dark:text-brand-hover" />
+                      <span className="truncate">Writing</span>
+                    </Link>
+                    <Link
+                      href="/writing/stats"
+                      onClick={onClose}
+                      className="col-span-2 flex items-center gap-2 rounded-xl bg-bg px-3 py-2.5 text-[13px] font-semibold text-ink transition hover:bg-card-hover"
+                    >
+                      <BarChart3 size={16} className="text-brand dark:text-brand-hover" />
+                      <span className="truncate">Thống kê Writing</span>
+                    </Link>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 gap-2">
+                    <div
+                      aria-disabled="true"
+                      className="flex cursor-not-allowed items-center justify-between gap-2 rounded-xl bg-bg px-3 py-2.5 text-[13px] font-semibold text-muted opacity-65"
+                    >
+                      <span className="flex items-center gap-2 truncate">
+                        <BookOpen size={16} />
+                        <span className="truncate">Reading</span>
+                      </span>
+                      <span className="shrink-0 rounded bg-line px-1.5 py-0.5 text-[10px] font-semibold text-muted">
+                        Đang phát triển
+                      </span>
+                    </div>
+                    <div
+                      aria-disabled="true"
+                      className="flex cursor-not-allowed items-center justify-between gap-2 rounded-xl bg-bg px-3 py-2.5 text-[13px] font-semibold text-muted opacity-65"
+                    >
+                      <span className="flex items-center gap-2 truncate">
+                        <PenLine size={16} />
+                        <span className="truncate">Writing</span>
+                      </span>
+                      <span className="shrink-0 rounded bg-line px-1.5 py-0.5 text-[10px] font-semibold text-muted">
+                        Đang phát triển
+                      </span>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* 5. Tiện ích từ vựng */}

@@ -13,6 +13,7 @@ import { speakWord } from "@/lib/tts";
 import { useMe } from "@/lib/use-me";
 import { createStudySet, updateStudySet, useStudySets } from "@/lib/study-sets";
 import { CharacterLoader } from "@/components/CharacterLoader";
+import { AdminModuleGuard } from "@/components/AdminModuleGuard";
 
 type Passage = {
   id: number;
@@ -2577,7 +2578,9 @@ export default function ReadingDetailPage() {
         </div>
       }
     >
-      <ReadingDetailInner />
+      <AdminModuleGuard title="Module Reading" loaderMode="reading">
+        <ReadingDetailInner />
+      </AdminModuleGuard>
     </Suspense>
   );
 }

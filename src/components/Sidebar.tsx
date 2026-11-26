@@ -22,12 +22,17 @@ import { VoiceSettingsButton } from "@/components/VoiceSettingsModal";
 import { BrandLogo } from "@/components/BrandLogo";
 import { SettingsModal } from "@/components/SettingsModal";
 
-type Item = { href: string; label: string; icon: LucideIcon; exact?: boolean; badge?: number; soon?: boolean };
+type Item = { href: string; label: string; icon: LucideIcon; exact?: boolean; badge?: number; soon?: boolean; soonLabel?: string };
 
 const SKILLS: Item[] = [
   { href: "/reading", label: "Reading", icon: BookOpen },
   { href: "/writing", label: "Writing", icon: PenLine },
   { href: "/writing/stats", label: "Thống kê Writing", icon: BarChart3 },
+];
+
+const SKILLS_DEV: Item[] = [
+  { href: "/reading", label: "Reading", icon: BookOpen, soon: true, soonLabel: "Đang phát triển" },
+  { href: "/writing", label: "Writing", icon: PenLine, soon: true, soonLabel: "Đang phát triển" },
 ];
 
 function NavLink({
@@ -39,19 +44,33 @@ function NavLink({
   path: string;
   onClick?: () => void;
 }) {
-  const active = item.exact
+  const active = !item.soon && (item.exact
     ? path === item.href
     : item.href === "/writing"
     ? path === "/writing" || (path.startsWith("/writing/") && !path.startsWith("/writing/stats"))
-    : path.startsWith(item.href);
+    : path.startsWith(item.href));
   const Icon = item.icon;
+  if (item.soon) {
+    return (
+      <div
+        aria-disabled="true"
+        className="flex cursor-not-allowed items-center gap-3 rounded-xl px-3 py-2 text-sm font-semibold text-muted opacity-65"
+      >
+        <Icon size={19} strokeWidth={1.6} />
+        <span className="flex-1 truncate">{item.label}</span>
+        <span className="shrink-0 rounded bg-line px-1.5 py-0.5 text-[10px] font-semibold text-muted">
+          {item.soonLabel || "Đang phát triển"}
+        </span>
+      </div>
+    );
+  }
   return (
     <Link
       href={item.href}
       onClick={onClick}
       className={`flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-semibold transition ${
         active ? "bg-card text-ink shadow-xs dark:shadow-none" : "text-muted hover:bg-card/60 hover:text-ink"
-      } ${item.soon ? "opacity-60" : ""}`}
+      }`}
     >
       <Icon size={19} strokeWidth={1.6} />
       <span className="flex-1 truncate">{item.label}</span>
@@ -60,7 +79,6 @@ function NavLink({
           {item.badge > 99 ? "99+" : item.badge}
         </span>
       ) : null}
-      {item.soon && <span className="rounded bg-line px-1.5 py-0.5 text-[10px] uppercase">sắp có</span>}
     </Link>
   );
 }
@@ -149,7 +167,7 @@ export default function Sidebar() {
   const [notifyReviewDue, setNotifyReviewDue] = useState(true);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
-  const { me, meLoaded, previewAsUser, togglePreviewAsUser, clearMe } = useMe({ skip: isAuthPage });
+  const { me, meLoaded, isAdmin, previewAsUser, togglePreviewAsUser, clearMe } = useMe({ skip: isAuthPage });
 
   // Chỉ cập nhật trạng thái đã xem thông báo khi đổi route
   useEffect(() => {
@@ -338,7 +356,7 @@ export default function Sidebar() {
 
         <div className="my-3 border-t border-line" />
         <div className="px-3 pb-1 text-xs font-semibold text-muted">Kỹ năng</div>
-        {SKILLS.map((i) => <NavLink key={i.href} item={i} path={path} />)}
+        {(isAdmin ? SKILLS : SKILLS_DEV).map((i) => <NavLink key={i.href} item={i} path={path} />)}
 
         <div className="mt-auto space-y-2.5 pt-3">
           <VoiceSettingsButton className="w-full justify-center" />

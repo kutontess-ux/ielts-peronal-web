@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { CharacterLoader } from "@/components/CharacterLoader";
+import { AdminModuleGuard } from "@/components/AdminModuleGuard";
 import {
   AlertTriangle,
   BarChart3,
@@ -195,7 +196,7 @@ const ERROR_LABELS: Record<
   },
 };
 
-export default function WritingHubPage() {
+function WritingHubInner() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [needsMigration, setNeedsMigration] = useState(false);
@@ -1743,5 +1744,13 @@ export default function WritingHubPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function WritingHubPage() {
+  return (
+    <AdminModuleGuard title="Module Writing" loaderMode="writing">
+      <WritingHubInner />
+    </AdminModuleGuard>
   );
 }

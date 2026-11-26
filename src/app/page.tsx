@@ -35,7 +35,7 @@ type WritingSummary = {
 };
 
 export default function Home() {
-  const { isAdmin } = useMe();
+  const { isAdmin, meLoaded } = useMe();
   const [dueCount, setDueCount] = useState<number | null>(null);
   const [totalWords, setTotalWords] = useState<number | null>(null);
   const [recentPassages, setRecentPassages] = useState<ReadingItem[]>([]);
@@ -72,15 +72,9 @@ export default function Home() {
   useEffect(() => {
     let active = true;
     (async () => {
-      const [revSummary, readingRes, writingRes] = await Promise.allSettled([
-        fetchDueSummaryCached(),
-        fetch("/api/reading", { cache: "no-store" }),
-        fetch("/api/writing", { cache: "no-store" }),
-      ]);
-      if (!active) return;
-
-      if (revSummary.status === "fulfilled") {
-        const s = revSummary.value;
+      try {
+        const s = await fetchDueSummaryCached();
+        if (!active) return;
         if (!s.ok) {
           setAuthMsg(s.error || "Bạn cần đăng nhập để xem dữ liệu học tập của mình.");
           setDueCount(0);
@@ -88,9 +82,24 @@ export default function Home() {
           setDueCount(s.dueCount);
           setTotalWords(s.totalWords);
         }
-      } else {
-        setDueCount(0);
+      } catch {
+        if (active) setDueCount(0);
       }
+    })();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!meLoaded || !isAdmin) return;
+    let active = true;
+    (async () => {
+      const [readingRes, writingRes] = await Promise.allSettled([
+        fetch("/api/reading", { cache: "no-store" }),
+        fetch("/api/writing", { cache: "no-store" }),
+      ]);
+      if (!active) return;
 
       if (readingRes.status === "fulfilled") {
         const r = readingRes.value;
@@ -127,7 +136,7 @@ export default function Home() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [meLoaded, isAdmin]);
 
   const recentStudySets = useMemo(() => {
     return [...studySets]
@@ -163,34 +172,38 @@ export default function Home() {
       icon: Newspaper,
       cta: "Xem từ mới",
     },
-    {
-      title: "Phân tích Reading",
-      sub: recentPassages[0]
-        ? `Gần nhất: ${recentPassages[0].title}`
-        : "Lưu bài đọc & tra từ theo ngữ cảnh",
-      badge: recentPassages[0]?.source_name || "Reading",
-      href: recentPassages[0] ? `/reading/${recentPassages[0].id}` : "/reading",
-      icon: BookOpen,
-      cta: recentPassages[0] ? "Mở bài" : "Bắt đầu",
-      mobileHidden: true,
-    },
-    {
-      title: "Kỷ luật Writing",
-      sub: writingSummary
-        ? writingSummary.completedToday
-          ? `Đã hoàn thành hôm nay · 🔥 ${writingSummary.currentStreak} ngày`
-          : `${writingSummary.todayTitle}${
-              writingSummary.currentStreak > 0
-                ? ` · 🔥 ${writingSummary.currentStreak} ngày`
-                : ""
-            }`
-        : "Luyện viết hằng ngày & chấm chữa 4 tiêu chí",
-      badge: writingSummary ? `🔥 ${writingSummary.currentStreak} ngày` : "Writing",
-      href: "/writing",
-      icon: PenLine,
-      cta: writingSummary?.completedToday ? "Xem sổ tay" : "Viết ngay",
-      mobileHidden: true,
-    },
+    ...(isAdmin
+      ? [
+          {
+            title: "Phân tích Reading",
+            sub: recentPassages[0]
+              ? `Gần nhất: ${recentPassages[0].title}`
+              : "Lưu bài đọc & tra từ theo ngữ cảnh",
+            badge: recentPassages[0]?.source_name || "Reading",
+            href: recentPassages[0] ? `/reading/${recentPassages[0].id}` : "/reading",
+            icon: BookOpen,
+            cta: recentPassages[0] ? "Mở bài" : "Bắt đầu",
+            mobileHidden: true,
+          },
+          {
+            title: "Kỷ luật Writing",
+            sub: writingSummary
+              ? writingSummary.completedToday
+                ? `Đã hoàn thành hôm nay · 🔥 ${writingSummary.currentStreak} ngày`
+                : `${writingSummary.todayTitle}${
+                    writingSummary.currentStreak > 0
+                      ? ` · 🔥 ${writingSummary.currentStreak} ngày`
+                      : ""
+                  }`
+              : "Luyện viết hằng ngày & chấm chữa 4 tiêu chí",
+            badge: writingSummary ? `🔥 ${writingSummary.currentStreak} ngày` : "Writing",
+            href: "/writing",
+            icon: PenLine,
+            cta: writingSummary?.completedToday ? "Xem sổ tay" : "Viết ngay",
+            mobileHidden: true,
+          },
+        ]
+      : []),
   ];
 
   const SHORTCUTS: { title: string; sub: string; tag: string; href: string; icon: React.ComponentType<{ size?: number; strokeWidth?: number }>; mobileHidden?: boolean }[] = [
@@ -215,15 +228,17 @@ export default function Home() {
       href: "/vocab",
       icon: QuizletSetIcon,
     },
-    ...recentPassages.map((p) => ({
-      title: p.title,
-      sub: `${p.source_name || "Reading"}${
-        p.score_correct !== null && p.score_total !== null ? ` · ${p.score_correct}/${p.score_total} câu đúng` : ""
-      }`,
-      tag: p.score_correct !== null && p.score_total !== null ? `${p.score_correct}/${p.score_total}` : "Reading",
-      href: `/reading/${p.id}`,
-      icon: BookOpen,
-    })),
+    ...(isAdmin
+      ? recentPassages.map((p) => ({
+          title: p.title,
+          sub: `${p.source_name || "Reading"}${
+            p.score_correct !== null && p.score_total !== null ? ` · ${p.score_correct}/${p.score_total} câu đúng` : ""
+          }`,
+          tag: p.score_correct !== null && p.score_total !== null ? `${p.score_correct}/${p.score_total}` : "Reading",
+          href: `/reading/${p.id}`,
+          icon: BookOpen,
+        }))
+      : []),
   ];
 
   const visibleJump = isMobile ? JUMP.filter((j) => !j.mobileHidden) : JUMP;
@@ -449,42 +464,76 @@ export default function Home() {
             </div>
           </Link>
 
-          <Link
-            href="/reading"
-            className="w-[78%] shrink-0 snap-start rounded-2xl border border-line bg-card p-5 transition hover:border-brand-hover sm:w-[270px] md:w-[calc((100%-28px)/3)]"
-          >
-            <BookOpen size={28} strokeWidth={1.5} className="text-brand-hover" />
-            <div className="mt-3 font-bold">Reading</div>
-            <div className="mt-1 text-sm text-muted">Phân tích bài đọc &amp; lưu từ vựng</div>
-          </Link>
+          {isAdmin ? (
+            <>
+              <Link
+                href="/reading"
+                className="w-[78%] shrink-0 snap-start rounded-2xl border border-line bg-card p-5 transition hover:border-brand-hover sm:w-[270px] md:w-[calc((100%-28px)/3)]"
+              >
+                <BookOpen size={28} strokeWidth={1.5} className="text-brand-hover" />
+                <div className="mt-3 font-bold">Reading</div>
+                <div className="mt-1 text-sm text-muted">Phân tích bài đọc &amp; lưu từ vựng</div>
+              </Link>
 
-          <Link
-            href="/writing"
-            className="w-[78%] shrink-0 snap-start rounded-2xl border border-line bg-card p-5 transition hover:border-brand-hover sm:w-[270px] md:w-[calc((100%-28px)/3)]"
-          >
-            <div className="flex items-center justify-between gap-2">
-              <PenLine size={28} strokeWidth={1.5} className="text-brand-hover" />
-              {writingSummary && (
-                <span
-                  className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-bold ${
-                    writingSummary.completedToday
-                      ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300"
-                      : "bg-orange-500/15 text-orange-700 dark:text-orange-300"
-                  }`}
-                >
-                  <Flame size={13} /> {writingSummary.currentStreak} ngày
-                </span>
-              )}
-            </div>
-            <div className="mt-3 font-bold">Writing</div>
-            <div className="mt-1 line-clamp-2 text-sm text-muted">
-              {writingSummary
-                ? writingSummary.completedToday
-                  ? "✓ Đã hoàn thành kỷ luật 3 bước hôm nay"
-                  : `Hôm nay: ${writingSummary.todayTitle}`
-                : "Luyện viết kỷ luật hằng ngày & chấm 4 tiêu chí"}
-            </div>
-          </Link>
+              <Link
+                href="/writing"
+                className="w-[78%] shrink-0 snap-start rounded-2xl border border-line bg-card p-5 transition hover:border-brand-hover sm:w-[270px] md:w-[calc((100%-28px)/3)]"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <PenLine size={28} strokeWidth={1.5} className="text-brand-hover" />
+                  {writingSummary && (
+                    <span
+                      className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-bold ${
+                        writingSummary.completedToday
+                          ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300"
+                          : "bg-orange-500/15 text-orange-700 dark:text-orange-300"
+                      }`}
+                    >
+                      <Flame size={13} /> {writingSummary.currentStreak} ngày
+                    </span>
+                  )}
+                </div>
+                <div className="mt-3 font-bold">Writing</div>
+                <div className="mt-1 line-clamp-2 text-sm text-muted">
+                  {writingSummary
+                    ? writingSummary.completedToday
+                      ? "✓ Đã hoàn thành kỷ luật 3 bước hôm nay"
+                      : `Hôm nay: ${writingSummary.todayTitle}`
+                    : "Luyện viết kỷ luật hằng ngày & chấm 4 tiêu chí"}
+                </div>
+              </Link>
+            </>
+          ) : (
+            <>
+              <div
+                aria-disabled="true"
+                className="w-[78%] shrink-0 snap-start cursor-not-allowed rounded-2xl border border-dashed border-line bg-card/60 p-5 opacity-75 sm:w-[270px] md:w-[calc((100%-28px)/3)]"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <BookOpen size={28} strokeWidth={1.5} className="text-muted" />
+                  <span className="rounded-full bg-amber-500/15 px-2.5 py-0.5 text-[11px] font-bold text-amber-700 dark:text-amber-300">
+                    Đang phát triển
+                  </span>
+                </div>
+                <div className="mt-3 font-bold text-ink">Reading</div>
+                <div className="mt-1 text-sm text-muted">Tính năng đang được phát triển</div>
+              </div>
+
+              <div
+                aria-disabled="true"
+                className="w-[78%] shrink-0 snap-start cursor-not-allowed rounded-2xl border border-dashed border-line bg-card/60 p-5 opacity-75 sm:w-[270px] md:w-[calc((100%-28px)/3)]"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <PenLine size={28} strokeWidth={1.5} className="text-muted" />
+                  <span className="rounded-full bg-amber-500/15 px-2.5 py-0.5 text-[11px] font-bold text-amber-700 dark:text-amber-300">
+                    Đang phát triển
+                  </span>
+                </div>
+                <div className="mt-3 font-bold text-ink">Writing</div>
+                <div className="mt-1 text-sm text-muted">Tính năng đang được phát triển</div>
+              </div>
+            </>
+          )}
         </HorizontalCarousel>
       </section>
     </div>

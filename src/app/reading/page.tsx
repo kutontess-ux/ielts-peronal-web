@@ -7,6 +7,7 @@ import {
   BookOpen, Calendar, CheckCircle2, FileText, Plus, Search, Trash2, X,
 } from "lucide-react";
 import { CharacterLoader } from "@/components/CharacterLoader";
+import { AdminModuleGuard } from "@/components/AdminModuleGuard";
 
 type PassageSummary = {
   id: number;
@@ -32,7 +33,7 @@ function formatDate(d: string) {
   return y && m && day ? `${day}/${m}/${y}` : d;
 }
 
-export default function ReadingHistoryPage() {
+function ReadingHistoryInner() {
   const router = useRouter();
   const [passages, setPassages] = useState<PassageSummary[]>([]);
   const [loading, setLoading] = useState(true);
@@ -370,5 +371,13 @@ export default function ReadingHistoryPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function ReadingHistoryPage() {
+  return (
+    <AdminModuleGuard title="Module Reading" loaderMode="reading">
+      <ReadingHistoryInner />
+    </AdminModuleGuard>
   );
 }
