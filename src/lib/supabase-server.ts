@@ -94,16 +94,17 @@ async function ensureProfile(
   const isListedAdmin = Boolean(email && adminEmails.has(email));
 
   if (existing) {
-    // Nếu email mới được thêm vào ADMIN_EMAILS hoặc tên/avatar thay đổi thì đồng bộ nhẹ
+    // Chỉ đồng bộ quyền admin, email, hoặc điền tên mặc định khi đang rỗng — không ghi đè tên/avatar người dùng đã tuỳ chỉnh
     const needsAdminSync = isListedAdmin && existing.role !== "admin";
-    if (needsAdminSync || existing.full_name !== fullName || existing.avatar_url !== avatarUrl) {
+    const needsEmailSync = Boolean(email && existing.email !== email);
+    const needsNameFill = !existing.full_name?.trim() && Boolean(fullName);
+    if (needsAdminSync || needsEmailSync || needsNameFill) {
       const nextRole = needsAdminSync ? "admin" : (existing.role as "admin" | "member");
       const { data: updated } = await db
         .from("profiles")
         .update({
-          email,
-          full_name: fullName,
-          avatar_url: avatarUrl,
+          email: email || existing.email,
+          full_name: needsNameFill ? fullName : existing.full_name,
           role: nextRole,
           updated_at: new Date().toISOString(),
         })

@@ -19,6 +19,7 @@ import {
   X,
 } from "lucide-react";
 import ThemeToggle from "@/components/ThemeToggle";
+import { UserAvatar } from "@/components/UserAvatar";
 import { VoiceSettingsModal } from "@/components/VoiceSettingsModal";
 import { notifySettingsUpdated } from "@/lib/due-events";
 import {
@@ -359,25 +360,41 @@ export function SettingsModal({
                   ) : null
                 ) : (
                   <div className="space-y-2.5">
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="min-w-0">
-                        <div className="truncate text-[14px] font-bold text-ink">
-                          {displayName}
+                    <Link
+                      href="/account"
+                      onClick={onClose}
+                      className="-mx-1.5 -mt-1.5 flex items-center gap-3 rounded-xl p-1.5 transition hover:bg-bg"
+                    >
+                      <UserAvatar
+                        avatarUrl={me.profile.avatar_url}
+                        name={displayName}
+                        email={me.profile.email}
+                        size="md"
+                      />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-1.5">
+                          <span className="truncate text-[14px] font-bold text-ink">
+                            {displayName}
+                          </span>
+                          <span
+                            className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                              me.isAdmin
+                                ? "bg-brand/15 text-brand dark:text-brand-hover"
+                                : "bg-bg text-muted"
+                            }`}
+                          >
+                            {me.isAdmin ? "Admin" : "Thành viên"}
+                          </span>
                         </div>
                         <div className="truncate text-[12px] text-muted">
                           {me.profile.email}
                         </div>
+                        <div className="mt-0.5 text-[11px] font-semibold text-brand dark:text-brand-hover">
+                          Cấu hình tài khoản
+                        </div>
                       </div>
-                      <span
-                        className={`shrink-0 rounded-full px-2.5 py-0.5 text-[11px] font-bold ${
-                          me.isAdmin
-                            ? "bg-brand/15 text-brand dark:text-brand-hover"
-                            : "bg-bg text-muted"
-                        }`}
-                      >
-                        {me.isAdmin ? "Admin" : "Thành viên"}
-                      </span>
-                    </div>
+                      <ChevronRight size={16} className="shrink-0 text-muted" />
+                    </Link>
 
                     <div className="text-[12px] text-muted">
                       {me.isAdmin

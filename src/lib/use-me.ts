@@ -12,9 +12,11 @@ export type MeInfo = {
     avatar_url: string | null;
     role: "admin" | "member";
     daily_ai_limit: number;
+    created_at?: string;
   };
   isAdmin: boolean;
   aiUsage: { usedToday: number; limit: number | null };
+  googleAvatarUrl?: string | null;
 };
 
 const PREVIEW_USER_KEY = "ielts_admin_preview_user_v1";
@@ -65,6 +67,12 @@ export async function fetchMeOnce(force = false): Promise<MeInfo | null> {
     });
 
   return inflightPromise;
+}
+
+export function setCachedMe(next: MeInfo) {
+  cachedMe = next;
+  cachedLoaded = true;
+  emitChange();
 }
 
 export function clearCachedMe() {

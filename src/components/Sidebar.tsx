@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import {
-  BarChart3, Bell, BookOpen, Eye, Folder, Home, Layers, LogIn, LogOut, Newspaper, PenLine, Repeat, Settings, Shield, Target,
+  BarChart3, Bell, BookOpen, ChevronRight, Eye, Folder, Home, Layers, LogIn, LogOut, Newspaper, PenLine, Repeat, Settings, Shield,
   type LucideIcon,
 } from "lucide-react";
 import {
@@ -21,6 +21,7 @@ import ThemeToggle from "@/components/ThemeToggle";
 import { VoiceSettingsButton } from "@/components/VoiceSettingsModal";
 import { BrandLogo } from "@/components/BrandLogo";
 import { SettingsModal } from "@/components/SettingsModal";
+import { UserAvatar } from "@/components/UserAvatar";
 
 type Item = { href: string; label: string; icon: LucideIcon; exact?: boolean; badge?: number; soon?: boolean; soonLabel?: string };
 
@@ -86,6 +87,7 @@ function NavLink({
 function UserFooter({
   me,
   meLoaded,
+  isAccountActive,
   signingOut,
   previewAsUser,
   onTogglePreview,
@@ -93,6 +95,7 @@ function UserFooter({
 }: {
   me: MeInfo | null;
   meLoaded: boolean;
+  isAccountActive: boolean;
   signingOut: boolean;
   previewAsUser: boolean;
   onTogglePreview: () => void;
@@ -117,20 +120,40 @@ function UserFooter({
 
   return (
     <div className="rounded-xl border border-line/60 bg-card p-3 text-xs dark:border-transparent">
-      <div className="flex items-center justify-between gap-2">
-        <span className="truncate font-bold text-ink">{displayName}</span>
-        <span
-          className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold ${
-            me.isAdmin
-              ? "bg-brand/15 text-brand-hover"
-              : "bg-line text-muted"
-          }`}
-        >
-          {me.isAdmin ? "Admin" : "Thành viên"}
-        </span>
-      </div>
-      <div className="mt-0.5 truncate text-[11px] text-muted">{me.profile.email}</div>
-      <div className="mt-1.5 text-[11px] font-medium text-muted">{quotaText}</div>
+      <Link
+        href="/account"
+        title="Cấu hình tài khoản"
+        className={`group -mx-1.5 -mt-1.5 flex items-center gap-2.5 rounded-lg p-1.5 transition ${
+          isAccountActive ? "bg-bg text-ink" : "hover:bg-bg/80"
+        }`}
+      >
+        <UserAvatar
+          avatarUrl={me.profile.avatar_url}
+          name={displayName}
+          email={me.profile.email}
+          size="sm"
+        />
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-1.5">
+            <span className="truncate font-bold text-ink">{displayName}</span>
+            <span
+              className={`shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-bold ${
+                me.isAdmin
+                  ? "bg-brand/15 text-brand-hover"
+                  : "bg-line text-muted"
+              }`}
+            >
+              {me.isAdmin ? "Admin" : "Thành viên"}
+            </span>
+          </div>
+          <div className="mt-0.5 truncate text-[11px] text-muted">{me.profile.email}</div>
+        </div>
+        <ChevronRight
+          size={15}
+          className="shrink-0 text-muted transition group-hover:translate-x-0.5 group-hover:text-ink"
+        />
+      </Link>
+      <div className="mt-2 text-[11px] font-medium text-muted">{quotaText}</div>
       {me.isAdmin && (
         <button
           type="button"
@@ -361,15 +384,10 @@ export default function Sidebar() {
         <div className="mt-auto space-y-2.5 pt-3">
           <VoiceSettingsButton className="w-full justify-center" />
           <ThemeToggle variant="switch" />
-          <div className="rounded-xl border border-line/60 bg-card p-3 text-xs text-muted dark:border-transparent">
-            <div className="mb-1 flex items-center gap-2 font-bold text-ink">
-              <Target size={16} strokeWidth={1.75} /> Mục tiêu: Band 6.5
-            </div>
-            IELTS Academic
-          </div>
           <UserFooter
             me={me}
             meLoaded={meLoaded}
+            isAccountActive={path.startsWith("/account")}
             signingOut={signingOut}
             previewAsUser={previewAsUser}
             onTogglePreview={togglePreviewAsUser}
