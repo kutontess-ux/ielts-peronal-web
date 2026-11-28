@@ -1259,6 +1259,31 @@ function MoveFolderModal({
 
 let cachedVocabWords: Word[] | null = null;
 let cachedVocabOverviewStats: { dueCount: number; totalWords: number; masteredCount: number } | null = null;
+let cachedBookWords: Word[] | null = null;
+let inflightBookWordsPromise: Promise<Word[]> | null = null;
+
+async function fetchBookWordsCached(force = false): Promise<Word[]> {
+  if (!force && cachedBookWords) return cachedBookWords;
+  if (!force && inflightBookWordsPromise) return inflightBookWordsPromise;
+
+  const url = force ? "/api/words?scope=books&refresh=1" : "/api/words?scope=books";
+  const req = fetch(url, force ? { cache: "no-store" } : undefined)
+    .then(async (r) => {
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`);
+      const list = (j.words ?? []) as Word[];
+      cachedBookWords = list;
+      return list;
+    })
+    .finally(() => {
+      if (inflightBookWordsPromise === req) {
+        inflightBookWordsPromise = null;
+      }
+    });
+
+  inflightBookWordsPromise = req;
+  return req;
+}
 
 function VocabLearnContent() {
   const router = useRouter();
@@ -1282,9 +1307,9 @@ function VocabLearnContent() {
     () => cachedVocabOverviewStats ?? { dueCount: 0, totalWords: 0, masteredCount: 0 }
   );
   const [loading, setLoading] = useState(() => !cachedVocabWords);
-  const [bookWords, setBookWords] = useState<Word[]>([]);
+  const [bookWords, setBookWords] = useState<Word[]>(() => cachedBookWords ?? []);
   const [bookLoading, setBookLoading] = useState(false);
-  const [bookLoaded, setBookLoaded] = useState(false);
+  const [bookLoaded, setBookLoaded] = useState(() => Boolean(cachedBookWords));
   const [bookErr, setBookErr] = useState("");
   const [savedBookSetId, setSavedBookSetId] = useState<string | null>(null);
   const [bookFolderModalOpen, setBookFolderModalOpen] = useState(false);
@@ -1403,14 +1428,17 @@ function VocabLearnContent() {
     return list;
   }, []);
 
-  const loadBookWords = useCallback(async () => {
+  const loadBookWords = useCallback(async (force = false) => {
+    if (!force && cachedBookWords) {
+      setBookWords(cachedBookWords);
+      setBookLoaded(true);
+      return;
+    }
     setBookLoading(true);
     setBookErr("");
     try {
-      const r = await fetch("/api/words?scope=books", { cache: "no-store" });
-      const j = await r.json();
-      if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`);
-      setBookWords((j.words ?? []) as Word[]);
+      const list = await fetchBookWordsCached(force);
+      setBookWords(list);
       setBookLoaded(true);
     } catch (e) {
       setBookErr((e as Error).message || "Không tải được danh sách bộ sách");
@@ -1420,7 +1448,7 @@ function VocabLearnContent() {
   }, []);
 
   const reloadBookAndPersonalWords = useCallback(async () => {
-    await Promise.all([loadBookWords(), reloadWords()]);
+    await Promise.all([loadBookWords(true), reloadWords()]);
   }, [loadBookWords, reloadWords]);
 
   const deleteBookWord = async (w: Word) => {
@@ -1429,7 +1457,11 @@ function VocabLearnContent() {
     setActivityLabel("/api/words", `Đang xoá từ "${w.word}" khỏi bộ sách...`);
     const r = await fetch(`/api/words?scope=book&id=${w.id}`, { method: "DELETE" });
     if (r.ok) {
-      setBookWords((prev) => prev.filter((x) => x.id !== w.id));
+      setBookWords((prev) => {
+        const next = prev.filter((x) => x.id !== w.id);
+        cachedBookWords = next;
+        return next;
+      });
       setWords((prev) => prev.filter((x) => x.id !== w.id));
       notifyDueUpdated();
     }
@@ -1440,18 +1472,16 @@ function VocabLearnContent() {
 
     const rafId = requestAnimationFrame(() => {
       setNowMs(Date.now());
-      if (isBookLink) {
+      if (isBookLink && !cachedBookWords) {
         setBookLoading(true);
       }
     });
     Promise.all([
       fetch("/api/words", { cache: "no-store" }).then((r) => r.json()),
       fetchDueSummaryCached(),
-      isBookLink
-        ? fetch("/api/words?scope=books", { cache: "no-store" }).then((r) => r.json())
-        : Promise.resolve(null),
+      isBookLink ? fetchBookWordsCached().catch(() => null) : Promise.resolve(null),
     ])
-      .then(([wJson, rSummary, bJson]) => {
+      .then(([wJson, rSummary, bList]) => {
         const list = (wJson.words ?? []) as Word[];
         const nextStats = {
           dueCount: rSummary.dueCount ?? 0,
@@ -1462,8 +1492,8 @@ function VocabLearnContent() {
         cachedVocabOverviewStats = nextStats;
         setWords(list);
         setStats(nextStats);
-        if (bJson) {
-          setBookWords((bJson.words ?? []) as Word[]);
+        if (bList) {
+          setBookWords(bList);
           setBookLoaded(true);
         }
       })
@@ -1498,10 +1528,10 @@ function VocabLearnContent() {
     const hasMissing = studySets.some((s) => s.wordIds.some((id) => !wordMap.has(id)));
     if (!hasMissing) return;
     bookFallbackFetchedRef.current = true;
-    fetch("/api/words?scope=books", { cache: "no-store" })
-      .then((r) => r.json())
-      .then((bJson) => {
-        if (bJson?.words) setBookWords(bJson.words as Word[]);
+    fetchBookWordsCached()
+      .then((list) => {
+        setBookWords(list);
+        setBookLoaded(true);
       })
       .catch(() => {
         // bỏ qua

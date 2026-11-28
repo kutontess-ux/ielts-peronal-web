@@ -3,6 +3,7 @@ import { requireAdmin } from "@/lib/supabase-server";
 import { consumeAiQuota } from "@/lib/ai-quota";
 import { enrich } from "@/lib/ai";
 import { normKey } from "@/lib/normalize";
+import { invalidateBooksCache } from "@/lib/books-cache";
 import oxford3000 from "@/data/oxford-3000.json";
 
 export const maxDuration = 120;
@@ -116,6 +117,7 @@ export async function POST(req: Request) {
     }
 
     if (rows.length === 0) {
+      if (promotedCount > 0) invalidateBooksCache();
       return NextResponse.json({ added: promotedCount, remaining });
     }
 
@@ -125,6 +127,7 @@ export async function POST(req: Request) {
       .select("id");
     if (error) throw new Error(error.message);
 
+    invalidateBooksCache();
     return NextResponse.json({ added: promotedCount + (data?.length ?? 0), remaining });
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message }, { status: 500 });

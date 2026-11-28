@@ -252,14 +252,20 @@ export default function BookSection({
     () => (activeBook ? words.filter((w) => w.source === activeBook.id) : []),
     [words, activeBook]
   );
-  const bookTopics = useMemo(
-    () => Array.from(new Set(bookWords.map((w) => w.topic))).sort(),
-    [bookWords]
-  );
-  const bookPresentLevels = useMemo(
-    () => LEVELS.filter((l) => bookWords.some((w) => w.level === l)),
-    [bookWords]
-  );
+  const { bookTopics, bookTopicCounts, bookPresentLevels, bookLevelCounts } = useMemo(() => {
+    const tCounts = new Map<string, number>();
+    const lCounts = new Map<string, number>();
+    for (const w of bookWords) {
+      tCounts.set(w.topic, (tCounts.get(w.topic) ?? 0) + 1);
+      lCounts.set(w.level, (lCounts.get(w.level) ?? 0) + 1);
+    }
+    return {
+      bookTopics: Array.from(tCounts.keys()).sort(),
+      bookTopicCounts: tCounts,
+      bookPresentLevels: LEVELS.filter((l) => (lCounts.get(l) ?? 0) > 0),
+      bookLevelCounts: lCounts,
+    };
+  }, [bookWords]);
 
   const bookFiltered = useMemo(
     () =>
@@ -740,7 +746,7 @@ export default function BookSection({
         >
           <option value="Tất cả">Chủ đề: Tất cả ({bookWords.length})</option>
           {bookTopics.map((t) => (
-            <option key={t} value={t}>{t} ({bookWords.filter((w) => w.topic === t).length})</option>
+            <option key={t} value={t}>{t} ({bookTopicCounts.get(t) ?? 0})</option>
           ))}
         </select>
         {viewMode === "modules" && (
@@ -782,7 +788,7 @@ export default function BookSection({
             onClick={() => toggleLevel(l)}
             className={`rounded-full px-3 py-1 text-xs font-semibold ${bookLevels.includes(l) ? "bg-brand text-white" : "bg-bg text-muted hover:text-ink"}`}
           >
-            {l} ({bookWords.filter((w) => w.level === l).length})
+            {l} ({bookLevelCounts.get(l) ?? 0})
           </button>
         ))}
       </div>

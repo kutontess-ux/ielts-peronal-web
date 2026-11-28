@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAdmin, requireAuth } from "@/lib/supabase-server";
 import { isMissingUserWordsTableError } from "@/lib/user-words";
+import { getCachedBookWords, invalidateBooksCache } from "@/lib/books-cache";
 import type { Word } from "@/lib/mock";
 
 type RawWordRow = {
@@ -68,22 +69,16 @@ export async function GET(req: Request) {
     }
 
     if (scope === "books") {
-      const bookWords: Word[] = [];
-      const CHUNK = 1000;
-      for (let from = 0; from < 20000; from += CHUNK) {
-        const { data, error } = await ctx.db
-          .from("words")
-          .select(WORD_COLUMNS)
-          .eq("status", "approved")
-          .like("source", "book-%")
-          .order("created_at", { ascending: false })
-          .range(from, from + CHUNK - 1);
-        if (error) throw new Error(error.message);
-        const batch = (data ?? []) as RawWordRow[];
-        for (const r of batch) bookWords.push(mapWord(r));
-        if (batch.length < CHUNK) break;
-      }
-      return NextResponse.json({ words: bookWords, total: bookWords.length });
+      const forceRefresh = searchParams.get("refresh") === "1";
+      const bookWords = await getCachedBookWords(ctx.db, forceRefresh);
+      return NextResponse.json(
+        { words: bookWords, total: bookWords.length },
+        {
+          headers: forceRefresh
+            ? { "Cache-Control": "no-store" }
+            : { "Cache-Control": "private, max-age=60, stale-while-revalidate=300" },
+        }
+      );
     }
 
     // Kho từ vựng cá nhân (scope=personal)
@@ -186,6 +181,7 @@ export async function DELETE(req: Request) {
 
       const { error } = await ctx.db.from("words").delete().in("id", ids);
       if (error) throw new Error(error.message);
+      invalidateBooksCache();
       return NextResponse.json({ deleted: ids.length });
     }
 
@@ -251,6 +247,7 @@ export async function PATCH(req: Request) {
         .eq("source", src)
         .select("id");
       if (error) throw new Error(error.message);
+      invalidateBooksCache();
       return NextResponse.json({ updated: data?.length ?? 0 });
     }
 

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/lib/supabase-server";
 import { linkWordsToUser } from "@/lib/user-words";
+import { invalidateBooksCache } from "@/lib/books-cache";
 
 type Item = {
   lemma: string; norm_key: string; ipa?: string; pos?: string; meaning_vi?: string;
@@ -77,6 +78,10 @@ export async function POST(req: Request) {
         .update({ source: cleanSource })
         .in("id", wordIds)
         .not("source", "like", "book-%");
+    }
+
+    if (isBookTarget) {
+      invalidateBooksCache();
     }
 
     // Nếu là nguồn cá nhân -> gắn vào Kho cá nhân (user_words) của riêng người dùng hiện tại
