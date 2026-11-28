@@ -236,7 +236,7 @@ export function SettingsModal({
                   <div className="flex items-center gap-2.5">
                     <Bell size={16} className="text-brand dark:text-brand-hover" />
                     <span className="text-[13px] font-semibold text-ink">
-                      Trung tâm thông báo &amp; Web Push
+                      Cài đặt thông báo
                     </span>
                     {notifBadge > 0 && (
                       <span className="rounded-full bg-rose-500 px-1.5 py-0.5 text-[10px] font-bold leading-none text-white">

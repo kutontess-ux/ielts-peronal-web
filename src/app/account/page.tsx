@@ -773,7 +773,7 @@ export default function AccountPage() {
           >
             <span className="flex items-center gap-2.5">
               <Bell size={16} className="text-brand dark:text-brand-hover" />
-              Quản lý thông báo &amp; Web Push
+              Cài đặt thông báo
             </span>
             <ChevronRight size={16} className="text-muted" />
           </Link>

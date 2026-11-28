@@ -280,7 +280,7 @@ export default function Notifications() {
     key: NotifKey;
     icon: LucideIcon;
     title: string;
-    sub: string;
+    sub?: string;
     href: string;
     cta: string;
   }[] = [];
@@ -289,8 +289,7 @@ export default function Notifications() {
     items.push({
       key: "notify_review_due",
       icon: Repeat,
-      title: `${dueCount} từ đến hạn ôn tập`,
-      sub: "Ôn đúng lúc để không quên từ",
+      title: `${dueCount} từ cần ôn`,
       href: "/vocab/review",
       cta: "Ôn ngay",
     });
@@ -303,11 +302,9 @@ export default function Notifications() {
         icon: PenLine,
         title:
           writingInfo && writingInfo.currentStreak > 0
-            ? `Kỷ luật Writing hôm nay (Giữ chuỗi 🔥 ${writingInfo.currentStreak} ngày)`
-            : "Nhiệm vụ Kỷ luật Writing hôm nay",
-        sub: `${
-          writingInfo?.todayTitle ?? "Luyện viết đoạn ngắn 15 phút theo lộ trình"
-        } · Đủ 3 bước: Viết → Chấm AI → Gõ lại câu sai`,
+            ? `Writing hôm nay · 🔥 ${writingInfo.currentStreak} ngày`
+            : "Writing hôm nay",
+        sub: writingInfo?.todayTitle,
         href: "/writing",
         cta: "Viết ngay",
       });
@@ -315,8 +312,7 @@ export default function Notifications() {
       items.push({
         key: "notify_writing_streak",
         icon: Flame,
-        title: `Đã hoàn thành Kỷ luật Writing hôm nay (🔥 ${writingInfo.currentStreak} ngày)`,
-        sub: "Bạn đã hoàn tất đủ 3 bước kỷ luật hôm nay. Xem lại sổ tay lỗi sai hoặc luyện thêm.",
+        title: `Đã xong Writing hôm nay · 🔥 ${writingInfo.currentStreak} ngày`,
         href: "/writing",
         cta: "Xem",
       });
@@ -328,7 +324,6 @@ export default function Notifications() {
       key: "notify_daily_vocab",
       icon: Newspaper,
       title: "Từ vựng hằng ngày",
-      sub: "Xem 5 từ báo + 5 từ IELTS riêng của bạn hôm nay",
       href: "/vocab/daily",
       cta: "Xem",
     });
@@ -364,25 +359,22 @@ export default function Notifications() {
           }`}
         >
           <BellOff size={14} />
-          {allMuted ? "Bật lại tất cả thông báo" : "Ngừng tất cả thông báo"}
+          {allMuted ? "Bật tất cả" : "Tắt tất cả"}
         </button>
       </div>
 
       <section className="rounded-2xl bg-card p-5">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="font-bold">Thông báo đẩy (PWA) & Lịch nhắc tự động</div>
+          <div className="font-bold">Lịch nhắc</div>
           {pushSubscribed && (
             <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/15 px-3 py-1 text-xs font-bold text-emerald-700 dark:text-emerald-300">
               <Bell size={13} />
-              Đang bật trên thiết bị này{pushDeviceCount > 1 ? ` (${pushDeviceCount} thiết bị)` : ""}
+              Đang bật{pushDeviceCount > 1 ? ` (${pushDeviceCount} thiết bị)` : ""}
             </span>
           )}
         </div>
-        <p className="mt-1 text-sm text-muted">
-          Nhận thông báo nhắc ôn tập SRS và 10 từ vựng hằng ngày ngay cả khi đã đóng trình duyệt hoặc app.
-        </p>
 
-        <div className="mt-4 flex flex-wrap items-center gap-6">
+        <div className="mt-3 flex flex-wrap items-center gap-6">
           {(
             [
               ["notify_morning", "Sáng 08:00"],
@@ -411,7 +403,7 @@ export default function Notifications() {
               className="inline-flex items-center gap-2 rounded-full bg-brand px-5 py-2 text-sm font-bold text-white transition hover:bg-brand-hover hover:text-bg disabled:opacity-50"
             >
               <Bell size={15} />
-              {pushBusy ? "Đang kích hoạt..." : "Bật thông báo đẩy (PWA)"}
+              {pushBusy ? "Đang bật..." : "Bật thông báo"}
             </button>
           ) : (
             <>
@@ -422,7 +414,7 @@ export default function Notifications() {
                 className="inline-flex items-center gap-2 rounded-full bg-brand px-4 py-2 text-sm font-bold text-white transition hover:bg-brand-hover hover:text-bg disabled:opacity-50"
               >
                 <Send size={14} />
-                {pushBusy ? "Đang gửi..." : "Gửi thông báo thử"}
+                {pushBusy ? "Đang gửi..." : "Gửi thử"}
               </button>
               <button
                 type="button"
@@ -431,7 +423,7 @@ export default function Notifications() {
                 className="inline-flex items-center gap-2 rounded-full border border-line bg-bg/60 px-4 py-2 text-xs font-bold text-muted transition hover:border-rose-400/50 hover:text-rose-500 disabled:opacity-50"
               >
                 <BellOff size={14} />
-                Tắt trên thiết bị này
+                Tắt
               </button>
             </>
           )}
@@ -439,7 +431,7 @@ export default function Notifications() {
 
         {perm === "denied" && (
           <p className="mt-2.5 text-xs text-rose-600 dark:text-rose-300">
-            Trình duyệt đang chặn thông báo, hãy cho phép trong cài đặt trang/thiết bị rồi bấm bật lại.
+            Trình duyệt đang chặn thông báo, hãy cho phép trong cài đặt rồi bật lại.
           </p>
         )}
 
@@ -447,14 +439,14 @@ export default function Notifications() {
           <div className="mt-3 flex items-start gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3.5 py-2.5 text-xs text-amber-800 dark:text-amber-200">
             <Smartphone size={15} className="mt-0.5 shrink-0" />
             <span>
-              Trên iPhone/iPad: bấm nút <b>Chia sẻ</b> trên Safari → <b>Thêm vào màn hình chính</b> (Add to Home Screen), sau đó mở app từ màn hình chính để bật thông báo đẩy.
+              Trên iOS: bấm <b>Chia sẻ</b> → <b>Thêm vào màn hình chính</b> để bật thông báo.
             </span>
           </div>
         )}
 
-        {pushConfigured === false && (
+        {pushConfigured === false && isAdmin && (
           <p className="mt-2.5 text-xs text-amber-600 dark:text-amber-300">
-            Lưu ý: Server chưa cấu hình VAPID keys (<code>NEXT_PUBLIC_VAPID_PUBLIC_KEY</code> & <code>VAPID_PRIVATE_KEY</code>) nên chưa thể gửi Web Push.
+            Chưa cấu hình VAPID keys (<code>NEXT_PUBLIC_VAPID_PUBLIC_KEY</code> &amp; <code>VAPID_PRIVATE_KEY</code>).
           </p>
         )}
 
@@ -471,31 +463,24 @@ export default function Notifications() {
         )}
       </section>
 
-      {/* Tuỳ chọn bật/tắt từng loại thông báo (đặc biệt cho người không có nhu cầu tìm từ hằng ngày) */}
       <section className="rounded-2xl bg-card p-5">
-        <div className="font-bold">Tuỳ chọn kênh thông báo</div>
-        <p className="mt-1 text-sm text-muted">
-          Tắt những mục bạn không có nhu cầu theo dõi (khi tắt Từ vựng hằng ngày, hệ thống cũng ngừng tự động gọi AI tìm từ mỗi ngày).
-        </p>
-        <div className="mt-4 space-y-3">
+        <div className="font-bold">Kênh thông báo</div>
+        <div className="mt-3 space-y-2.5">
           {(
             [
               {
                 key: "notify_daily_vocab",
-                label: "Tìm & nhắc Từ vựng hằng ngày",
-                desc: "Gợi ý 5 từ báo + 5 từ IELTS riêng của bạn mỗi ngày",
+                label: "Từ vựng hằng ngày",
               },
               {
                 key: "notify_review_due",
-                label: "Nhắc ôn tập (SRS)",
-                desc: "Hiện thông báo và chấm đỏ khi có từ đến hạn ôn",
+                label: "Nhắc ôn tập",
               },
               ...(isAdmin
                 ? [
                     {
                       key: "notify_writing_streak" as const,
-                      label: "Nhắc Kỷ luật Writing hằng ngày",
-                      desc: "Nhắc hoàn thành bài viết 15 phút & giữ chuỗi streak",
+                      label: "Writing hằng ngày",
                     },
                   ]
                 : []),
@@ -507,10 +492,7 @@ export default function Notifications() {
                 key={opt.key}
                 className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line/70 bg-bg/50 px-4 py-3 dark:border-line"
               >
-                <div className="min-w-0 flex-1">
-                  <div className="text-sm font-bold">{opt.label}</div>
-                  <div className="text-xs text-muted">{opt.desc}</div>
-                </div>
+                <div className="min-w-0 flex-1 text-sm font-bold">{opt.label}</div>
                 <button
                   type="button"
                   role="switch"
@@ -534,7 +516,7 @@ export default function Notifications() {
       {settings.notify_review_due && dueCount === 0 && (
         <div className="flex items-center gap-3 rounded-2xl bg-emerald-500/15 p-4 text-sm text-emerald-700 dark:bg-emerald-400/15 dark:text-emerald-300">
           <CheckCircle2 size={20} strokeWidth={1.75} />
-          Bạn đã ôn hết từ đến hạn hôm nay! Không còn thông báo nhắc ôn tập nào.
+          Đã ôn hết từ hôm nay.
         </div>
       )}
 
@@ -542,7 +524,7 @@ export default function Notifications() {
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-line bg-card/60 p-5 text-sm text-muted">
           <div className="flex items-center gap-2.5">
             <BellOff size={18} />
-            <span>Bạn đã ngừng nhận tất cả thông báo nhắc học.</span>
+            <span>Đã tắt tất cả thông báo.</span>
           </div>
           <button
             type="button"
@@ -558,7 +540,7 @@ export default function Notifications() {
             }
             className="rounded-full bg-brand px-4 py-1.5 text-xs font-bold text-white hover:bg-brand-hover hover:text-bg"
           >
-            Bật lại thông báo
+            Bật lại
           </button>
         </div>
       ) : (
@@ -568,13 +550,13 @@ export default function Notifications() {
               key={n.title}
               className="flex flex-col gap-3.5 rounded-2xl bg-card p-4 sm:flex-row sm:items-center sm:justify-between sm:gap-4"
             >
-              <div className="flex min-w-0 flex-1 items-start gap-3.5">
+              <div className="flex min-w-0 flex-1 items-center gap-3.5">
                 <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-bg text-brand-hover">
                   <n.icon size={21} strokeWidth={1.6} />
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="break-words font-bold">{n.title}</div>
-                  <div className="mt-0.5 break-words text-sm text-muted">{n.sub}</div>
+                  {n.sub && <div className="mt-0.5 break-words text-sm text-muted">{n.sub}</div>}
                 </div>
               </div>
               <div className="flex shrink-0 items-center justify-end gap-2 sm:justify-start">
@@ -584,7 +566,7 @@ export default function Notifications() {
                   onClick={() => updateSettings({ [n.key]: false }, n.key)}
                   className="whitespace-nowrap rounded-full border border-line px-3.5 py-2 text-xs font-semibold text-muted transition hover:border-rose-400/50 hover:text-rose-500 disabled:opacity-50"
                 >
-                  Ngừng nhận
+                  Tắt
                 </button>
                 <Link
                   href={n.href}
