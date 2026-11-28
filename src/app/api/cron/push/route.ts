@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
 import { DEFAULT_NOTIFICATION_SETTINGS, DEFAULT_USER_SETTINGS } from "@/lib/srs";
 import { isWebPushConfigured, sendPushNotification, type StoredPushSubscription } from "@/lib/web-push";
+import { pregenerateDailyForActiveUsers, type PregenerateSummary } from "@/lib/daily-generator";
 
 export const maxDuration = 60;
 
@@ -38,13 +39,6 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    if (!isWebPushConfigured()) {
-      return NextResponse.json(
-        { error: "VAPID keys chưa được cấu hình (NEXT_PUBLIC_VAPID_PUBLIC_KEY & VAPID_PRIVATE_KEY)." },
-        { status: 500 }
-      );
-    }
-
     const { dayStr, hour, startIso, nowIso } = getVnTodayInfo();
     const url = new URL(req.url);
     const rawSlot = url.searchParams.get("slot");
@@ -56,13 +50,37 @@ export async function GET(req: Request) {
           : "evening";
 
     const db = supabaseAdmin();
+
+    // Dự phòng tạo sẵn từ vựng hằng ngày vào khung giờ sáng nếu cron đầu ngày chưa chạy
+    let dailyPregen: PregenerateSummary | { error: string } | null = null;
+    if (slot === "morning") {
+      try {
+        dailyPregen = await pregenerateDailyForActiveUsers(db, {
+          day: dayStr,
+          timeBudgetMs: 35_000,
+        });
+      } catch (e) {
+        dailyPregen = { error: (e as Error).message };
+      }
+    }
+
+    if (!isWebPushConfigured()) {
+      return NextResponse.json(
+        {
+          error: "VAPID keys chưa được cấu hình (NEXT_PUBLIC_VAPID_PUBLIC_KEY & VAPID_PRIVATE_KEY).",
+          dailyPregen,
+        },
+        { status: 500 }
+      );
+    }
+
     const { data: subs, error: subErr } = await db
       .from("push_subscriptions")
       .select("id,user_id,endpoint,p256dh,auth");
 
     if (subErr) throw new Error(subErr.message);
     if (!subs || subs.length === 0) {
-      return NextResponse.json({ ok: true, slot, usersChecked: 0, sent: 0 });
+      return NextResponse.json({ ok: true, slot, day: dayStr, usersChecked: 0, sent: 0, dailyPregen });
     }
 
     const subsByUser = new Map<string, StoredPushSubscription[]>();
@@ -223,6 +241,7 @@ export async function GET(req: Request) {
       skipped,
       failed,
       removedExpired: expiredEndpoints.length,
+      dailyPregen,
     });
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message }, { status: 500 });

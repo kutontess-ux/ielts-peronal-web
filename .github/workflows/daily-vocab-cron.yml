@@ -1,0 +1,39 @@
+name: Daily Vocab Pre-generation
+
+on:
+  schedule:
+    # 17:05 UTC = 00:05 giờ Việt Nam (UTC+7) mỗi ngày
+    - cron: "5 17 * * *"
+  workflow_dispatch:
+
+jobs:
+  pregenerate-daily-vocab:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger /api/cron/daily
+        env:
+          APP_URL: ${{ secrets.APP_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          if [ -z "$APP_URL" ]; then
+            echo "Thiếu secret APP_URL trong GitHub repository settings (VD: https://your-app.vercel.app)."
+            exit 1
+          fi
+          TARGET_URL="${APP_URL%/}/api/cron/daily"
+          echo "Calling $TARGET_URL ..."
+          if [ -n "$CRON_SECRET" ]; then
+            HTTP_CODE=$(curl -sS -w "%{http_code}" -o response.json \
+              --max-time 130 \
+              -H "Authorization: Bearer $CRON_SECRET" \
+              "$TARGET_URL")
+          else
+            HTTP_CODE=$(curl -sS -w "%{http_code}" -o response.json \
+              --max-time 130 \
+              "$TARGET_URL")
+          fi
+          echo "HTTP $HTTP_CODE"
+          cat response.json
+          echo ""
+          if [ "$HTTP_CODE" -lt 200 ] || [ "$HTTP_CODE" -ge 300 ]; then
+            exit 1
+          fi
